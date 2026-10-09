@@ -21,13 +21,6 @@ const STATE = {
   activeTab: 'audit' // 'audit', 'headers', 'checklist', 'report'
 };
 
-const PRESETS = [
-  { label: 'GitHub', domain: 'github.com' },
-  { label: 'Cloudflare', domain: 'cloudflare.com' },
-  { label: 'Google', domain: 'google.com' },
-  { label: 'Melih Karasu', domain: 'melihkarasu.com' }
-];
-
 // Güvenlik Başlıkları Kural Kütüphanesi
 const HEADER_RULES = {
   'content-security-policy': {
@@ -376,7 +369,7 @@ async function startSecurityScan() {
   const cleanDomain = sanitizeInputDomain(rawDomain);
 
   if (!cleanDomain || !cleanDomain.includes('.')) {
-    showToast('Lütfen geçerli bir alan adı girin (örn: github.com)', 'warning');
+    showToast('Lütfen geçerli bir alan adı girin (örn: siteniz.com)', 'warning');
     return;
   }
 
@@ -759,6 +752,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Varsayılan ilk yükleme (örnek GitHub)
   if (inputEl && !inputEl.value) {
-    inputEl.value = 'github.com';
+    inputEl.value = '';
   }
 });
