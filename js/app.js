@@ -1,5 +1,5 @@
 /**
- * Web Güvenlik Radarı (Web Security Scanner)
+ * Web Security Scanner (Web Security Scanner)
  * Pasif Güvenlik Başlıkları, DoH DNS, E-posta Savunması & SSL Denetim Motoru
  * Sıfır Backend - %100 İstemci Taraflı (CORS-Açık DoH & Header Röntgeni)
  */
@@ -632,7 +632,7 @@ function exportMarkdownReport() {
     }
   }
 
-  md += `\n*Rapor, [Web Güvenlik Radarı](https://melihkarasu.github.io/web-guvenlik-radari/) tarafından pasif denetimle üretilmiştir.*`;
+  md += `\n*Rapor, [Web Security Scanner](https://melihkarasu.github.io/web-security-scanner/) tarafından pasif denetimle üretilmiştir.*`;
 
   downloadFile(`${STATE.currentDomain}-guvenlik-raporu.md`, md, 'text/markdown');
   showToast('Markdown raporu indirildi!', 'success');
