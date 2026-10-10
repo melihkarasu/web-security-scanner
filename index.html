@@ -97,6 +97,31 @@
   <!-- Ana İçerik -->
   <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 w-full flex-1">
     
+    <!-- Çalışma Modu & Yasal/Etik Sorumluluk Bildirimi -->
+    <div class="mb-5 space-y-3">
+      <!-- Dinamik Mod Rozeti ve Açıklaması (JS ile doldurulur) -->
+      <div id="scanner-mode-notice" class="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5 shadow-xs">
+        <span class="text-base">ℹ️</span>
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <strong>Çalışma Modu:</strong>
+            <span id="scanner-mode-badge"><span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[11px] font-mono">🟡 GitHub Pages Modu (Pasif DoH)</span></span>
+          </div>
+          <p class="text-[11px] text-amber-800 leading-relaxed">
+            Tarayıcı güvenlik kısıtı (CORS) nedeniyle GitHub Pages üzerinden üçüncü parti sitelerin HTTP başlıkları doğrudan okunamaz. DoH DNS canlı sorgulanır. Gerçek başlık analizi için <strong>"cURL Röntgeni"</strong> sekmesini kullanabilir veya repoyu lokalde <code class="font-mono bg-amber-100/80 px-1 py-0.5 rounded font-bold">python3 server.py</code> ile çalıştırabilirsiniz.
+          </p>
+        </div>
+      </div>
+
+      <!-- Yasal & Etik Kullanım Sorumluluk Uyarısı -->
+      <div class="p-3 rounded-xl bg-stone-100/80 border border-stone-200/80 text-[11px] text-mistral-slate flex items-start gap-2">
+        <span class="text-stone-500">⚖️</span>
+        <p class="leading-relaxed">
+          <strong class="text-mistral-ink">Yasal & Etik Kullanım Sorumluluğu:</strong> Bu araç yalnızca sahibi olduğunuz veya açık yazılı test iznine sahip olduğunuz sistemleri denetlemek içindir. Yetkisiz sistemleri hedef almak, otomatize taramalarla servisleri meşgul etmek ilgili siber güvenlik mevzuatları kapsamında hukuki ve cezai sorumluluk doğurabilir. Tüm kullanım sorumluluğu kullanıcıya aittir.
+        </p>
+      </div>
+    </div>
+
     <!-- Giriş & Arama Kutusu -->
     <div class="mb-8 bg-white border border-stone-200/80 rounded-2xl p-5 sm:p-6 shadow-xs">
       <div class="max-w-3xl mb-4">
@@ -371,6 +396,6 @@
   </footer>
 
   <!-- İstemci Mantığı (Cache-Bust ile) -->
-  <script src="js/app.js?v=20261009a"></script>
+  <script src="js/app.js?v=20261010a"></script>
 </body>
 </html>

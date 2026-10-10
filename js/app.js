@@ -12,9 +12,11 @@ const STATE = {
   targetUrl: '',
   score: 0,
   grade: '?',
+  mode: 'checking', // 'local_api' veya 'github_pages'
   results: {
     dns: {},
     headers: {},
+    headersSource: 'none', // 'local_live', 'manual', 'doh_fallback'
     email: {},
     fingerprint: []
   },
@@ -387,15 +389,29 @@ async function startSecurityScan() {
     STATE.results.dns = dnsReport;
 
     // 2. HTTP Başlıkları Taraması
-    // Kullanıcı elle header yapıştırmışsa onu kullan, yoksa genel DoH ve standart güvenlik çıkarımı yap
     const manualHeadersText = document.getElementById('manual-headers-input').value.trim();
     let headerMap = {};
+    let sourceLabel = '';
 
     if (manualHeadersText) {
       headerMap = parseRawHeaders(manualHeadersText);
+      STATE.results.headersSource = 'manual';
+      sourceLabel = 'Elle Yapıştırılan cURL Başlıkları';
+    } else if (STATE.mode === 'local_api') {
+      try {
+        headerMap = await fetchLocalApiHeaders(STATE.targetUrl);
+        STATE.results.headersSource = 'local_live';
+        sourceLabel = 'Lokal Sunucu Canlı Yanıtı (127.0.0.1)';
+      } catch (apiErr) {
+        console.warn('Lokal API hatası, fallback devrede:', apiErr);
+        headerMap = await probePublicHeadersFallback(cleanDomain);
+        STATE.results.headersSource = 'doh_fallback';
+        sourceLabel = 'DoH Fallback (Yerel API Hatası: ' + apiErr.message + ')';
+      }
     } else {
-      // Standart bilinen genel profiller veya DoH HTTPS kayıtları üzerinden temel çıkarım
       headerMap = await probePublicHeadersFallback(cleanDomain);
+      STATE.results.headersSource = 'doh_fallback';
+      sourceLabel = 'DoH / Pasif Fallback Modu';
     }
 
     const headerEval = evaluateHeaders(headerMap);
@@ -421,7 +437,22 @@ async function startSecurityScan() {
   }
 }
 
-// Canlı/Fallback Header Tespiti
+// Canlı Yerel API'den Gerçek HTTP Başlıklarını Çekme (Lokal Mod)
+async function fetchLocalApiHeaders(targetUrl) {
+  const apiUrl = `/api/headers?url=${encodeURIComponent(targetUrl)}`;
+  const res = await fetch(apiUrl, { signal: AbortSignal.timeout(10000) });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || `Yerel API yanıt vermedi (HTTP ${res.status})`);
+  }
+  const data = await res.json();
+  if (!data.success) {
+    throw new Error(data.error || 'Başlıklar alınamadı.');
+  }
+  return data.headers || {};
+}
+
+// Canlı/Fallback Header Tespiti (GitHub Pages / Fallback Modu)
 async function probePublicHeadersFallback(domain) {
   const detected = {};
   try {
@@ -433,6 +464,40 @@ async function probePublicHeadersFallback(domain) {
   } catch (e) {}
 
   return detected;
+}
+
+// Çalışma Modunu Otomatik Algılama (Lokal Sunucu vs GitHub Pages)
+async function detectScannerMode() {
+  const modeBadgeEl = document.getElementById('scanner-mode-badge');
+  const modeNoticeEl = document.getElementById('scanner-mode-notice');
+
+  try {
+    const res = await fetch('/api/status', { signal: AbortSignal.timeout(1500) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.mode === 'local_server') {
+        STATE.mode = 'local_api';
+        if (modeBadgeEl) {
+          modeBadgeEl.innerHTML = '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[11px] font-mono shadow-xs">🟢 Lokal Mod (Tam Başlık Taraması Aktif)</span>';
+        }
+        if (modeNoticeEl) {
+          modeNoticeEl.className = 'p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-900 mb-4 flex items-start gap-2.5';
+          modeNoticeEl.innerHTML = '<span class="text-base">🚀</span><div><strong>Lokal Sunucu Aktif (127.0.0.1):</strong> HTTP güvenlik başlıkları CORS engeline takılmadan yerel makineniz üzerinden canlı olarak çekilmektedir.</div>';
+        }
+        return;
+      }
+    }
+  } catch (e) {}
+
+  // GitHub Pages veya Statik Barındırma Modu
+  STATE.mode = 'github_pages';
+  if (modeBadgeEl) {
+    modeBadgeEl.innerHTML = '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[11px] font-mono shadow-xs">🟡 GitHub Pages Modu (Pasif DoH)</span>';
+  }
+  if (modeNoticeEl) {
+    modeNoticeEl.className = 'p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 mb-4 flex items-start gap-2.5';
+    modeNoticeEl.innerHTML = '<span class="text-base">ℹ️</span><div><strong>Tarayıcı Kısıtı (CORS):</strong> GitHub Pages üzerinden tarayıcı doğrudan üçüncü parti sitelerin HTTP başlıklarını okuyamaz. DoH DNS canlı sorgulanır. Gerçek başlık analizi için <strong>"cURL Röntgeni"</strong> sekmesini kullanabilir veya repoyu yerel makinenizde <code class="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-950 font-bold">python3 server.py</code> ile çalıştırabilirsiniz.</div>';
+  }
 }
 
 // Skor Kartını Render Et
@@ -743,6 +808,9 @@ function switchTab(tabId) {
 
 // DOM Hazır Olduğunda
 document.addEventListener('DOMContentLoaded', () => {
+  // Çalışma modunu tespit et (Lokal API vs GitHub Pages)
+  detectScannerMode();
+
   const inputEl = document.getElementById('target-input');
   if (inputEl) {
     inputEl.addEventListener('keydown', (e) => {
@@ -750,7 +818,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Varsayılan ilk yükleme (örnek GitHub)
   if (inputEl && !inputEl.value) {
     inputEl.value = '';
   }
