@@ -1,6 +1,6 @@
 # Web Security Scanner 🛡️
 
-> **Pasif Güvenlik Başlıkları, DoH DNS & E-posta Savunma Röntgeni**  
+> **Pasif Güvenlik Başlıkları, DoH DNS & E-posta Savunma Taraması**  
 > Hibrit Mimari: Canlı Demo (GitHub Pages) + Bağımsız Sıfır-Bağımlılık Yerel Sunucu (Local Mode)
 
 [![GitHub Pages Demo](https://img.shields.io/badge/Canlı%20Demo-GitHub%20Pages-orange?style=flat-square)](https://melihkarasu.github.io/web-security-scanner/)
@@ -42,7 +42,7 @@
 ### Seçenek 1: Canlı Web Sürümü (Kurulumsuz)
 Herhangi bir terminal veya indirme gerekmeden doğrudan tarayıcınızda açın:  
 👉 **[https://melihkarasu.github.io/web-security-scanner/](https://melihkarasu.github.io/web-security-scanner/)**  
-*(DoH DNS kayıtları tam taranır. Derin HTTP başlık denetimi için 2. sekmedeki "cURL Röntgeni" alanına `curl -I https://site.com` çıktısını yapıştırabilirsiniz).*
+*(DoH DNS kayıtları tam taranır. Derin HTTP başlık denetimi için 2. sekmedeki "cURL Başlık Taraması" alanına `curl -I https://site.com` çıktısını yapıştırabilirsiniz).*
 
 ---
 

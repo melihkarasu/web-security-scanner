@@ -1,7 +1,7 @@
 /**
  * Web Security Scanner (Web Security Scanner)
  * Pasif Güvenlik Başlıkları, DoH DNS, E-posta Savunması & SSL Denetim Motoru
- * Sıfır Backend - %100 İstemci Taraflı (CORS-Açık DoH & Header Röntgeni)
+ * Sıfır Backend - %100 İstemci Taraflı (CORS-Açık DoH & Header Taraması)
  */
 
 // =============================================================
@@ -496,7 +496,7 @@ async function detectScannerMode() {
   }
   if (modeNoticeEl) {
     modeNoticeEl.className = 'p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 mb-4 flex items-start gap-2.5';
-    modeNoticeEl.innerHTML = '<span class="text-base">ℹ️</span><div><strong>Tarayıcı Kısıtı (CORS):</strong> GitHub Pages üzerinden tarayıcı doğrudan üçüncü parti sitelerin HTTP başlıklarını okuyamaz. DoH DNS canlı sorgulanır. Gerçek başlık analizi için <strong>"cURL Röntgeni"</strong> sekmesini kullanabilir veya repoyu yerel makinenizde <code class="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-950 font-bold">python3 server.py</code> ile çalıştırabilirsiniz.</div>';
+    modeNoticeEl.innerHTML = '<span class="text-base">ℹ️</span><div><strong>Tarayıcı Kısıtı (CORS):</strong> GitHub Pages üzerinden tarayıcı doğrudan üçüncü parti sitelerin HTTP başlıklarını okuyamaz. DoH DNS canlı sorgulanır. Gerçek başlık analizi için <strong>"cURL Başlık Taraması"</strong> sekmesini kullanabilir veya repoyu yerel makinenizde <code class="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-950 font-bold">python3 server.py</code> ile çalıştırabilirsiniz.</div>';
   }
 }
 
@@ -663,7 +663,7 @@ function exportMarkdownReport() {
   }
 
   const dateStr = new Date().toISOString().split('T')[0];
-  let md = `# Web Güvenlik Röntgeni Raporu\n\n`;
+  let md = `# Web Güvenlik Taraması Raporu\n\n`;
   md += `**Taranan Hedef:** \`${STATE.currentDomain}\`  \n`;
   md += `**Tarih:** ${dateStr}  \n`;
   md += `**Güvenlik Puanı:** **${STATE.score} / 100** (Not: **${STATE.grade}**)  \n\n`;
@@ -706,7 +706,7 @@ function toggleLoading(isLoading) {
 
   if (btn) btn.disabled = isLoading;
   if (spinner) spinner.classList.toggle('hidden', !isLoading);
-  if (btnText) btnText.innerText = isLoading ? 'Denetleniyor...' : 'Güvenlik Röntgenini Başlat';
+  if (btnText) btnText.innerText = isLoading ? 'Denetleniyor...' : 'Güvenlik Taramasıni Başlat';
 }
 
 function selectPreset(domain) {
