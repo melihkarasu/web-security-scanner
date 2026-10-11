@@ -23,6 +23,9 @@ import webbrowser
 import threading
 import time
 
+# Faz 3: Aktif tarama motoru (etik onay geçidi + rate limiter içerir)
+from active_scan_engine import ETHICAL_GATE, run_active_scan
+
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 WebSecurityScanner/1.0"
@@ -40,6 +43,16 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         self.send_response(204)
         self.end_headers()
 
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+
+        # Faz 3: Etik onay ucu — aktif test öncesi kullanıcı beyanı
+        if parsed.path == "/api/active-confirm":
+            self.handle_api_active_confirm()
+            return
+
+        self.send_json({"success": False, "error": "Bilinmeyen POST ucu"}, status=404)
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
 
@@ -56,6 +69,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         # 1c. API: /api/sast?path=... (Kaynak Kod Analizi - Faz 2)
         if parsed.path == "/api/sast":
             self.handle_api_sast(parsed)
+            return
+
+        # 1d. API: /api/active-scan?url=... (Aktif Güvenlik Testi - Faz 3)
+        if parsed.path == "/api/active-scan":
+            self.handle_api_active_scan(parsed)
             return
 
         # 2. API: /api/status (sunucu aktif mi kontrolü)
@@ -357,6 +375,77 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
 
         except Exception as e:
             self.send_json({"success": False, "error": f"SAST taraması başarısız: {str(e)}"}, status=500)
+
+    # =============================================================
+    # FAZ 3: Aktif Güvenlik Testi Uçları
+    # Etik onay (POST /api/active-confirm) + tarama (GET /api/active-scan)
+    # =============================================================
+    def handle_api_active_confirm(self):
+        """Kullanıcının etik beyanını alır ve domain için onay kaydeder."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length > 0 else b"{}"
+            data = json.loads(body.decode("utf-8") or "{}")
+        except (ValueError, json.JSONDecodeError):
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+
+        raw_url = (data.get("url") or "").strip()
+        confirmed = data.get("confirmed") is True
+
+        if not raw_url:
+            self.send_json({"success": False, "error": "url alanı gereklidir"}, status=400)
+            return
+        if not confirmed:
+            self.send_json({"success": False, "error": "Onay bayrağı (confirmed: true) gereklidir"}, status=400)
+            return
+
+        if not raw_url.startswith("http://") and not raw_url.startswith("https://"):
+            raw_url = "https://" + raw_url
+
+        try:
+            hostname = urllib.parse.urlparse(raw_url).hostname
+        except ValueError:
+            hostname = None
+
+        if not hostname:
+            self.send_json({"success": False, "error": "Geçersiz hedef adres"}, status=400)
+            return
+
+        ETHICAL_GATE.confirm(hostname)
+        self.send_json({
+            "success": True,
+            "message": "Etik onay kaydedildi: %s için aktif test yetkisi verildi." % hostname,
+            "domain": hostname
+        })
+
+    def handle_api_active_scan(self, parsed_path):
+        """Etik onay sonrası aktif taramayı yürütür."""
+        qs = urllib.parse.parse_qs(parsed_path.query)
+        raw_url = (qs.get("url") or [""])[0].strip()
+        modules_param = (qs.get("modules") or [""])[0].strip()
+
+        if not raw_url:
+            self.send_json({"success": False, "error": "URL parametresi gereklidir"}, status=400)
+            return
+
+        if not raw_url.startswith("http://") and not raw_url.startswith("https://"):
+            raw_url = "https://" + raw_url
+
+        modules = [m for m in modules_param.split(",") if m] if modules_param else None
+
+        try:
+            result = run_active_scan(raw_url, modules)
+            if not result.get("success") and result.get("error") == "ETIK_ONAY_YOK":
+                self.send_json({
+                    "success": False,
+                    "error": "ETIK_ONAY_YOK",
+                    "message": "Aktif test öncesi etik onay gereklidir. Lütfen onay diyaloğunu kabul edin."
+                }, status=403)
+                return
+            self.send_json(result)
+        except Exception as e:
+            self.send_json({"success": False, "error": "Aktif tarama başarısız: %s" % str(e)}, status=500)
 
     def fetch_headers(self, url):
         # Güvenlik & Pasiflik: Yalnızca başlıkları al, gövdeyi indirme

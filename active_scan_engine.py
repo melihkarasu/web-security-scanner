@@ -1,0 +1,615 @@
+#!/usr/bin/env python3
+"""
+Web Security Scanner — Aktif Güvenlik Testi Motoru (Faz 3)
+Etik onay geçidi + rate limiting ile kontrollü aktif testler:
+SQL injection (error/boolean/time-based), XSS (reflected), CSRF, SSRF,
+port taraması (temel TCP) ve derin başlık analizi.
+
+İlkeler:
+- Yalnızca OKUMA amaçlı (GET) veya zararsız payload'lar; INSERT/UPDATE/DELETE yok.
+- Her istek arası minimum gecikme (rate limit) — hedefi yorma.
+- İstek başına üst sınır; tarama başına toplam istek üst sınırı.
+- Etik onay geçidi olmadan hiçbir aktif istek gönderilmez.
+Yalnızca Python 3 standart kütüphanesi kullanır.
+"""
+
+import os
+import re
+import json
+import time
+import socket
+import urllib.request
+import urllib.parse
+import urllib.error
+
+# =============================================================
+# Güvenlik Duvarı Sabitleri
+# =============================================================
+RATE_LIMIT_SECONDS = 1.5       # istekler arası minimum süre
+MAX_REQUESTS_PER_SCAN = 60     # tarama başına toplam istek üst sınırı
+REQUEST_TIMEOUT = 8            # istek başına zaman aşımı
+TIME_BASED_SLEEP = 2           # time-based SQLi testi için bekleme (kısa tutulur)
+PORT_SCAN_TIMEOUT = 2.0        # port taraması soket zaman aşımı
+
+# Yaygın portlar (temel TCP connect taraması)
+COMMON_PORTS = {
+    21: "FTP", 22: "SSH", 25: "SMTP", 53: "DNS",
+    80: "HTTP", 110: "POP3", 143: "IMAP", 443: "HTTPS",
+    465: "SMTPS", 587: "Submission", 993: "IMAPS", 995: "POP3S",
+    1433: "MSSQL", 1521: "Oracle", 2375: "Docker API",
+    3306: "MySQL", 3389: "RDP", 5432: "PostgreSQL",
+    5900: "VNC", 6379: "Redis", 8080: "HTTP-alt", 8443: "HTTPS-alt",
+    9200: "Elasticsearch", 27017: "MongoDB"
+}
+
+# SQL hata imzaları (hedefin veritabanı motoru tespiti + error-based kanıt)
+SQL_ERROR_SIGNATURES = [
+    (r"you have an error in your sql syntax", "MySQL"),
+    (r"warning[:;]\s*mysql", "MySQL"),
+    (r"unclosed quotation mark after the character string", "MSSQL"),
+    (r"microsoft sql server.*error", "MSSQL"),
+    (r"quoted string not properly terminated", "Oracle"),
+    (r"ora-\d{5}", "Oracle"),
+    (r"postgresql.*error|pg_query\(|psql:", "PostgreSQL"),
+    (r"sqlite3?\.(operational|programming)error", "SQLite"),
+    (r"sqlite.*(error|warning)", "SQLite"),
+    (r"\btraceback\b.*\bsqlalchemy", "SQLAlchemy"),
+    (r"supplied argument is not a valid mysql", "PHP/MySQL"),
+]
+
+# Zayıf CSRF savunması tespiti için form token kalıpları
+CSRF_TOKEN_FIELDS = re.compile(
+    r'name=["\'](?:csrf[_-]?(?:token|middleware)|_csrf|authenticity[_-]?token|__requestverificationtoken|token)["\']',
+    re.IGNORECASE
+)
+
+# URL parametre adı sezgileri
+ID_PARAM_PATTERN = re.compile(r'(?:^|&)([^=&]*(?:id|uid|user|account|doc|file|page|ref|no)[^=&]*)=([^&]*)', re.IGNORECASE)
+URLVAL_PARAM_PATTERN = re.compile(r'(?:^|&)([^=&]*(?:url|link|redirect|next|target|dest|goto|domain|host|site|page|callback|return|continue)[^=&]*)=([^&]*)', re.IGNORECASE)
+
+# XSS yansıma marker'ı (zararsız benzersiz dize)
+XSS_MARKER = "wzxqmk731"
+
+# SSRF iç ağ hedefleri (yanıt farkı analizi için)
+SSRF_PROBE_TARGET = "127.0.0.1"
+
+
+# =============================================================
+# Etik Onay Geçidi (session-bazlı)
+# =============================================================
+class EthicalGate:
+    """Aktif test öncesi kullanıcı onayını kaydeder; onaysız istek reddedilir."""
+
+    def __init__(self):
+        self._confirmed = {}  # domain -> confirm timestamp
+
+    def confirm(self, domain):
+        self._confirmed[domain.lower()] = time.time()
+
+    def is_confirmed(self, domain):
+        return domain.lower() in self._confirmed
+
+    def reset(self):
+        self._confirmed = {}
+
+
+ETHICAL_GATE = EthicalGate()
+
+
+# =============================================================
+# Rate-Limited HTTP İstemcisi
+# =============================================================
+class RateLimitedClient:
+    """Tüm aktif istekler bu istemciden geçer: rate limit + sayaç + User-Agent."""
+
+    def __init__(self):
+        self.request_count = 0
+        self.last_request_at = 0.0
+
+    def get(self, url, params=None, timeout=REQUEST_TIMEOUT):
+        """Rate-limited GET. İstek üst sınırına ulaşınca StopIteration yükseltir."""
+        if self.request_count >= MAX_REQUESTS_PER_SCAN:
+            raise StopIteration("İstek üst sınırına ulaşıldı (%d)" % MAX_REQUESTS_PER_SCAN)
+
+        # Rate limit uygula
+        elapsed = time.time() - self.last_request_at
+        if elapsed < RATE_LIMIT_SECONDS:
+            time.sleep(RATE_LIMIT_SECONDS - elapsed)
+
+        if params:
+            sep = "&" if "?" in url else "?"
+            url = url + sep + urllib.parse.urlencode(params)
+
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 WebSecurityScanner/1.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8"
+        }, method="GET")
+
+        self.request_count += 1
+        self.last_request_at = time.time()
+
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                body = resp.read(256 * 1024).decode("utf-8", errors="replace")
+                return {"status": resp.status, "headers": dict(resp.headers), "body": body, "url": url, "error": None}
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read(256 * 1024).decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            return {"status": e.code, "headers": dict(e.headers or {}), "body": body, "url": url, "error": None}
+        except Exception as e:
+            return {"status": None, "headers": {}, "body": "", "url": url, "error": str(e)}
+
+
+# =============================================================
+# Test Modülleri
+# =============================================================
+def test_sqli(client, base_url):
+    """SQL injection: error-based + boolean-based + time-based (kısa)."""
+    findings = []
+    parsed = urllib.parse.urlparse(base_url)
+    if not parsed.query:
+        findings.append({
+            "test": "SQL Injection", "severity": "BİLGİ", "title": "Test edilebilir sorgu parametresi yok",
+            "evidence": "URL'de query string bulunamadı; form parametreleri manuel test gerektirir.",
+            "cwe": "-", "fix": "Form içi girdileri de test etmek için parametreli URL kullanın."
+        })
+        return findings
+
+    params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+    base_params = {k: v[0] for k, v in params.items()}
+
+    for pname in list(params.keys())[:4]:  # ilk 4 parametre
+        # --- Error-based: tek tırnak ---
+        probe_params = dict(base_params)
+        probe_params[pname] = base_params[pname] + "'"
+        probe_url = _build_url(parsed, probe_params)
+        resp = client.get(probe_url)
+        if resp["error"]:
+            continue
+        for sig, engine in SQL_ERROR_SIGNATURES:
+            if re.search(sig, resp["body"], re.IGNORECASE):
+                findings.append({
+                    "test": "SQL Injection", "severity": "KRİTİK",
+                    "title": "Error-based SQL Injection (%s parametresi)" % pname,
+                    "evidence": "%s → %s hata imzası: %s" % (probe_url, engine, _excerpt(resp["body"], sig)),
+                    "cwe": "CWE-89",
+                    "fix": "Parametreli sorgular kullanın; hata mesajlarını kullanıcıya göstermeyin."
+                })
+                break  # aynı parametre için tek bulgu yeter
+
+        # --- Boolean-based: AND 1=1 vs AND 1=2 ---
+        true_resp = client.get(_build_url(parsed, {**base_params, pname: base_params[pname] + " AND 1=1"}))
+        false_resp = client.get(_build_url(parsed, {**base_params, pname: base_params[pname] + " AND 1=2"}))
+        if not true_resp["error"] and not false_resp["error"]:
+            t_len, f_len = len(true_resp["body"]), len(false_resp["body"])
+            t_status, f_status = true_resp["status"], false_resp["status"]
+            if (t_status == f_status and t_len > 0 and abs(t_len - f_len) > 0 and f_len != t_len
+                    and _normal_similarity(true_resp["body"], false_resp["body"]) < 0.95):
+                findings.append({
+                    "test": "SQL Injection", "severity": "KRİTİK",
+                    "title": "Boolean-based SQL Injection şüphesi (%s parametresi)" % pname,
+                    "evidence": "AND 1=1 yanıt uzunluğu %d, AND 1=2 yanıt uzunluğu %d (fark: %d, durum: %s/%s)" % (t_len, f_len, abs(t_len - f_len), t_status, f_status),
+                    "cwe": "CWE-89",
+                    "fix": "Parametreli sorgular kullanın (prepared statements)."
+                })
+
+        # --- Time-based: SLEEP (yalnızca MySQL sözdizimi, kısa bekleme) ---
+        t0 = time.time()
+        resp = client.get(_build_url(parsed, {**base_params, pname: base_params[pname] + "' AND SLEEP(%d) AND '1'='1" % TIME_BASED_SLEEP}), timeout=TIME_BASED_SLEEP + REQUEST_TIMEOUT)
+        elapsed = time.time() - t0
+        if not resp["error"] and elapsed >= TIME_BASED_SLEEP:
+            findings.append({
+                "test": "SQL Injection", "severity": "KRİTİK",
+                "title": "Time-based blind SQL Injection şüphesi (%s parametresi)" % pname,
+                "evidence": "SLEEP(%d) payload'ı yanıt süresini %.1f sn'ye uzattı (normal: <%.1f sn)" % (TIME_BASED_SLEEP, elapsed, REQUEST_TIMEOUT),
+                "cwe": "CWE-89",
+                "fix": "Parametreli sorgular kullanın; girdiyi tip doğrulamasından geçirin."
+            })
+
+    return findings
+
+
+def test_xss_reflected(client, base_url):
+    """Reflected XSS: zararsız marker enjekte edip ham yansımayı arar."""
+    findings = []
+    parsed = urllib.parse.urlparse(base_url)
+    if not parsed.query:
+        return findings
+
+    params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+    base_params = {k: v[0] for k, v in params.items()}
+
+    for pname in list(params.keys())[:4]:
+        probe_params = dict(base_params)
+        probe_params[pname] = XSS_MARKER
+        resp = client.get(_build_url(parsed, probe_params))
+        if resp["error"]:
+            continue
+        body = resp["body"]
+        if XSS_MARKER in body:
+            # Marker HTML context'inde mi? (etiket içinde ham mı, yoksa kod bloğu içinde mi)
+            idx = body.find(XSS_MARKER)
+            ctx = body[max(0, idx - 40):idx + len(XSS_MARKER) + 10]
+            encoded_ok = (XSS_MARKER not in body)
+            if not encoded_ok:
+                # Önemli kontrol: marker'ın URL-encode edilmeden ve HTML-escape edilmeden dönmesi
+                if XSS_MARKER in ctx:
+                    findings.append({
+                        "test": "XSS", "severity": "YÜKSEK",
+                        "title": "Reflected XSS — encode edilmemiş yansıma (%s parametresi)" % pname,
+                        "evidence": "...%s... (marker ham olarak yanıt gövdesine yansıdı)" % _excerpt(ctx, XSS_MARKER),
+                        "cwe": "CWE-79",
+                        "fix": "Çıktıyı bağlama göre kodlayın (HTML: &lt; &gt; &quot;); textContent kullanın."
+                    })
+                    break  # bir kanıt yeter
+
+    # DOM-based XSS: sayfa içi tehlikeli sink taraması (pasif okuma, payload yok)
+    resp = client.get(base_url)
+    if not resp["error"] and resp["body"]:
+        dom_patterns = [
+            (r"document\.write\(\s*.*(?:location\.(?:hash|search|href)|window\.name)", "document.write + konum kaynağı"),
+            (r"\.innerHTML\s*=\s*.*(?:location\.(?:hash|search)|window\.name|document\.URL)", "innerHTML + konum kaynağı"),
+            (r"eval\(\s*.*(?:location\.(?:hash|search)|window\.name)", "eval + konum kaynağı"),
+        ]
+        for rx, desc in dom_patterns:
+            m = re.search(rx, resp["body"])
+            if m:
+                findings.append({
+                    "test": "XSS", "severity": "ORTA",
+                    "title": "DOM-based XSS riski (%s)" % desc,
+                    "evidence": _excerpt(resp["body"], rx, 100),
+                    "cwe": "CWE-79",
+                    "fix": "Konum kaynaklarını (hash/search) DOM'a yazmadan önce sterilize edin."
+                })
+                break
+
+    return findings
+
+
+def test_csrf(client, base_url):
+    """CSRF savunması: form token'ı + SameSite çerez kontrolü."""
+    findings = []
+    resp = client.get(base_url)
+    if resp["error"]:
+        return findings
+
+    body = resp["body"]
+    forms = re.findall(r"<form[^>]*>([\s\S]*?)</form>", body, re.IGNORECASE)
+    state_changing = [f for f in forms if re.search(r'<form[^>]*method=["\'](?:post|get)["\']', body, re.IGNORECASE)]
+
+    if not forms:
+        findings.append({
+            "test": "CSRF", "severity": "BİLGİ", "title": "Test edilebilir form yok",
+            "evidence": "Sayfada <form> bulunamadı.", "cwe": "-", "fix": "-"
+        })
+        return findings
+
+    # Form token kontrolü
+    forms_without_token = []
+    for i, form_html in enumerate(forms):
+        if not CSRF_TOKEN_FIELDS.search(form_html):
+            forms_without_token.append(i + 1)
+
+    # SameSite çerez kontrolü
+    set_cookies = []
+    for hk, hv in resp["headers"].items():
+        if hk.lower() == "set-cookie":
+            set_cookies.append(hv)
+    samesite_ok = any("samesite" in c.lower() and ("strict" in c.lower() or "lax" in c.lower()) for c in set_cookies)
+
+    if forms_without_token and not samesite_ok:
+        findings.append({
+            "test": "CSRF", "severity": "YÜKSEK",
+            "title": "CSRF koruması zayıf (%d/%d formda token yok, SameSite çerez yok)" % (len(forms_without_token), len(forms)),
+            "evidence": "Token'sız form indeksleri: %s; Set-Cookie başlıklarında SameSite Strict/Lax bulunamadı." % forms_without_token[:5],
+            "cwe": "CWE-352",
+            "fix": "Formlara CSRF token ekleyin; oturum çerezlerine SameSite=Lax/Strict tanımlayın."
+        })
+    elif forms_without_token:
+        findings.append({
+            "test": "CSRF", "severity": "ORTA",
+            "title": "Bazı formlarda CSRF token yok (SameSite çerez kısmi koruma sağlıyor)",
+            "evidence": "Token'sız form indeksleri: %s" % forms_without_token[:5],
+            "cwe": "CWE-352",
+            "fix": "Tüm durum değiştiren formlara token ekleyin."
+        })
+    elif not samesite_ok:
+        findings.append({
+            "test": "CSRF", "severity": "ORTA",
+            "title": "Oturum çerezinde SameSite bayrağı yok",
+            "evidence": "Set-Cookie: %s" % (set_cookies[0][:80] if set_cookies else "(çerez yok)"),
+            "cwe": "CWE-352",
+            "fix": "Çerezlere SameSite=Lax ekleyin."
+        })
+
+    return findings
+
+
+def test_ssrf(client, base_url):
+    """SSRF şüphesi: URL-benzeri parametreleri iç ağ adresiyle deneyip yanıt farkı analiz eder."""
+    findings = []
+    parsed = urllib.parse.urlparse(base_url)
+    if not parsed.query:
+        return findings
+
+    # URL-benzeri parametre adları
+    url_params = URLVAL_PARAM_PATTERN.findall(parsed.query)
+    if not url_params:
+        return findings
+
+    baseline = client.get(base_url)
+    if baseline["error"]:
+        return findings
+
+    for pname, pval in url_params[:3]:
+        probe_params = dict(urllib.parse.parse_qs(parsed.query, keep_blank_values=True))
+        probe_params = {k: v[0] for k, v in probe_params.items()}
+        probe_params[pname] = SSRF_PROBE_TARGET
+        resp = client.get(_build_url(parsed, probe_params))
+        if resp["error"]:
+            continue
+
+        # Yanıt farkı: durum kodu değişimi veya hata mesajı iç ağ bağlantısını ele verir
+        internal_signals = [
+            r"connection refused", r"127\.0\.0\.1", r"localhost",
+            r"curl error", r"failed to connect", r"bağlantı reddedildi"
+        ]
+        signal_hit = [s for s in internal_signals if re.search(s, resp["body"], re.IGNORECASE)]
+        if resp["status"] != baseline["status"] or (signal_hit and not any(re.search(s, baseline["body"] or "", re.IGNORECASE) for s in internal_signals)):
+            findings.append({
+                "test": "SSRF", "severity": "YÜKSEK",
+                "title": "SSRF şüphesi (%s parametresi iç ağ adresini işliyor)" % pname,
+                "evidence": "127.0.0.1 değeri gönderildiğinde durum %s→%s; sinyal: %s" % (
+                    baseline["status"], resp["status"], ", ".join(signal_hit) or "(yanıt farkı)"),
+                "cwe": "CWE-918",
+                "fix": "İstek öncesi DNS çözümlemesi ile özel IP aralıklarını reddedin (SSRF guard)."
+            })
+            break
+
+    return findings
+
+
+def test_port_scan(hostname):
+    """Temel TCP connect taraması (yalnızca yaygın portlar)."""
+    findings = []
+    open_ports = []
+    for port, service in COMMON_PORTS.items():
+        try:
+            with socket.create_connection((hostname, port), timeout=PORT_SCAN_TIMEOUT):
+                open_ports.append({"port": port, "service": service})
+        except (socket.timeout, ConnectionRefusedError, OSError):
+            continue
+
+    risky = [p for p in open_ports if p["service"] in ("Docker API", "Redis", "MongoDB", "Elasticsearch", "VNC", "RDP", "MSSQL", "Oracle", "MySQL", "PostgreSQL")]
+    if risky:
+        findings.append({
+            "test": "Port Taraması", "severity": "ORTA",
+            "title": "Yayına açık veritabanı/altyapı portu tespit edildi",
+            "evidence": ", ".join("%d/%s" % (p["port"], p["service"]) for p in risky),
+            "cwe": "CWE-668",
+            "fix": "Bu portları güvenlik duvarı ile kısıtlayın; yalnızca iç ağdan erişilebilir yapın."
+        })
+
+    # Bilgi bulgusu: tüm açık portlar listesi
+    findings.append({
+        "test": "Port Taraması", "severity": "BİLGİ",
+        "title": "Açık portlar (%d/%d taranan)" % (len(open_ports), len(COMMON_PORTS)),
+        "evidence": ", ".join("%d/%s" % (p["port"], p["service"]) for p in open_ports) or "(hiçbiri)",
+        "cwe": "-", "fix": "-"
+    })
+    return findings, open_ports
+
+
+def test_deep_headers(base_url):
+    """Derin başlık analizi: CSP direktif detayları + CORS politika zafiyeti (tek istek, pasif)."""
+    findings = []
+    resp_headers, status = _fetch_headers_only(base_url)
+    if resp_headers is None:
+        findings.append({
+            "test": "Derin Başlık", "severity": "BİLGİ", "title": "Başlıklar alınamadı",
+            "evidence": str(status), "cwe": "-", "fix": "-"
+        })
+        return findings
+
+    # CSP direktif analizi
+    csp = _get_header(resp_headers, "content-security-policy")
+    if csp:
+        if "unsafe-inline" in csp:
+            findings.append({
+                "test": "Derin Başlık", "severity": "ORTA",
+                "title": "CSP: unsafe-inline izni",
+                "evidence": _excerpt(csp, "unsafe-inline", 60),
+                "cwe": "CWE-693",
+                "fix": "script-src 'self' + nonce/hash kullanın; unsafe-inline'den kurtulun."
+            })
+        if "unsafe-eval" in csp:
+            findings.append({
+                "test": "Derin Başlık", "severity": "YÜKSEK",
+                "title": "CSP: unsafe-eval izni",
+                "evidence": _excerpt(csp, "unsafe-eval", 60),
+                "cwe": "CWE-693",
+                "fix": "eval gerektiren bağımlılıkları kaldırın; CSP'den unsafe-eval'i çıkarın."
+            })
+        if re.search(r"(?:script-src|default-src)[^;]*\*", csp):
+            findings.append({
+                "test": "Derin Başlık", "severity": "ORTA",
+                "title": "CSP: script-src'de wildcard (*)",
+                "evidence": _excerpt(csp, r"script-src", 60),
+                "cwe": "CWE-693",
+                "fix": "script-src'ı 'self' ve güvenilir alan adlarıyla sınırlandırın."
+            })
+        if "object-src" not in csp and "default-src" not in csp:
+            findings.append({
+                "test": "Derin Başlık", "severity": "DÜŞÜK",
+                "title": "CSP: object-src/default-src tanımsız",
+                "evidence": "object-src 'none' tanımlanmamış.",
+                "cwe": "CWE-693",
+                "fix": "object-src 'none' ekleyin (plugin içerik enjeksiyonunu engeller)."
+            })
+
+    # CORS politika analizi
+    acao = _get_header(resp_headers, "access-control-allow-origin")
+    acac = _get_header(resp_headers, "access-control-allow-credentials")
+    if acao == "*" and acac and acac.lower() == "true":
+        findings.append({
+            "test": "Derin Başlık", "severity": "YÜKSEK",
+            "title": "CORS: wildcard origin + credentials izni",
+            "evidence": "Access-Control-Allow-Origin: * + Access-Control-Allow-Credentials: true",
+            "cwe": "CWE-942",
+            "fix": "Kimlik bilgileriyle wildcard origin kullanmayın; origin allow-list uygulayın."
+        })
+    elif acao == "*":
+        findings.append({
+            "test": "Derin Başlık", "severity": "DÜŞÜK",
+            "title": "CORS: wildcard origin (geniş erişim)",
+            "evidence": "Access-Control-Allow-Origin: *",
+            "cwe": "CWE-942",
+            "fix": "Hassas kaynaklar için origin'leri allow-list ile sınırlayın."
+        })
+
+    # Cache-Control eksikliği (hassas sayfalar için)
+    cc = _get_header(resp_headers, "cache-control")
+    if cc and re.search(r"no-store|no-cache|private", cc, re.IGNORECASE) is None:
+        findings.append({
+            "test": "Derin Başlık", "severity": "DÜŞÜK",
+            "title": "Cache-Control: önbellek izni kısıtsız",
+            "evidence": "Cache-Control: %s" % cc[:60],
+            "cwe": "CWE-524",
+            "fix": "Hassas yanıtlara Cache-Control: no-store ekleyin."
+        })
+
+    return findings
+
+
+def test_idor_indicators(client, base_url):
+    """IDOR göstergeleri: kimlik-benzeri parametreleri tespit edip manuel inceleme önerir (otomatik erişim değiştirmez)."""
+    findings = []
+    parsed = urllib.parse.urlparse(base_url)
+    if not parsed.query:
+        return findings
+
+    id_params = ID_PARAM_PATTERN.findall(parsed.query)
+    if id_params:
+        findings.append({
+            "test": "IDOR", "severity": "ORTA",
+            "title": "Kimlik-benzeri parametre tespit edildi (yetki kontrolü doğrulanmalı)",
+            "evidence": ", ".join("%s=%s" % (p, v[:20]) for p, v in id_params[:5]),
+            "cwe": "CWE-639",
+            "fix": "Her istekte kaynağın sahibi sunucu tarafında doğrulanmalı (ownership check). İki farklı hesapla erişim testi yapın."
+        })
+    return findings
+
+
+# =============================================================
+# Yardımcılar
+# =============================================================
+def _build_url(parsed, params):
+    query = urllib.parse.urlencode(params)
+    return urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, query, parsed.fragment))
+
+def _normal_similarity(a, b):
+    """İki gövdenin kaba benzerlik oranı (0-1). Boolean-based tespitte yanlış-pozitif azaltır."""
+    if not a or not b:
+        return 0.0
+    import difflib
+    return difflib.SequenceMatcher(None, a[:20000], b[:20000]).ratio()
+
+def _excerpt(body, pattern, radius=80):
+    """Regex'e uyan yerin etrafından kısa kanıt parçası çıkarır."""
+    m = re.search(pattern, body or "", re.IGNORECASE)
+    if not m:
+        return "(kanıt çıkarılamadı)"
+    start = max(0, m.start() - radius // 2)
+    end = min(len(body), m.end() + radius // 2)
+    return body[start:end].replace("\n", " ").strip()[:160]
+
+def _get_header(headers, name):
+    for k, v in headers.items():
+        if k.lower() == name:
+            return v
+    return None
+
+def _fetch_headers_only(url):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 WebSecurityScanner/1.0"}, method="GET")
+        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
+            return dict(resp.headers), resp.status
+    except urllib.error.HTTPError as e:
+        return dict(e.headers or {}), e.code
+    except Exception as e:
+        return None, str(e)
+
+
+# =============================================================
+# Ana Aktif Tarama Orkestratörü
+# =============================================================
+def run_active_scan(base_url, modules=None):
+    """Etik onay sonrası aktif taramayı orkestre eder."""
+    parsed = urllib.parse.urlparse(base_url if "://" in base_url else "https://" + base_url)
+    hostname = parsed.hostname
+    normalized = "%s://%s%s" % (parsed.scheme, parsed.netloc, parsed.path or "/")
+
+    if not ETHICAL_GATE.is_confirmed(hostname or ""):
+        return {"success": False, "error": "ETIK_ONAY_YOK", "message": "Aktif test için etik onay gerekli."}
+
+    all_modules = ["sqli", "xss", "csrf", "ssrf", "idor", "ports", "deep_headers"]
+    active_modules = modules if modules else all_modules
+
+    client = RateLimitedClient()
+    findings = []
+    module_stats = {}
+    scan_url = base_url if "://" in base_url else "https://" + base_url
+
+    def _run(name, fn):
+        t0 = time.time()
+        try:
+            result = fn()
+            count = len(result) if isinstance(result, (list, tuple)) else 0
+            module_stats[name] = {"ran": True, "findings": count, "duration_ms": int((time.time() - t0) * 1000), "requests": client.request_count}
+            return result
+        except StopIteration:
+            module_stats[name] = {"ran": False, "skipped": "istek limiti", "duration_ms": int((time.time() - t0) * 1000)}
+            return []
+        except Exception as e:
+            module_stats[name] = {"ran": False, "error": str(e)[:100], "duration_ms": int((time.time() - t0) * 1000)}
+            return []
+
+    start = time.time()
+
+    if "sqli" in active_modules:
+        findings += _run("sqli", lambda: test_sqli(client, scan_url))
+    if "xss" in active_modules:
+        findings += _run("xss", lambda: test_xss_reflected(client, scan_url))
+    if "csrf" in active_modules:
+        findings += _run("csrf", lambda: test_csrf(client, scan_url))
+    if "ssrf" in active_modules:
+        findings += _run("ssrf", lambda: test_ssrf(client, scan_url))
+    if "idor" in active_modules:
+        findings += _run("idor", lambda: test_idor_indicators(client, scan_url))
+    if "deep_headers" in active_modules:
+        findings += _run("deep_headers", lambda: test_deep_headers(scan_url))
+    if "ports" in active_modules:
+        def _ports():
+            f, _open = test_port_scan(hostname)
+            return f
+        findings += _run("ports", _ports)
+
+    summary = {"KRİTİK": 0, "YÜKSEK": 0, "ORTA": 0, "DÜŞÜK": 0, "BİLGİ": 0}
+    for f in findings:
+        summary[f["severity"]] = summary.get(f["severity"], 0) + 1
+
+    return {
+        "success": True,
+        "url": scan_url,
+        "modules": module_stats,
+        "summary": summary,
+        "findings": findings,
+        "requests_sent": client.request_count,
+        "rate_limit_seconds": RATE_LIMIT_SECONDS,
+        "duration_ms": int((time.time() - start) * 1000),
+        "disclaimer": "Aktif testler yalnızca okuma amaçlı payload'larla, rate-limited olarak yürütülmüştür."
+    }

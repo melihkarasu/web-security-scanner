@@ -19,6 +19,7 @@ const STATE = {
     headersSource: 'none', // 'local_live', 'manual', 'doh_fallback'
     deepScan: null, // Faz 1: cookies, tls, robots, mixed_content, tech_fingerprint
     sast: null, // Faz 2: kaynak kod analizi sonuçları
+    activeScan: null, // Faz 3: aktif güvenlik testi sonuçları
     email: {},
     fingerprint: []
   },
@@ -976,6 +977,179 @@ function renderSastDeps(deps) {
   }
 }
 
+// =============================================================
+// FAZ 3: Aktif Güvenlik Testi Mantığı (Etik Onay + Rate-Limited Tarama)
+// =============================================================
+async function startActiveScan() {
+  const targetInput = document.getElementById('active-target-input');
+  const btn = document.getElementById('active-btn');
+  const spinner = document.getElementById('active-spinner');
+  const btnText = document.getElementById('active-btn-text');
+  const resultsEl = document.getElementById('active-results');
+  const pagesNotice = document.getElementById('active-pages-notice');
+  const ethicalCheck = document.getElementById('active-ethical-check');
+
+  // Mod kontrolü
+  if (STATE.mode !== 'local_api') {
+    if (pagesNotice) pagesNotice.classList.remove('hidden');
+    showToast('Aktif test yalnızca lokal sunucu modunda çalışır. python3 server.py ile çalıştırın.', 'warning');
+    return;
+  }
+  if (pagesNotice) pagesNotice.classList.add('hidden');
+
+  const rawUrl = targetInput ? targetInput.value.trim() : '';
+  if (!rawUrl) {
+    showToast('Lütfen bir hedef URL girin (örn: https://siteniz.com/page?id=1)', 'warning');
+    return;
+  }
+
+  // Etik onay kontrolü
+  if (!ethicalCheck || !ethicalCheck.checked) {
+    showToast('Devam etmek için etik sorumluluk beyanını onaylamanız gerekiyor.', 'warning');
+    if (ethicalCheck) ethicalCheck.focus();
+    return;
+  }
+
+  // Seçili modülleri topla
+  const moduleChecks = document.querySelectorAll('.active-module-check:checked');
+  const modules = Array.from(moduleChecks).map(c => c.value);
+  if (modules.length === 0) {
+    showToast('En az bir test modülü seçmelisiniz.', 'warning');
+    return;
+  }
+
+  // UI: yükleniyor
+  if (btn) btn.disabled = true;
+  if (spinner) spinner.classList.remove('hidden');
+  if (btnText) btnText.innerText = 'Test Ediliyor...';
+  if (resultsEl) resultsEl.classList.remove('hidden');
+
+  try {
+    // 1. Etik onayı sunucuya gönder (domain bazlı)
+    const confirmRes = await fetch('/api/active-confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: rawUrl, confirmed: true }),
+      signal: AbortSignal.timeout(5000)
+    });
+    const confirmData = await confirmRes.json();
+    if (!confirmData.success) {
+      showToast('Onay kaydedilemedi: ' + (confirmData.error || '?'), 'error');
+      return;
+    }
+
+    // 2. Aktif taramayı başlat
+    const scanUrl = '/api/active-scan?url=' + encodeURIComponent(rawUrl) + '&modules=' + encodeURIComponent(modules.join(','));
+    const res = await fetch(scanUrl, { signal: AbortSignal.timeout(300000) });
+    const data = await res.json();
+
+    if (!data.success) {
+      if (data.error === 'ETIK_ONAY_YOK') {
+        showToast('Etik onay bulunamadı. Beyanı işaretleyip tekrar deneyin.', 'warning');
+      } else {
+        showToast('Aktif test hatası: ' + (data.error || data.message || 'Bilinmeyen hata'), 'error');
+      }
+      return;
+    }
+
+    STATE.results.activeScan = data;
+    renderActiveResults(data);
+
+    const s = data.summary;
+    showToast('Aktif test tamamlandı: ' + data.findings.length + ' bulgu (K:' + (s['KRİTİK'] || 0) + ' Y:' + (s['YÜKSEK'] || 0) + ' O:' + (s['ORTA'] || 0) + ') — ' + data.requests_sent + ' istek', 'success');
+  } catch (err) {
+    console.error('Active Scan Error:', err);
+    showToast('Aktif test başarısız: ' + err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    if (spinner) spinner.classList.add('hidden');
+    if (btnText) btnText.innerText = 'Aktif Testi Başlat';
+  }
+}
+
+function renderActiveResults(data) {
+  // İstatistik kartı
+  const statsGrid = document.getElementById('active-stats-grid');
+  if (statsGrid) {
+    const cards = [
+      { label: 'Gönderilen İstek', value: data.requests_sent || 0, icon: '📡' },
+      { label: 'Rate Limit', value: (data.rate_limit_seconds || 1.5) + ' sn', icon: '⏱️' },
+      { label: 'Toplam Bulgu', value: data.findings.length, icon: '🔍' },
+      { label: 'Süre', value: ((data.duration_ms || 0) / 1000).toFixed(1) + ' sn', icon: '⚡' },
+      { label: 'Modül', value: Object.keys(data.modules || {}).length, icon: '🧩' }
+    ];
+    statsGrid.innerHTML = cards.map(c => '<div class="p-3 rounded-xl bg-stone-50 border border-stone-200 text-center"><div class="text-xl mb-0.5">' + c.icon + '</div><div class="text-lg font-bold font-mono text-mistral-ink">' + escapeHtml(String(c.value)) + '</div><div class="text-[10px] text-mistral-slate font-medium">' + c.label + '</div></div>').join('');
+  }
+
+  // Şiddet özeti
+  const sevGrid = document.getElementById('active-severity-summary');
+  if (sevGrid) {
+    const s = data.summary || {};
+    const sevs = [
+      { key: 'KRİTİK', color: 'bg-rose-100 text-rose-800 border-rose-200' },
+      { key: 'YÜKSEK', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+      { key: 'ORTA', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+      { key: 'DÜŞÜK', color: 'bg-stone-100 text-stone-700 border-stone-200' },
+      { key: 'BİLGİ', color: 'bg-sky-100 text-sky-800 border-sky-200' }
+    ];
+    sevGrid.innerHTML = sevs.map(sv => '<div class="p-3 rounded-xl border text-center ' + sv.color + '"><div class="text-2xl font-bold font-mono">' + (s[sv.key] || 0) + '</div><div class="text-[10px] font-bold tracking-wider">' + sv.key + '</div></div>').join('');
+  }
+
+  // Modül durumu
+  const modulesEl = document.getElementById('active-modules-status');
+  if (modulesEl) {
+    const MODULE_NAMES = {
+      sqli: 'SQL Injection', xss: 'XSS', csrf: 'CSRF', ssrf: 'SSRF',
+      idor: 'IDOR', ports: 'Port Taraması', deep_headers: 'Derin Başlık'
+    };
+    modulesEl.innerHTML = Object.entries(data.modules || {}).map(([mid, m]) => {
+      const statusHtml = m.ran
+        ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-100 text-emerald-800">✓ ' + (m.findings || 0) + ' bulgu</span>'
+        : (m.skipped
+          ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-100 text-amber-800">atlandı</span>'
+          : '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-100 text-rose-800">hata</span>');
+      return '<div class="p-2.5 rounded-xl border border-stone-200 bg-stone-50 flex items-center justify-between gap-2"><span class="text-xs font-mono font-semibold text-mistral-ink">' + (MODULE_NAMES[mid] || mid) + '</span>' + statusHtml + '</div>';
+    }).join('');
+  }
+
+  // Bulgular
+  const list = document.getElementById('active-findings-list');
+  const countEl = document.getElementById('active-findings-count');
+  if (countEl) countEl.innerText = (data.findings.length) + ' bulgu';
+  if (list) {
+    if (data.findings.length === 0) {
+      list.innerHTML = '<div class="p-4 text-center text-xs text-mistral-slate">Bulgu tespit edilmedi. 🎉</div>';
+    } else {
+      const sevColors = {
+        'KRİTİK': 'border-rose-300 bg-rose-50/60',
+        'YÜKSEK': 'border-orange-300 bg-orange-50/60',
+        'ORTA': 'border-amber-300 bg-amber-50/60',
+        'DÜŞÜK': 'border-stone-300 bg-stone-50/60',
+        'BİLGİ': 'border-sky-300 bg-sky-50/60'
+      };
+      const sevBadges = {
+        'KRİTİK': 'bg-rose-600 text-white',
+        'YÜKSEK': 'bg-orange-500 text-white',
+        'ORTA': 'bg-amber-500 text-white',
+        'DÜŞÜK': 'bg-stone-500 text-white',
+        'BİLGİ': 'bg-sky-500 text-white'
+      };
+      list.innerHTML = data.findings.map(f => '<div class="p-3 rounded-xl border ' + (sevColors[f.severity] || 'border-stone-200') + '">' +
+        '<div class="flex items-start justify-between gap-2 mb-1.5">' +
+        '<div class="flex items-center gap-2 flex-wrap">' +
+        '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono ' + (sevBadges[f.severity] || 'bg-stone-500 text-white') + '">' + escapeHtml(f.severity) + '</span>' +
+        '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-100 border border-stone-200 text-stone-600">' + escapeHtml(f.cwe || '-') + '</span>' +
+        '</div>' +
+        '<span class="text-[10px] font-mono text-stone-500 whitespace-nowrap">' + escapeHtml(f.test || '') + '</span>' +
+        '</div>' +
+        '<div class="text-xs font-bold text-mistral-ink mb-1.5">' + escapeHtml(f.title) + '</div>' +
+        '<div class="text-[10px] font-mono bg-stone-900 text-emerald-300 p-2 rounded-lg overflow-x-auto mb-1.5"><code>' + escapeHtml(f.evidence || '') + '</code></div>' +
+        (f.fix && f.fix !== '-' ? '<p class="text-[11px] text-emerald-800 bg-emerald-50 rounded-lg px-2 py-1 leading-relaxed"><strong>Çözüm:</strong> ' + escapeHtml(f.fix) + '</p>' : '') +
+        '</div>').join('');
+    }
+  }
+}
+
 // Markdown Denetim Raporunu Dışa Aktarma
 function exportMarkdownReport() {
   if (!STATE.currentDomain) {
@@ -1307,7 +1481,7 @@ function escapeAttr(str) {
 // Sekme Değiştirme
 function switchTab(tabId) {
   STATE.activeTab = tabId;
-  const tabs = ['audit', 'headers', 'sast', 'checklist'];
+  const tabs = ['audit', 'headers', 'sast', 'active', 'checklist'];
   for (const t of tabs) {
     const el = document.getElementById(`tab-content-${t}`);
     const btn = document.getElementById(`tab-btn-${t}`);
