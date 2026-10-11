@@ -1056,7 +1056,8 @@ async function startActiveScan() {
     renderActiveResults(data);
 
     const s = data.summary;
-    showToast('Aktif test tamamlandı: ' + data.findings.length + ' bulgu (K:' + (s['KRİTİK'] || 0) + ' Y:' + (s['YÜKSEK'] || 0) + ' O:' + (s['ORTA'] || 0) + ') — ' + data.requests_sent + ' istek', 'success');
+    const chainCount = (data.chains || []).length;
+    showToast('Aktif test tamamlandı: ' + data.findings.length + ' bulgu' + (chainCount > 0 ? ' + ' + chainCount + ' risk zinciri' : '') + ' (K:' + (s['KRİTİK'] || 0) + ' Y:' + (s['YÜKSEK'] || 0) + ' O:' + (s['ORTA'] || 0) + ') — ' + data.requests_sent + ' istek', 'success');
   } catch (err) {
     console.error('Active Scan Error:', err);
     showToast('Aktif test başarısız: ' + err.message, 'error');
@@ -1099,7 +1100,8 @@ function renderActiveResults(data) {
   const modulesEl = document.getElementById('active-modules-status');
   if (modulesEl) {
     const MODULE_NAMES = {
-      sqli: 'SQL Injection', xss: 'XSS', csrf: 'CSRF', ssrf: 'SSRF',
+      sqli: 'SQL Injection', nosqli: 'NoSQL Injection', ssti: 'SSTI',
+      open_redirect: 'Open Redirect', xss: 'XSS', csrf: 'CSRF', ssrf: 'SSRF',
       idor: 'IDOR', ports: 'Port Taraması', deep_headers: 'Derin Başlık'
     };
     modulesEl.innerHTML = Object.entries(data.modules || {}).map(([mid, m]) => {
@@ -1110,6 +1112,33 @@ function renderActiveResults(data) {
           : '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-100 text-rose-800">hata</span>');
       return '<div class="p-2.5 rounded-xl border border-stone-200 bg-stone-50 flex items-center justify-between gap-2"><span class="text-xs font-mono font-semibold text-mistral-ink">' + (MODULE_NAMES[mid] || mid) + '</span>' + statusHtml + '</div>';
     }).join('');
+  }
+
+  // Zincirleme korelasyon sonuçları (Faz 6A)
+  const chainsCard = document.getElementById('active-chains-card');
+  const chainsList = document.getElementById('active-chains-list');
+  if (chainsCard && chainsList) {
+    const chains = data.chains || [];
+    if (chains.length === 0) {
+      chainsCard.classList.add('hidden');
+    } else {
+      chainsCard.classList.remove('hidden');
+      const chainSevBadges = {
+        'KRİTİK': 'bg-rose-600 text-white',
+        'YÜKSEK': 'bg-orange-500 text-white',
+        'ORTA': 'bg-amber-500 text-white',
+        'DÜŞÜK': 'bg-stone-500 text-white'
+      };
+      chainsList.innerHTML = chains.map(c => '<div class="p-3 rounded-xl bg-white border border-rose-200 shadow-xs">' +
+        '<div class="flex items-start justify-between gap-2 mb-1.5">' +
+        '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono ' + (chainSevBadges[c.severity] || 'bg-stone-500 text-white') + '">' + escapeHtml(c.severity) + '</span>' +
+        '<span class="text-[10px] font-mono text-stone-500">' + escapeHtml((c.components || []).join(' + ')) + '</span>' +
+        '</div>' +
+        '<div class="text-xs font-bold text-rose-900 mb-1">' + escapeHtml(c.title) + '</div>' +
+        '<p class="text-[11px] text-rose-700 leading-relaxed mb-1.5">' + escapeHtml(c.description) + '</p>' +
+        '<p class="text-[11px] text-emerald-800 bg-emerald-50 rounded-lg px-2 py-1 leading-relaxed"><strong>Çözüm:</strong> ' + escapeHtml(c.fix) + '</p>' +
+        '</div>').join('');
+    }
   }
 
   // Bulgular

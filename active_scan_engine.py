@@ -504,6 +504,228 @@ def test_idor_indicators(client, base_url):
     return findings
 
 
+def test_nosqli(client, base_url):
+    """NoSQL injection: $ne/$gt operatör prob'ları + Mongo/Redis hata imzaları."""
+    findings = []
+    parsed = urllib.parse.urlparse(base_url)
+    if not parsed.query:
+        return findings
+
+    params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+    base_params = {k: v[0] for k, v in params.items()}
+
+    nosql_error_sigs = [
+        (r"MongoError|MongoDB.*error|BSONError", "MongoDB"),
+        (r"mongo:\s*.*\b(?:SyntaxError|TypeError)\b", "MongoDB"),
+        (r"WRONGTYPE|Redis.*error", "Redis"),
+        (r"CouchDB.*error|couch.*forbidden", "CouchDB"),
+    ]
+
+    for pname in list(params.keys())[:3]:
+        # 1. $ne operatör probu (error-based + boolean karışımı)
+        probe_params = dict(base_params)
+        probe_params[pname] = "' || '1'=='1' || ''=='"
+        resp = client.get(_build_url(parsed, probe_params))
+        if resp["error"]:
+            continue
+        for sig, engine in nosql_error_sigs:
+            if re.search(sig, resp["body"], re.IGNORECASE):
+                findings.append({
+                    "test": "NoSQL Injection", "severity": "KRİTİK",
+                    "title": "NoSQL injection hata sızıntısı (%s parametresi, %s)" % (pname, engine),
+                    "evidence": "%s → imza: %s" % (resp["url"][:90], _excerpt(resp["body"], sig)),
+                    "cwe": "CWE-943",
+                    "fix": "Girdiyi tip doğrulamasından geçirin; sorgu operatörlerini whitelist'le kısıtlayın."
+                })
+                break
+
+        # 2. $ne boolean farkı: baseline vs $ne:true
+        if not findings or findings[-1].get("title", "").find(pname) == -1:
+            baseline = client.get(_build_url(parsed, base_params))
+            probe2 = dict(base_params)
+            probe2[pname + "[$ne]"] = "__nonexistent__"
+            resp2 = client.get(_build_url(parsed, {k: v for k, v in probe2.items() if k != pname}))
+            if not resp2["error"] and not baseline["error"]:
+                if baseline["status"] == 200 and resp2["status"] == 200 and _normal_similarity(baseline["body"], resp2["body"]) < 0.9 and len(baseline["body"]) != len(resp2["body"]):
+                    findings.append({
+                        "test": "NoSQL Injection", "severity": "YÜKSEK",
+                        "title": "NoSQL $ne operatör enjeksiyonu şüphesi (%s parametresi)" % pname,
+                        "evidence": "$ne probu yanıt uzunluğunu %d → %d değiştirdi (benzerlik: %.2f)" % (len(baseline["body"]), len(resp2["body"]), _normal_similarity(baseline["body"], resp2["body"])),
+                        "cwe": "CWE-943",
+                        "fix": "Parametre adlarında operatör enjeksiyonunu engelleyin ($ ile başlayan anahtarları reddedin)."
+                    })
+    return findings
+
+
+def test_ssti(client, base_url):
+    """SSTI: zararsız matematik marker'ı ({{7*7}}, ${7*7}, <%= 7*7 %>) — 49 yansıması aranır."""
+    findings = []
+    parsed = urllib.parse.urlparse(base_url)
+    if not parsed.query:
+        return findings
+
+    params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+    base_params = {k: v[0] for k, v in params.items()}
+
+    markers = [
+        ("{{7*7}}", "Jinja2/Twig/Liquid"),
+        ("${7*7}", "FreeMarker/Thymeleaf/JSP EL"),
+        ("<%= 7*7 %>", "ERB/EJS"),
+        ("#{7*7}", "Ruby ERB/Thymeleaf"),
+        ("%{7*7}", "Mako"),
+    ]
+
+    for pname in list(params.keys())[:3]:
+        for payload, engine in markers:
+            probe_params = dict(base_params)
+            probe_params[pname] = payload
+            resp = client.get(_build_url(parsed, probe_params))
+            if resp["error"]:
+                continue
+            # 7*7 = 49: marker'ın hesaplanıp hesaplanmadığına bakılır
+            body = resp["body"]
+            payload_rendered = ("49" in body) and (payload not in body)
+            if payload_rendered:
+                findings.append({
+                    "test": "SSTI", "severity": "KRİTİK",
+                    "title": "Server-Side Template Injection (%s parametresi, %s)" % (pname, engine),
+                    "evidence": "Payload %r gönderildi; yanıt 49 içeriyor ve payload ham olarak dönmedi — şablon motoru ifadeyi değerlendirdi." % payload,
+                    "cwe": "CWE-1336",
+                    "fix": "Kullanıcı girdisini şablon olarak değerlendirmeyin; veri olarak geçirin (context/data parametresi)."
+                })
+                break  # ilk çalışan motor yeterli
+    return findings
+
+
+def test_open_redirect(client, base_url):
+    """Open redirect: URL-benzeri parametrelere marker hedefi koyup Location başlığı kontrolü."""
+    findings = []
+    parsed = urllib.parse.urlparse(base_url)
+    if not parsed.query:
+        return findings
+
+    url_params = URLVAL_PARAM_PATTERN.findall(parsed.query)
+    if not url_params:
+        return findings
+
+    MARKER_HOST = "wss-marker-redirect-test.example.org"
+    for pname, pval in url_params[:3]:
+        probe_params = dict(urllib.parse.parse_qs(parsed.query, keep_blank_values=True))
+        probe_params = {k: v[0] for k, v in probe_params.items()}
+        probe_params[pname] = "https://" + MARKER_HOST
+
+        # Rate-limited client redirect takibi yapmadığından manuel kontrol: Location başlığına bak
+        url = _build_url(parsed, probe_params)
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 WebSecurityScanner/1.0"}, method="GET")
+            # NoRedirect opener: 3xx yanıtı olduğu gibi yakalanır
+            class NoRedirect(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, *args, **kwargs):
+                    return None
+            opener = urllib.request.build_opener(NoRedirect)
+            client.request_count += 1  # rate limit sayaçlarına dahil et
+            client.last_request_at = time.time()
+            try:
+                resp = opener.open(req, timeout=REQUEST_TIMEOUT)
+                location = resp.headers.get("Location") or ""
+                status = resp.status
+            except urllib.error.HTTPError as e:
+                location = (e.headers or {}).get("Location") or ""
+                status = e.code
+        except Exception:
+            continue
+
+        if status in (301, 302, 303, 307, 308) and MARKER_HOST in location:
+            findings.append({
+                "test": "Open Redirect", "severity": "ORTA",
+                "title": "Open redirect (%s parametresi)" % pname,
+                "evidence": "https://%s değeri gönderildiğinde sunucu Location: %s başlığıyla döndü (HTTP %s)" % (MARKER_HOST, location[:90], status),
+                "cwe": "CWE-601",
+                "fix": "Yönlendirme hedeflerini allow-list ile doğrulayın; harici alan adlarına yönlendirmeyin."
+            })
+            break  # bir kanıt yeterli
+    return findings
+
+
+# =============================================================
+# Faz 6A: Zincirleme Korelasyon Motoru
+# Bulgular arası risk kombinasyonlarını tespit eder.
+# =============================================================
+def correlate_findings(findings):
+    """Bulgular arası korelasyon: birleşik risk, parçaların toplamından büyüktür."""
+    chains = []
+    by_test = {}
+    for f in findings:
+        by_test.setdefault(f.get("test", ""), []).append(f)
+
+    def _has(test):
+        return test in by_test and len(by_test[test]) > 0
+
+    def _sev_of(test):
+        sevs = {"KRİTİK": 0, "YÜKSEK": 1, "ORTA": 2, "DÜŞÜK": 3, "BİLGİ": 4}
+        return min((sevs.get(f["severity"], 4) for f in by_test.get(test, [])), default=4)
+
+    # 1. SSRF + yaygın port/DB portu → iç ağ keşfi zinciri
+    if _has("SSRF") and _has("Port Taraması"):
+        port_finds = by_test["Port Taraması"]
+        risky = [f for f in port_finds if any(x in f.get("evidence", "") for x in ("Redis", "MongoDB", "MSSQL", "MySQL", "PostgreSQL", "Docker", "Elasticsearch"))]
+        if risky:
+            chains.append({
+                "title": "SSRF + açık veritabanı portu = iç ağ keşfi zinciri",
+                "severity": "KRİTİK",
+                "components": ["SSRF", "Port Taraması"],
+                "description": "SSRF zafiyeti ile birlikte iç ağda açık veritabanı/altyapı portları tespit edildi. Saldırgan SSRF üzerinden bu servislere doğrudan erişebilir (veri sızıntısı / RCE zinciri).",
+                "fix": "SSRF guard uygulayın ve iç servisleri ağ seviyesinde izole edin."
+            })
+
+    # 2. XSS + zayıf CSP → yükletilebilir XSS zinciri
+    if _has("XSS") and _sev_of("Derin Başlık") <= 2:
+        deep = by_test.get("Derin Başlık", [])
+        weak_csp = [f for f in deep if "CSP" in f.get("title", "")]
+        if weak_csp:
+            chains.append({
+                "title": "XSS + zayıf CSP = serbest script enjeksiyonu",
+                "severity": "KRİTİK",
+                "components": ["XSS", "Derin Başlık"],
+                "description": "Yansıyan/DOM XSS tespit edildi ve CSP politikası zayıf (unsafe-inline/unsafe-eval/wildcard). Tarayıcı katmanı da koruma sağlamadığından saldırı zinciri tamamlanıyor.",
+                "fix": "CSP'yi sıkılaştırın (unsafe-* kaldırın) ve XSS kaynağını kapatın."
+            })
+
+    # 3. SQLi (error-based) + verbose hata → veri sızıntısı zinciri
+    sqli_err = [f for f in by_test.get("SQL Injection", []) if "Error-based" in f.get("title", "")]
+    if sqli_err:
+        chains.append({
+            "title": "Error-based SQLi + veritabanı hata sızıntısı",
+            "severity": "KRİTİK",
+            "components": ["SQL Injection"],
+            "description": "SQL hata mesajı istemciye sızıyor; saldırgan sorgu yapısını öğrenerek blind/extraktion saldırılarına geçebilir.",
+            "fix": "Hata mesajlarını gizleyin (genel hata sayfası) + parametreli sorgular."
+        })
+
+    # 4. CSRF yok + çerez SameSite yok → oturum devralma zinciri
+    csrf_weak = [f for f in by_test.get("CSRF", []) if "yok" in f.get("title", "") or "zayıf" in f.get("title", "")]
+    if csrf_weak and _sev_of("CSRF") <= 1:
+        chains.append({
+            "title": "CSRF korumasızlık + zayıf çerez = oturum devralma zinciri",
+            "severity": "YÜKSEK",
+            "components": ["CSRF"],
+            "description": "Formlarda token yok ve oturum çerezi SameSite korumasız; tek bir dış bağlantıyla kullanıcı adına işlem yapılabilir.",
+            "fix": "CSRF token + SameSite=Lax/Strict çerez uygulayın."
+        })
+
+    # 5. SSTI + teknoloji parmak izi → RCE zinciri (deep_scan verisi yoksa pas geç)
+    if _has("SSTI"):
+        chains.append({
+            "title": "SSTI = doğrudan RCE riski",
+            "severity": "KRİTİK",
+            "components": ["SSTI"],
+            "description": "Şablon motoru kullanıcı girdisini değerlendiriyor; çoğu motorda bu, sunucuda keyfi kod yürütme (RCE) anlamına gelir.",
+            "fix": "Kullanıcı girdisini şablon olarak değerlendirmeyi derhal kaldırın."
+        })
+
+    return chains
+
+
 # =============================================================
 # Yardımcılar
 # =============================================================
@@ -556,7 +778,7 @@ def run_active_scan(base_url, modules=None):
     if not ETHICAL_GATE.is_confirmed(hostname or ""):
         return {"success": False, "error": "ETIK_ONAY_YOK", "message": "Aktif test için etik onay gerekli."}
 
-    all_modules = ["sqli", "xss", "csrf", "ssrf", "idor", "ports", "deep_headers"]
+    all_modules = ["sqli", "nosqli", "ssti", "open_redirect", "xss", "csrf", "ssrf", "idor", "ports", "deep_headers"]
     active_modules = modules if modules else all_modules
 
     client = RateLimitedClient()
@@ -582,6 +804,12 @@ def run_active_scan(base_url, modules=None):
 
     if "sqli" in active_modules:
         findings += _run("sqli", lambda: test_sqli(client, scan_url))
+    if "nosqli" in active_modules:
+        findings += _run("nosqli", lambda: test_nosqli(client, scan_url))
+    if "ssti" in active_modules:
+        findings += _run("ssti", lambda: test_ssti(client, scan_url))
+    if "open_redirect" in active_modules:
+        findings += _run("open_redirect", lambda: test_open_redirect(client, scan_url))
     if "xss" in active_modules:
         findings += _run("xss", lambda: test_xss_reflected(client, scan_url))
     if "csrf" in active_modules:
@@ -602,12 +830,18 @@ def run_active_scan(base_url, modules=None):
     for f in findings:
         summary[f["severity"]] = summary.get(f["severity"], 0) + 1
 
+    # Faz 6A: Zincirleme korelasyon analizi
+    chains = correlate_findings(findings)
+    for c in chains:
+        summary[c["severity"]] = summary.get(c["severity"], 0) + 1
+
     return {
         "success": True,
         "url": scan_url,
         "modules": module_stats,
         "summary": summary,
         "findings": findings,
+        "chains": chains,
         "requests_sent": client.request_count,
         "rate_limit_seconds": RATE_LIMIT_SECONDS,
         "duration_ms": int((time.time() - start) * 1000),

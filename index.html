@@ -506,9 +506,18 @@
         </div>
 
         <!-- Modül Seçimi -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-2">
           <label class="flex items-center gap-1.5 text-[11px] font-mono cursor-pointer p-2 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 transition">
             <input type="checkbox" checked value="sqli" class="active-module-check w-3.5 h-3.5 accent-orange-600" /> SQLi
+          </label>
+          <label class="flex items-center gap-1.5 text-[11px] font-mono cursor-pointer p-2 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 transition">
+            <input type="checkbox" checked value="nosqli" class="active-module-check w-3.5 h-3.5 accent-orange-600" /> NoSQLi
+          </label>
+          <label class="flex items-center gap-1.5 text-[11px] font-mono cursor-pointer p-2 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 transition">
+            <input type="checkbox" checked value="ssti" class="active-module-check w-3.5 h-3.5 accent-orange-600" /> SSTI
+          </label>
+          <label class="flex items-center gap-1.5 text-[11px] font-mono cursor-pointer p-2 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 transition">
+            <input type="checkbox" checked value="open_redirect" class="active-module-check w-3.5 h-3.5 accent-orange-600" /> Redirect
           </label>
           <label class="flex items-center gap-1.5 text-[11px] font-mono cursor-pointer p-2 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 transition">
             <input type="checkbox" checked value="xss" class="active-module-check w-3.5 h-3.5 accent-orange-600" /> XSS
@@ -549,6 +558,19 @@
             <span>Modül Çalışma Durumu</span>
           </h4>
           <div id="active-modules-status" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5"></div>
+        </div>
+
+        <!-- Zincirleme Korelasyon Bulguları -->
+        <div id="active-chains-card" class="hidden bg-gradient-to-br from-rose-50 to-orange-50 border-2 border-rose-300 rounded-2xl p-5 shadow-xs">
+          <div class="flex items-center justify-between mb-3 pb-2 border-b border-rose-200">
+            <h4 class="font-bold text-sm text-rose-900 flex items-center gap-2">
+              <span>⛓️</span>
+              <span>Zincirleme Risk Analizi (Korelasyon)</span>
+            </h4>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-600 text-white font-bold">BİRLEŞİK RİSK</span>
+          </div>
+          <p class="text-[11px] text-rose-700 mb-3 leading-relaxed">Aşağıdaki zincirler, tek tek orta düzeyde görünen bulguların birleşince oluşturduğu kritik riskleri gösterir (bütün, parçaların toplamından büyüktür).</p>
+          <div id="active-chains-list" class="space-y-2.5"></div>
         </div>
 
         <!-- Bulgular -->
@@ -663,6 +685,6 @@
   </footer>
 
   <!-- İstemci Mantığı (Cache-Bust ile) -->
-  <script src="js/app.js?v=20261011d"></script>
+  <script src="js/app.js?v=20261011e"></script>
 </body>
 </html>
