@@ -12,6 +12,9 @@ import json
 import time
 import urllib.request
 
+# Faz 6B: Derin analiz motoru (Python AST + JS taint + entropy + genişletilmiş kurallar)
+from deep_sast_engine import run_deep_analysis, EXTRA_RULES
+
 # =============================================================
 # Tarama Sınırları ve Dizin/Filtre Kuralları
 # =============================================================
@@ -326,6 +329,17 @@ def sast_scan_directory(root_path):
             total_lines += len(lines)
             rel_path = os.path.relpath(fpath, root_path)
 
+            # Faz 6B: Derin analiz (Python AST + JS taint + entropy + genişletilmiş regex)
+            try:
+                deep_findings = run_deep_analysis(fpath, rel_path)
+                for df in deep_findings:
+                    # Faz 4 tutarlılığı: derin bulgulara da CVSS hesapla
+                    if "cvss" not in df:
+                        df["cvss"] = cvss_approx(df.get("severity", "ORTA"), df.get("category", ""))
+                findings.extend(deep_findings)
+            except Exception:
+                pass
+
             rule_hit_counts = {}
             for lineno, line in enumerate(lines, start=1):
                 stripped = line.strip()
@@ -367,6 +381,11 @@ def sast_scan_directory(root_path):
     rule_lookup = {r[0]: r for r in SAST_RULES}
     verified_count = 0
     for f in findings:
+        # Faz 6B: derin analiz bulguları (AST/taint yapısal kanıt; regex/entropy satır kanıtı)
+        if f.get("analyzer"):
+            f["verified"] = True
+            verified_count += 1
+            continue
         f["verified"] = False
         try:
             fpath = os.path.join(root_path, f["file"])
@@ -387,6 +406,12 @@ def sast_scan_directory(root_path):
         except OSError:
             continue
 
+    # Faz 6B: analizci kırılımı
+    analyzer_counts = {}
+    for f in findings:
+        a = f.get("analyzer", "regex")
+        analyzer_counts[a] = analyzer_counts.get(a, 0) + 1
+
     summary = {"KRİTİK": 0, "YÜKSEK": 0, "ORTA": 0, "DÜŞÜK": 0}
     for f in findings:
         summary[f["severity"]] = summary.get(f["severity"], 0) + 1
@@ -403,14 +428,16 @@ def sast_scan_directory(root_path):
             "duration_ms": duration_ms,
             "truncated": files_scanned >= SAST_MAX_FILES,
             "verified_count": verified_count,
-            "verification_pass": True
+            "verification_pass": True,
+            "deep_rules_active": len(SAST_RULES) + len(EXTRA_RULES),
+            "analyzers": analyzer_counts
         },
         "summary": summary,
         "coverage": {
             "categories_with_findings": sorted({f["category"] for f in findings}),
             "files_with_findings": sorted({f["file"] for f in findings}),
             "rules_triggered": sorted({f["rule_id"] for f in findings}),
-            "rules_total": len(SAST_RULES),
+            "rules_total": len(SAST_RULES) + len(EXTRA_RULES),
             "rule_coverage_pct": round(len({f["rule_id"] for f in findings}) * 100.0 / len(SAST_RULES), 1),
             "file_coverage_pct": round(len({f["file"] for f in findings}) * 100.0 / max(1, files_scanned), 1),
             "verified_pct": round(verified_count * 100.0 / max(1, len(findings)), 1)

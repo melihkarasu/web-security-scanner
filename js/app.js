@@ -846,7 +846,7 @@ function renderSastStats(data) {
   const cards = [
     { label: 'Taranan Dosya', value: st.files_scanned || 0, icon: '📄' },
     { label: 'Toplam Satır', value: (st.total_lines || 0).toLocaleString('tr-TR'), icon: '📝' },
-    { label: 'Aktif Kural', value: st.rules_active || 0, icon: '📏' },
+    { label: 'Aktif Kural', value: st.deep_rules_active || st.rules_active || 0, icon: '📏', title: 'Regex + yapısal (AST/taint/entropy) kuralları' },
     { label: 'Süre', value: ((st.duration_ms || 0) / 1000).toFixed(1) + ' sn', icon: '⚡' }
   ];
 
@@ -857,6 +857,28 @@ function renderSastStats(data) {
       <div class="text-[10px] text-mistral-slate font-medium">${c.label}</div>
     </div>
   `).join('');
+
+  // Faz 6B: Analizci kırılımı (hangi motor kaç bulgu üretti)
+  const statsCard = document.getElementById('sast-stats-card');
+  if (statsCard) {
+    const analyzers = data.stats && data.stats.analyzers || {};
+    const ANALYZER_NAMES = {
+      regex: 'Regex (42 kural)',
+      extended_regex: 'Genişletilmiş Regex',
+      python_ast: '🐍 Python AST',
+      js_taint: 'JS Taint Akışı',
+      entropy: 'Entropy Analizi'
+    };
+    const entries = Object.entries(analyzers);
+    if (entries.length > 0) {
+      let badgeHtml = '<div class="mt-3 pt-3 border-t border-stone-100"><div class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider mb-1.5">Analizci Kırılımı</div><div class="flex flex-wrap gap-1.5">';
+      for (const [aKey, aCount] of entries) {
+        badgeHtml += '<span class="px-2 py-0.5 rounded-full bg-stone-100 border border-stone-200 text-[10px] font-mono text-stone-700">' + (ANALYZER_NAMES[aKey] || aKey) + ': <strong>' + aCount + '</strong></span>';
+      }
+      badgeHtml += '</div></div>';
+      statsCard.insertAdjacentHTML('beforeend', badgeHtml);
+    }
+  }
 
   // Şiddet özeti
   const sevGrid = document.getElementById('sast-severity-summary');
