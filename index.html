@@ -230,6 +230,20 @@
           <div id="leaks-container" class="space-y-2"></div>
         </div>
 
+        <!-- Faz 1: Derin Pasif Tarama Kartı (Sadece Lokal Modda Görünür) -->
+        <div id="deep-scan-card" class="hidden bg-white border border-stone-200 rounded-2xl p-5 shadow-xs">
+          <div class="flex items-center justify-between gap-2 mb-3 pb-2 border-b border-stone-100">
+            <h3 class="text-base font-bold font-editorial text-mistral-ink flex items-center gap-2">
+              <span>🔬</span>
+              <span>Derin Pasif Tarama Sonuçları</span>
+            </h3>
+            <span class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">Lokal Mod Özel</span>
+          </div>
+          <div id="deep-scan-container" class="space-y-3">
+            <!-- JS ile dinamik doldurulur: çerezler, TLS, robots.txt, mixed content, teknoloji parmak izi -->
+          </div>
+        </div>
+
         <!-- 2 Sütunlu Grid: Sol = HTTP Başlıkları, Sağ = DNS & E-posta -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
@@ -396,6 +410,6 @@
   </footer>
 
   <!-- İstemci Mantığı (Cache-Bust ile) -->
-  <script src="js/app.js?v=20261010a"></script>
+  <script src="js/app.js?v=20261011a"></script>
 </body>
 </html>

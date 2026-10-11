@@ -17,6 +17,7 @@ const STATE = {
     dns: {},
     headers: {},
     headersSource: 'none', // 'local_live', 'manual', 'doh_fallback'
+    deepScan: null, // Faz 1: cookies, tls, robots, mixed_content, tech_fingerprint
     email: {},
     fingerprint: []
   },
@@ -428,6 +429,26 @@ async function startSecurityScan() {
     renderDnsResults(dnsReport);
     renderLeaks(headerEval.leaks);
 
+    // Faz 1: Derin Pasif Tarama (yalnızca lokal modda)
+    const deepScanCard = document.getElementById('deep-scan-card');
+    if (STATE.mode === 'local_api') {
+      try {
+        const deepRes = await fetch(`/api/deep-scan?url=${encodeURIComponent(STATE.targetUrl)}`, { signal: AbortSignal.timeout(20000) });
+        const deepData = await deepRes.json();
+        if (deepData && deepData.success) {
+          STATE.results.deepScan = deepData;
+          renderDeepScanResults(deepData);
+        } else if (deepScanCard) {
+          deepScanCard.classList.add('hidden');
+        }
+      } catch (deepErr) {
+        console.warn('Derin tarama atlandı:', deepErr);
+        if (deepScanCard) deepScanCard.classList.add('hidden');
+      }
+    } else if (deepScanCard) {
+      deepScanCard.classList.add('hidden');
+    }
+
     showToast(`Denetim tamamlandı! Güvenlik Notu: ${final.grade} (${final.score}/100)`, 'success');
   } catch (err) {
     console.error('Scan Error:', err);
@@ -653,6 +674,109 @@ function renderLeaks(leaks) {
       <p class="text-[11px] text-rose-600 mt-1">Sunucu sürüm bilgisi saldırganlara teknoloji yığını ifşa ediyor. Gizlenmesi önerilir.</p>
     </div>
   `).join('');
+}
+
+// Faz 1: Derin Pasif Tarama Sonuçlarını Render Et
+function renderDeepScanResults(deep) {
+  const container = document.getElementById('deep-scan-container');
+  const card = document.getElementById('deep-scan-card');
+  if (!container || !card) return;
+
+  card.classList.remove('hidden');
+  let html = '';
+
+  // 1.1 Çerez Güvenliği
+  if (deep.cookies && deep.cookies.analyzed) {
+    const cookies = deep.cookies.findings || [];
+    html += '<div class="p-4 rounded-xl border border-stone-200 bg-white">';
+    html += '<div class="flex items-center justify-between gap-2 mb-2"><h4 class="font-bold text-sm text-mistral-ink">🍪 Çerez Güvenlik Analizi</h4>';
+    html += '<span class="text-[11px] font-mono text-stone-500">' + (deep.cookies.count || 0) + ' çerez</span></div>';
+    if (cookies.length === 0) {
+      html += '<p class="text-xs text-mistral-slate">Çerez tespit edilmedi veya analiz edilemedi.</p>';
+    }
+    for (const c of cookies) {
+      const okCount = (c.httponly ? 1 : 0) + (c.secure ? 1 : 0) + (['strict', 'lax'].includes((c.samesite || '').toLowerCase()) ? 1 : 0);
+      const badge = okCount === 3
+        ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">✅ Güvenli</span>'
+        : '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800">⚠️ Eksik Bayrak</span>';
+      html += '<div class="mb-2 p-2.5 rounded-lg bg-stone-50 border border-stone-200/70">';
+      html += '<div class="flex items-center justify-between gap-2 mb-1"><span class="font-mono text-xs font-bold text-mistral-ink">' + escapeHtml(c.name) + '</span>' + badge + '</div>';
+      html += '<div class="text-[11px] font-mono text-stone-500">HttpOnly: ' + (c.httponly ? '✅' : '❌') + ' • Secure: ' + (c.secure ? '✅' : '❌') + ' • SameSite: ' + escapeHtml(c.samesite) + '</div>';
+      if (c.issues && c.issues.length > 0) {
+        html += '<ul class="mt-1 text-[11px] text-rose-600 list-disc list-inside">';
+        for (const iss of c.issues) html += '<li>' + escapeHtml(iss) + '</li>';
+        html += '</ul>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // 1.2 TLS / Sertifika
+  if (deep.tls && deep.tls.analyzed) {
+    const tls = deep.tls;
+    const hasIssues = (tls.findings || []).length > 0;
+    html += '<div class="p-4 rounded-xl border ' + (hasIssues ? 'border-rose-200 bg-rose-50/40' : 'border-emerald-200 bg-emerald-50/30') + '">';
+    html += '<div class="flex items-center justify-between gap-2 mb-2"><h4 class="font-bold text-sm text-mistral-ink">🔒 TLS / Sertifika Analizi</h4>';
+    html += (hasIssues ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800">⚠️ Bulgular Var</span>' : '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">✅ Sağlıklı</span>') + '</div>';
+    if (tls.protocol) {
+      html += '<div class="text-[11px] font-mono text-stone-600 mb-1">Protokol: <span class="' + (tls.protocol === 'TLSv1.3' || tls.protocol === 'TLSv1.2' ? 'text-emerald-700' : 'text-rose-700') + '">' + escapeHtml(tls.protocol) + '</span></div>';
+    }
+    if (tls.issuer) html += '<div class="text-[11px] font-mono text-stone-600 mb-1">Sertifika Yetkilisi: ' + escapeHtml(tls.issuer) + '</div>';
+    if (tls.valid_until) html += '<div class="text-[11px] font-mono text-stone-600 mb-1">Geçerlilik: ' + escapeHtml(tls.valid_until) + (tls.expiry_days !== null && tls.expiry_days !== undefined ? ' (' + tls.expiry_days + ' gün kaldı)' : '') + '</div>';
+    for (const f of (tls.findings || [])) {
+      html += '<div class="mt-1.5 p-2 rounded bg-rose-50 border border-rose-200 text-[11px] text-rose-700"><strong>' + escapeHtml(f.level) + ':</strong> ' + escapeHtml(f.issue) + '</div>';
+    }
+    html += '</div>';
+  }
+
+  // 1.3 robots.txt İfşası
+  if (deep.robots && deep.robots.analyzed) {
+    const rb = deep.robots;
+    const issues = rb.findings || [];
+    html += '<div class="p-4 rounded-xl border border-stone-200 bg-white">';
+    html += '<div class="flex items-center justify-between gap-2 mb-2"><h4 class="font-bold text-sm text-mistral-ink">🤖 robots.txt İfşası</h4>';
+    html += (rb.exists ? '<span class="text-[11px] font-mono text-stone-500">' + (issues.length > 0 ? issues.length + ' bulgu' : 'temiz') + '</span>' : '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-stone-100 text-stone-600">Dosya yok</span>') + '</div>';
+    if (!rb.exists && rb.note) html += '<p class="text-xs text-mistral-slate">' + escapeHtml(rb.note) + '</p>';
+    for (const f of issues) {
+      html += '<div class="mb-1.5 p-2 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-800"><strong>' + escapeHtml(f.level) + ':</strong> ' + escapeHtml(f.issue) + ' <code class="font-mono">' + escapeHtml(f.evidence || '') + '</code></div>';
+    }
+    html += '</div>';
+  }
+
+  // 1.4 Mixed Content
+  if (deep.mixed_content && deep.mixed_content.analyzed) {
+    const mc = deep.mixed_content;
+    const findings = mc.findings || [];
+    html += '<div class="p-4 rounded-xl border ' + (findings.length > 0 ? 'border-rose-200 bg-rose-50/40' : 'border-emerald-200 bg-emerald-50/30') + '">';
+    html += '<div class="flex items-center justify-between gap-2 mb-2"><h4 class="font-bold text-sm text-mistral-ink">🔗 Mixed Content</h4>';
+    html += (findings.length > 0 ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800">⚠️ ' + findings.length + ' bulgu</span>' : '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">✅ Temiz</span>') + '</div>';
+    for (const f of findings) {
+      html += '<div class="mb-1.5 p-2 rounded bg-rose-50 border border-rose-200 text-[11px] text-rose-700"><strong>' + escapeHtml(f.level) + ':</strong> ' + escapeHtml(f.issue) + ' <code class="font-mono break-all">' + escapeHtml(f.evidence || '') + '</code></div>';
+    }
+    html += '</div>';
+  }
+
+  // 1.5 Teknoloji Parmak İzi
+  if (deep.tech_fingerprint && deep.tech_fingerprint.analyzed) {
+    const techs = deep.tech_fingerprint.technologies || [];
+    html += '<div class="p-4 rounded-xl border border-stone-200 bg-white">';
+    html += '<div class="flex items-center justify-between gap-2 mb-2"><h4 class="font-bold text-sm text-mistral-ink">🧩 Teknoloji Parmak İzi</h4>';
+    html += '<span class="text-[11px] font-mono text-stone-500">' + techs.length + ' tespit</span></div>';
+    if (techs.length === 0) {
+      html += '<p class="text-xs text-mistral-slate">Teknoloji ifşası tespit edilmedi (iyi iş!).</p>';
+    } else {
+      html += '<div class="flex flex-wrap gap-1.5">';
+      for (const t of techs) {
+        html += '<span class="px-2.5 py-1 rounded-lg bg-stone-100 border border-stone-200 text-[11px] font-mono text-stone-700" title="' + escapeHtml(t.source) + '">' + escapeHtml(t.category) + ': <strong>' + escapeHtml(t.value) + '</strong></span>';
+      }
+      html += '</div>';
+      html += '<p class="text-[11px] text-mistral-slate mt-2">Bu bilgiler saldırganlara hedefe yönelik exploit aramada yol gösterir; başlıklarda gizlenmesi önerilir.</p>';
+    }
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
 }
 
 // Markdown Denetim Raporunu Dışa Aktarma
