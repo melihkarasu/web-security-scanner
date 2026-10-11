@@ -18,6 +18,7 @@ const STATE = {
     headers: {},
     headersSource: 'none', // 'local_live', 'manual', 'doh_fallback'
     deepScan: null, // Faz 1: cookies, tls, robots, mixed_content, tech_fingerprint
+    sast: null, // Faz 2: kaynak kod analizi sonuçları
     email: {},
     fingerprint: []
   },
@@ -779,6 +780,194 @@ function renderDeepScanResults(deep) {
   container.innerHTML = html;
 }
 
+// =============================================================
+// FAZ 2: SAST — Kaynak Kod Analizi Mantığı
+// =============================================================
+async function startSastScan() {
+  const pathInput = document.getElementById('sast-path-input');
+  const btn = document.getElementById('sast-btn');
+  const spinner = document.getElementById('sast-spinner');
+  const btnText = document.getElementById('sast-btn-text');
+  const resultsEl = document.getElementById('sast-results');
+  const pagesNotice = document.getElementById('sast-pages-notice');
+
+  // Mod kontrolü: SAST yalnızca lokal sunucuda çalışır
+  if (STATE.mode !== 'local_api') {
+    if (pagesNotice) pagesNotice.classList.remove('hidden');
+    showToast('SAST taraması yalnızca lokal sunucu modunda çalışır. python3 server.py ile çalıştırın.', 'warning');
+    return;
+  }
+  if (pagesNotice) pagesNotice.classList.add('hidden');
+
+  const targetPath = pathInput ? pathInput.value.trim() : '';
+  if (!targetPath) {
+    showToast('Lütfen bir proje dizin yolu girin.', 'warning');
+    return;
+  }
+
+  // UI: yükleniyor
+  if (btn) btn.disabled = true;
+  if (spinner) spinner.classList.remove('hidden');
+  if (btnText) btnText.innerText = 'Taranıyor...';
+  if (resultsEl) resultsEl.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`/api/sast?path=${encodeURIComponent(targetPath)}`, { signal: AbortSignal.timeout(120000) });
+    const data = await res.json();
+
+    if (!data.success) {
+      showToast('SAST hatası: ' + (data.error || 'Bilinmeyen hata'), 'error');
+      return;
+    }
+
+    STATE.results.sast = data;
+    renderSastStats(data);
+    renderSastFindings();
+    renderSastDeps(data.dependencies);
+
+    const s = data.summary;
+    showToast(`SAST tamamlandı: ${data.findings.length} bulgu (K:${s['KRİTİK'] || 0} Y:${s['YÜKSEK'] || 0} O:${s['ORTA'] || 0} D:${s['DÜŞÜK'] || 0})`, 'success');
+  } catch (err) {
+    console.error('SAST Error:', err);
+    showToast('SAST taraması başarısız: ' + err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    if (spinner) spinner.classList.add('hidden');
+    if (btnText) btnText.innerText = 'Kodu Tara';
+  }
+}
+
+function renderSastStats(data) {
+  const grid = document.getElementById('sast-stats-grid');
+  if (!grid) return;
+
+  const st = data.stats || {};
+  const cards = [
+    { label: 'Taranan Dosya', value: st.files_scanned || 0, icon: '📄' },
+    { label: 'Toplam Satır', value: (st.total_lines || 0).toLocaleString('tr-TR'), icon: '📝' },
+    { label: 'Aktif Kural', value: st.rules_active || 0, icon: '📏' },
+    { label: 'Süre', value: ((st.duration_ms || 0) / 1000).toFixed(1) + ' sn', icon: '⚡' }
+  ];
+
+  grid.innerHTML = cards.map(c => `
+    <div class="p-3 rounded-xl bg-stone-50 border border-stone-200 text-center">
+      <div class="text-xl mb-0.5">${c.icon}</div>
+      <div class="text-lg font-bold font-mono text-mistral-ink">${escapeHtml(String(c.value))}</div>
+      <div class="text-[10px] text-mistral-slate font-medium">${c.label}</div>
+    </div>
+  `).join('');
+
+  // Şiddet özeti
+  const sevGrid = document.getElementById('sast-severity-summary');
+  if (sevGrid) {
+    const s = data.summary || {};
+    const sevs = [
+      { key: 'KRİTİK', color: 'bg-rose-100 text-rose-800 border-rose-200' },
+      { key: 'YÜKSEK', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+      { key: 'ORTA', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+      { key: 'DÜŞÜK', color: 'bg-stone-100 text-stone-700 border-stone-200' }
+    ];
+    sevGrid.innerHTML = sevs.map(sv => `
+      <div class="p-3 rounded-xl border text-center ${sv.color}">
+        <div class="text-2xl font-bold font-mono">${s[sv.key] || 0}</div>
+        <div class="text-[10px] font-bold tracking-wider">${sv.key}</div>
+      </div>
+    `).join('');
+  }
+}
+
+function renderSastFindings() {
+  const list = document.getElementById('sast-findings-list');
+  if (!list) return;
+  const data = STATE.results.sast;
+  if (!data || !data.findings) return;
+
+  const filterSel = document.getElementById('sast-severity-filter');
+  const filter = filterSel ? filterSel.value : 'all';
+
+  const filtered = filter === 'all' ? data.findings : data.findings.filter(f => f.severity === filter);
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="p-4 text-center text-xs text-mistral-slate">Bu filtreye uygun bulgu yok. 🎉</div>';
+    return;
+  }
+
+  const sevColors = {
+    'KRİTİK': 'border-rose-300 bg-rose-50/60',
+    'YÜKSEK': 'border-orange-300 bg-orange-50/60',
+    'ORTA': 'border-amber-300 bg-amber-50/60',
+    'DÜŞÜK': 'border-stone-300 bg-stone-50/60'
+  };
+  const sevBadges = {
+    'KRİTİK': 'bg-rose-600 text-white',
+    'YÜKSEK': 'bg-orange-500 text-white',
+    'ORTA': 'bg-amber-500 text-white',
+    'DÜŞÜK': 'bg-stone-500 text-white'
+  };
+
+  list.innerHTML = filtered.map(f => `
+    <div class="p-3 rounded-xl border ${sevColors[f.severity] || 'border-stone-200'}">
+      <div class="flex items-start justify-between gap-2 mb-1.5">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono ${sevBadges[f.severity] || 'bg-stone-500 text-white'}">${f.severity}</span>
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-200/70 text-stone-700">${f.rule_id}</span>
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-100 border border-stone-200 text-stone-600">${f.cwe}</span>
+        </div>
+        <span class="text-[10px] font-mono text-stone-500 whitespace-nowrap">${escapeHtml(f.category)}</span>
+      </div>
+      <div class="text-xs font-bold text-mistral-ink mb-1">${escapeHtml(f.title)}</div>
+      <div class="text-[11px] font-mono text-stone-600 mb-1.5">📍 ${escapeHtml(f.file)}:${f.line}</div>
+      <pre class="text-[10px] font-mono bg-stone-900 text-amber-200 p-2 rounded-lg overflow-x-auto mb-1.5"><code>${escapeHtml(f.match)}</code></pre>
+      <p class="text-[11px] text-mistral-slate leading-relaxed">${escapeHtml(f.description)}</p>
+    </div>
+  `).join('');
+}
+
+function renderSastDeps(deps) {
+  const card = document.getElementById('sast-deps-card');
+  const container = document.getElementById('sast-deps-container');
+  if (!card || !container) return;
+
+  if (!deps || !deps.analyzed) {
+    card.classList.add('hidden');
+    return;
+  }
+
+  const vuln = deps.vulnerable || [];
+  if (vuln.length === 0 && (deps.note || '').includes('bulunamadı')) {
+    card.classList.remove('hidden');
+    container.innerHTML = `<div class="p-3 rounded-xl bg-stone-50 border border-stone-200 text-xs text-mistral-slate">${escapeHtml(deps.note || 'Bağımlılık manifestosu bulunamadı.')}</div>`;
+    return;
+  }
+
+  if (vuln.length === 0) {
+    card.classList.remove('hidden');
+    container.innerHTML = '<div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">✅ Bilinen CVE\u2019si olan bağımlılık tespit edilmedi.</div>';
+    return;
+  }
+
+  card.classList.remove('hidden');
+  container.innerHTML = vuln.map(v => `
+    <div class="p-3 rounded-xl bg-rose-50/60 border border-rose-200">
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <span class="text-xs font-bold font-mono text-mistral-ink">📦 ${escapeHtml(v.name)} <span class="text-stone-500">@${escapeHtml(v.version)}</span></span>
+        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white">${v.vuln_count} CVE</span>
+      </div>
+      ${v.vulns.map(vn => `
+        <div class="mb-1 p-2 rounded-lg bg-white border border-rose-100 text-[11px]">
+          <span class="font-mono font-bold text-rose-700">${escapeHtml(vn.id)}</span>
+          ${vn.url ? `<a href="${escapeAttr(vn.url)}" target="_blank" rel="noopener" class="text-mistral-orange hover:underline ml-1 text-[10px]">↗ detay</a>` : ''}
+          <p class="text-stone-600 mt-0.5 leading-relaxed">${escapeHtml(vn.summary)}</p>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+
+  if (deps.errors && deps.errors.length > 0) {
+    container.innerHTML += `<div class="p-2 text-[10px] text-stone-400 font-mono">${deps.errors.length} paket sorgulanamadı (ağ hatası)</div>`;
+  }
+}
+
 // Markdown Denetim Raporunu Dışa Aktarma
 function exportMarkdownReport() {
   if (!STATE.currentDomain) {
@@ -915,7 +1104,7 @@ function escapeAttr(str) {
 // Sekme Değiştirme
 function switchTab(tabId) {
   STATE.activeTab = tabId;
-  const tabs = ['audit', 'headers', 'checklist'];
+  const tabs = ['audit', 'headers', 'sast', 'checklist'];
   for (const t of tabs) {
     const el = document.getElementById(`tab-content-${t}`);
     const btn = document.getElementById(`tab-btn-${t}`);

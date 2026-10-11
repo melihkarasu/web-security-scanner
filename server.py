@@ -53,6 +53,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_deep_scan(parsed)
             return
 
+        # 1c. API: /api/sast?path=... (Kaynak Kod Analizi - Faz 2)
+        if parsed.path == "/api/sast":
+            self.handle_api_sast(parsed)
+            return
+
         # 2. API: /api/status (sunucu aktif mi kontrolü)
         if parsed.path == "/api/status":
             self.send_json({
@@ -312,6 +317,46 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.send_json({"success": False, "error": f"Bağlantı hatası: {e.reason}"}, status=502)
         except Exception as e:
             self.send_json({"success": False, "error": f"Beklenmeyen hata: {str(e)}"}, status=500)
+
+    # =============================================================
+    # FAZ 2: SAST — Kaynak Kod Analizi Uç Noktası (/api/sast)
+    # Dizin taraması (42 kural) + bağımlılık CVE kontrolü (OSV)
+    # =============================================================
+    def handle_api_sast(self, parsed_path):
+        qs = urllib.parse.parse_qs(parsed_path.query)
+        raw_path = (qs.get("path") or [""])[0].strip()
+
+        if not raw_path:
+            self.send_json({"success": False, "error": "path parametresi gereklidir (?path=/proje/dizini)"}, status=400)
+            return
+
+        # Yol normalizasyonu (~/ genişletmesi)
+        raw_path = os.path.expanduser(raw_path)
+
+        if not os.path.isdir(raw_path):
+            self.send_json({"success": False, "error": f"Dizin bulunamadı: {raw_path}"}, status=404)
+            return
+
+        try:
+            # SAST motoru ayrı modülden import edilir (gecikmeli import — döngüsüz)
+            from sast_engine import sast_scan_directory, check_dependencies_osv
+
+            # 2.1-2.6, 2.8: Kaynak kod taraması
+            scan_result = sast_scan_directory(raw_path)
+
+            # 2.7: Bağımlılık CVE kontrolü (OSV) — ayrı çalışır, hatada taramayı bloklamaz
+            deps_result = None
+            if (qs.get("deps") or ["1"])[0] in ("1", "true", "yes"):
+                try:
+                    deps_result = check_dependencies_osv(raw_path)
+                except Exception as e:
+                    deps_result = {"analyzed": False, "error": str(e)[:200]}
+
+            scan_result["dependencies"] = deps_result
+            self.send_json(scan_result)
+
+        except Exception as e:
+            self.send_json({"success": False, "error": f"SAST taraması başarısız: {str(e)}"}, status=500)
 
     def fetch_headers(self, url):
         # Güvenlik & Pasiflik: Yalnızca başlıkları al, gövdeyi indirme

@@ -169,6 +169,9 @@
       <button id="tab-btn-checklist" onclick="switchTab('checklist')" class="px-4 py-2 rounded-lg text-xs font-semibold text-mistral-slate hover:text-mistral-ink transition-all cursor-pointer">
         🛡️ Güvenlik Kılavuzu & Checklist
       </button>
+      <button id="tab-btn-sast" onclick="switchTab('sast')" class="px-4 py-2 rounded-lg text-xs font-semibold text-mistral-slate hover:text-mistral-ink transition-all cursor-pointer">
+        🧪 Kaynak Kod Analizi (SAST)
+      </button>
     </div>
 
     <!-- SEKME 1: DENETİM SONUÇLARI -->
@@ -312,7 +315,107 @@
       </div>
     </div>
 
-    <!-- SEKME 3: GÜVENLİK KILAVUZU & CHECKLIST -->
+    <!-- SEKME 3: KAYNAK KODU ANALİZİ (SAST) -->
+    <div id="tab-content-sast" class="hidden space-y-6">
+      <div class="bg-white border border-stone-200 rounded-2xl p-6 shadow-xs">
+        <div class="flex items-center justify-between mb-4 pb-3 border-b border-stone-100">
+          <div>
+            <h3 class="text-lg font-bold font-editorial text-mistral-ink mb-1 flex items-center gap-2">
+              <span>🧪</span>
+              <span>Kaynak Kod Güvenlik Analizi (SAST)</span>
+            </h3>
+            <p class="text-xs text-mistral-slate">Proje dizininizi 42 kural ile tarar: hardcoded secret'lar, SQL injection, XSS, SSRF, zayıf kriptografi, Dockerfile riskleri ve bağımlılık CVE'leri (OSV veritabanı).</p>
+          </div>
+          <span class="text-xs font-mono px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">Lokal Mod Özel</span>
+        </div>
+
+        <!-- GitHub Pages modunda uyarı -->
+        <div id="sast-pages-notice" class="hidden p-4 rounded-xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 mb-4 flex items-start gap-2.5">
+          <span class="text-base">ℹ️</span>
+          <div>SAST taraması dosya sistemi erişimi gerektirir ve yalnızca <strong>lokal sunucu modunda</strong> çalışır. Repoyu indirip <code class="font-mono bg-amber-100/80 px-1 py-0.5 rounded font-bold">python3 server.py</code> ile çalıştırın.</div>
+        </div>
+
+        <!-- Dizin yolu girişi -->
+        <div class="flex flex-col sm:flex-row gap-2.5">
+          <div class="relative flex-1">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400 text-sm">
+              📁
+            </div>
+            <input
+              type="text"
+              id="sast-path-input"
+              placeholder="/proje/dizini (örn: ~/projelerim/web-uygulamam)"
+              class="w-full pl-10 pr-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-sm font-mono text-mistral-ink placeholder-stone-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+            />
+          </div>
+          <button
+            id="sast-btn"
+            onclick="startSastScan()"
+            class="px-6 py-3 rounded-xl bg-mistral-orange text-white font-semibold text-sm hover:bg-mistral-orange transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            <span id="sast-spinner" class="hidden animate-spin">⏳</span>
+            <span id="sast-btn-text">Kodu Tara</span>
+          </button>
+        </div>
+        <p class="text-[11px] text-stone-500 mt-2">Yalnızca sahibi olduğunuz kod tabanlarını tarayın. Tarama tamamen yerel makinenizde çalışır; hiçbir dosya dışarı gönderilmez.</p>
+      </div>
+
+      <!-- SAST Sonuçları -->
+      <div id="sast-results" class="hidden space-y-5">
+        <!-- İstatistik kartı -->
+        <div id="sast-stats-card" class="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" id="sast-stats-grid">
+            <!-- JS ile doldurulur -->
+          </div>
+        </div>
+
+        <!-- Şiddet özeti -->
+        <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs">
+          <h4 class="font-bold text-sm text-mistral-ink mb-3 flex items-center gap-2">
+            <span>📊</span>
+            <span>Bulgu Dağılımı</span>
+          </h4>
+          <div id="sast-severity-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <!-- JS ile doldurulur -->
+          </div>
+        </div>
+
+        <!-- Bulgular listesi -->
+        <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs">
+          <div class="flex items-center justify-between mb-3 pb-2 border-b border-stone-100">
+            <h4 class="font-bold text-sm text-mistral-ink flex items-center gap-2">
+              <span>🔍</span>
+              <span>Tespit Edilen Bulgular</span>
+            </h4>
+            <div class="flex items-center gap-1.5">
+              <select id="sast-severity-filter" onchange="renderSastFindings()" class="text-[11px] font-mono px-2 py-1 rounded-lg border border-stone-200 bg-stone-50 text-mistral-ink cursor-pointer">
+                <option value="all">Tümü</option>
+                <option value="KRİTİK">KRİTİK</option>
+                <option value="YÜKSEK">YÜKSEK</option>
+                <option value="ORTA">ORTA</option>
+                <option value="DÜŞÜK">DÜŞÜK</option>
+              </select>
+            </div>
+          </div>
+          <div id="sast-findings-list" class="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
+            <!-- JS ile doldurulur -->
+          </div>
+        </div>
+
+        <!-- Bağımlılık CVE sonuçları -->
+        <div id="sast-deps-card" class="hidden bg-white border border-stone-200 rounded-2xl p-5 shadow-xs">
+          <h4 class="font-bold text-sm text-mistral-ink mb-3 flex items-center gap-2">
+            <span>📦</span>
+            <span>Bağımlılık CVE Denetimi (OSV Veritabanı)</span>
+          </h4>
+          <div id="sast-deps-container" class="space-y-2.5">
+            <!-- JS ile doldurulur -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEKME 4: GÜVENLİK KILAVUZU & CHECKLIST -->
     <div id="tab-content-checklist" class="hidden space-y-6">
       <div class="bg-white border border-stone-200 rounded-2xl p-6 shadow-xs">
         <div class="flex items-center justify-between mb-4 pb-3 border-b border-stone-100">
@@ -410,6 +513,6 @@
   </footer>
 
   <!-- İstemci Mantığı (Cache-Bust ile) -->
-  <script src="js/app.js?v=20261011a"></script>
+  <script src="js/app.js?v=20261011b"></script>
 </body>
 </html>
