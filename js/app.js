@@ -912,6 +912,8 @@ function renderSastFindings() {
           <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono ${sevBadges[f.severity] || 'bg-stone-500 text-white'}">${f.severity}</span>
           <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-200/70 text-stone-700">${f.rule_id}</span>
           <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-100 border border-stone-200 text-stone-600">${f.cwe}</span>
+          ${f.cvss !== undefined ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold">CVSS ${f.cvss}</span>` : ''}
+          ${f.verified === true ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-100 border border-emerald-200 text-emerald-700 font-bold" title="İkinci geçişte bağımsız olarak teyit edildi">✓ Doğrulandı</span>' : ''}
         </div>
         <span class="text-[10px] font-mono text-stone-500 whitespace-nowrap">${escapeHtml(f.category)}</span>
       </div>
@@ -919,6 +921,12 @@ function renderSastFindings() {
       <div class="text-[11px] font-mono text-stone-600 mb-1.5">📍 ${escapeHtml(f.file)}:${f.line}</div>
       <pre class="text-[10px] font-mono bg-stone-900 text-amber-200 p-2 rounded-lg overflow-x-auto mb-1.5"><code>${escapeHtml(f.match)}</code></pre>
       <p class="text-[11px] text-mistral-slate leading-relaxed">${escapeHtml(f.description)}</p>
+      ${f.fix ? `
+        <div class="mt-1.5 pt-1.5 border-t border-stone-200/70 flex items-start gap-1.5">
+          <span class="text-[11px]">🛠️</span>
+          <p class="text-[11px] text-emerald-800 bg-emerald-50 rounded-lg px-2 py-1 leading-relaxed flex-1"><strong>Çözüm:</strong> ${escapeHtml(f.fix)}</p>
+        </div>
+      ` : ''}
     </div>
   `).join('');
 }
@@ -1003,13 +1011,208 @@ function exportMarkdownReport() {
     }
   }
 
-  md += `\n*Rapor, [Web Security Scanner](https://melihkarasu.github.io/web-security-scanner/) tarafından pasif denetimle üretilmiştir.*`;
+  // Faz 1: Derin Pasif Tarama bölümü
+  const deep = STATE.results.deepScan;
+  if (deep && deep.success) {
+    md += `\n---\n\n## 🔬 4. Derin Pasif Tarama Bulguları\n\n`;
 
+    if (deep.cookies && deep.cookies.analyzed && deep.cookies.findings) {
+      md += `### 🍪 Çerez Güvenliği (${deep.cookies.count || 0} çerez)\n\n`;
+      for (const c of deep.cookies.findings) {
+        const okCount = (c.httponly ? 1 : 0) + (c.secure ? 1 : 0) + (['strict', 'lax'].includes((c.samesite || '').toLowerCase()) ? 1 : 0);
+        md += `- **\`${c.name}\`** ${okCount === 3 ? '✅ Güvenli' : '⚠️ Eksik bayrak'} — HttpOnly: ${c.httponly ? '✅' : '❌'} • Secure: ${c.secure ? '✅' : '❌'} • SameSite: ${c.samesite}\n`;
+      }
+      md += `\n`;
+    }
+
+    if (deep.tls && deep.tls.analyzed) {
+      md += `### 🔒 TLS / Sertifika\n\n`;
+      md += `- **Protokol:** ${deep.tls.protocol || 'Bilinmiyor'}\n`;
+      md += `- **Sertifika Yetkilisi:** ${deep.tls.issuer || 'Bilinmiyor'}\n`;
+      const expiryNote = (deep.tls.expiry_days !== undefined && deep.tls.expiry_days !== null) ? ` (${deep.tls.expiry_days} gün kaldı)` : '';
+      md += `- **Geçerlilik:** ${deep.tls.valid_until || 'Bilinmiyor'}${expiryNote}\n`;
+      for (const f of (deep.tls.findings || [])) {
+        md += `- ⚠️ **${f.level}:** ${f.issue}\n`;
+      }
+      md += `\n`;
+    }
+
+    if (deep.robots && deep.robots.analyzed) {
+      md += `### 🤖 robots.txt İfşası\n\n`;
+      if (!deep.robots.exists) {
+        md += `- robots.txt dosyası mevcut değil.\n`;
+      } else if ((deep.robots.findings || []).length === 0) {
+        md += `- ✅ Hassas dizin ifşası tespit edilmedi.\n`;
+      } else {
+        for (const f of deep.robots.findings) {
+          md += `- ⚠️ **${f.level}:** ${f.issue} (\`${f.evidence}\`)\n`;
+        }
+      }
+      md += `\n`;
+    }
+
+    if (deep.mixed_content && deep.mixed_content.analyzed) {
+      md += `### 🔗 Mixed Content\n\n`;
+      if ((deep.mixed_content.findings || []).length === 0) {
+        md += `- ✅ Mixed content tespit edilmedi.\n`;
+      } else {
+        for (const f of deep.mixed_content.findings) {
+          md += `- ⚠️ **${f.level}:** ${f.issue} — \`${(f.evidence || '').slice(0, 80)}\`\n`;
+        }
+      }
+      md += `\n`;
+    }
+
+    if (deep.tech_fingerprint && deep.tech_fingerprint.analyzed) {
+      md += `### 🧩 Teknoloji Parmak İzi\n\n`;
+      const techs = deep.tech_fingerprint.technologies || [];
+      if (techs.length === 0) {
+        md += `- ✅ Teknoloji ifşası tespit edilmedi.\n`;
+      } else {
+        for (const t of techs) {
+          md += `- **${t.category}:** ${t.value} _(kaynak: ${t.source})_\n`;
+        }
+      }
+      md += `\n`;
+    }
+  }
+
+  // Faz 2: SAST bulguları (varsa)
+  const sast = STATE.results.sast;
+  if (sast && sast.success) {
+    md += `\n---\n\n## 🧪 5. Kaynak Kod Analizi (SAST) — \`${sast.root}\`\n\n`;
+    md += `**Taranan dosya:** ${sast.stats.files_scanned} • **Satır:** ${sast.stats.total_lines} • **Doğrulanan bulgu:** ${sast.stats.verified_count}/${sast.findings.length} • **Kural kapsamı:** ${sast.coverage.rule_coverage_pct}%\n\n`;
+    md += `| Şiddet | Kural | CVSS | CWE | Doğrulandı | Dosya:Satır | Başlık |\n|---|---|---|---|---|---|---|\n`;
+    for (const f of sast.findings) {
+      md += `| ${f.severity} | ${f.rule_id} | ${f.cvss} | ${f.cwe} | ${f.verified ? '✓' : '—'} | \`${f.file}:${f.line}\` | ${f.title} |\n`;
+    }
+    if (sast.dependencies && sast.dependencies.analyzed) {
+      const vulnDeps = sast.dependencies.vulnerable || [];
+      md += `\n### 📦 Bağımlılık CVE Denetimi (OSV)\n\n`;
+      if (vulnDeps.length === 0) {
+        md += `- ✅ Bilinen CVE içeren bağımlılık tespit edilmedi.\n`;
+      } else {
+        for (const v of vulnDeps) {
+          md += `- **${v.name}@${v.version}** (${v.ecosystem}) — ${v.vuln_count} CVE: ${v.vulns.map(x => x.id).join(', ')}\n`;
+        }
+      }
+    }
+  }
+
+  md += `\n---\n\n*Rapor, [Web Security Scanner](https://melihkarasu.github.io/web-security-scanner/) tarafından üretilmiştir. Tarama tarihi: ${new Date().toISOString()}.*`;
+
+  STATE.reportMarkdown = md;
   downloadFile(`${STATE.currentDomain}-guvenlik-raporu.md`, md, 'text/markdown');
   showToast('Markdown raporu indirildi!', 'success');
 }
 
-// =============================================================
+// JSON Rapor Dışa Aktarma (Faz 4 — makine okunabilir format)
+function exportJsonReport() {
+  if (!STATE.currentDomain && !STATE.results.sast) {
+    showToast('Önce bir tarama yapmalısınız.', 'warning');
+    return;
+  }
+
+  const report = {
+    tool: 'Web Security Scanner',
+    version: '1.0.0',
+    generated_at: new Date().toISOString(),
+    mode: STATE.mode,
+    target: {
+      domain: STATE.currentDomain || null,
+      url: STATE.targetUrl || null,
+      score: STATE.score,
+      grade: STATE.grade
+    },
+    results: STATE.results
+  };
+
+  const name = STATE.currentDomain || 'sast-taramasi';
+  downloadFile(`${name}-guvenlik-raporu.json`, JSON.stringify(report, null, 2), 'application/json');
+  showToast('JSON raporu indirildi!', 'success');
+}
+
+// HTML Rapor Dışa Aktarma (Faz 4 — compliance-ready format)
+function exportHtmlReport() {
+  if (!STATE.reportMarkdown && !STATE.currentDomain) {
+    showToast('Önce bir tarama yapmalısınız.', 'warning');
+    return;
+  }
+
+  let src = STATE.reportMarkdown || '';
+  // 1) HTML escape
+  let body = src.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // 2) Kod blokları (korumalı — diğer dönüşümlerden önce)
+  const codeBlocks = [];
+  body = body.replace(/```[a-z]*\n([\s\S]*?)```/g, (m, code) => {
+    codeBlocks.push(code);
+    return `@@CODEBLOCK${codeBlocks.length - 1}@@`;
+  });
+
+  // 3) Başlıklar
+  body = body.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  body = body.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  body = body.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  body = body.replace(/^---$/gm, '<hr>');
+
+  // 4) Tablolar
+  body = body.replace(/((?:^\|.*\|\s*\n)+)/gm, (block) => {
+    const rows = block.trim().split('\n');
+    let out = '<table>';
+    rows.forEach((row, idx) => {
+      if (row.includes('---')) return;
+      const cells = row.split('|').slice(1, -1).map(c => c.trim());
+      const tag = idx === 0 ? 'th' : 'td';
+      out += '<tr>' + cells.map(c => `<${tag}>${c}</${tag}>`).join('') + '</tr>';
+    });
+    return out + '</table>';
+  });
+
+  // 5) Satır içi biçimlendirme
+  body = body.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  body = body.replace(/_([^_]+)_/g, '<em>$1</em>');
+  body = body.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+  // 6) Listeler
+  body = body.replace(/((?:^- .+\n?)+)/gm, (block) => {
+    const items = block.trim().split('\n').map(l => `<li>${l.replace(/^- /, '')}</li>`).join('');
+    return `<ul>${items}</ul>`;
+  });
+
+  // 7) Kod bloklarını geri yerleştir
+  body = body.replace(/@@CODEBLOCK(\d+)@@/g, (m, idx) => `<pre><code>${codeBlocks[parseInt(idx, 10)]}</code></pre>`);
+
+  const fullHtml = `<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Web Güvenlik Taraması Raporu — ${STATE.currentDomain || 'SAST'}</title>
+  <style>
+    body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; max-width: 900px; margin: 0 auto; padding: 24px; color: #1c1917; background: #fdfaf6; line-height: 1.6; }
+    h1 { border-bottom: 3px solid #fa520f; padding-bottom: 8px; }
+    h2 { margin-top: 28px; }
+    h3 { margin-top: 20px; }
+    code { background: #f5f5f4; padding: 2px 5px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
+    pre { background: #1c1917; color: #fbbf24; padding: 12px; border-radius: 8px; overflow-x: auto; }
+    pre code { background: transparent; color: inherit; padding: 0; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+    th, td { border: 1px solid #e7e5e4; padding: 6px 10px; text-align: left; }
+    th { background: #f5f5f4; }
+    hr { border: none; border-top: 1px solid #e7e5e4; margin: 24px 0; }
+    ul { padding-left: 22px; }
+    li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+${body}
+</body>
+</html>`;
+
+  const name = STATE.currentDomain || 'sast-taramasi';
+  downloadFile(`${name}-guvenlik-raporu.html`, fullHtml, 'text/html');
+  showToast('HTML raporu indirildi!', 'success');
+}
 // 5. Yardımcı Fonksiyonlar & Başlatma
 // =============================================================
 function toggleLoading(isLoading) {

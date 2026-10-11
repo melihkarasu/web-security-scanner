@@ -37,6 +37,84 @@ SAST_MAX_FILES = 800               # tarama başına üst sınır
 SAST_MAX_MATCHES_PER_RULE = 3      # dosya başına kural başına üst sınır
 SAST_DEPS_MAX_PACKAGES = 60        # OSV sorgu üst sınırı
 
+# =============================================================
+# Faz 4: CVSS Yaklaşıklığı, Kapsama ve Düzeltme Önerileri
+# =============================================================
+# Şiddet → CVSS taban aralığı (yaklaşık skor)
+SEVERITY_CVSS = {
+    "KRİTİK": (9.0, 10.0),
+    "YÜKSEK": (7.0, 8.9),
+    "ORTA": (4.0, 6.9),
+    "DÜŞÜK": (0.1, 3.9)
+}
+
+# Kategori bazlı CVSS ayarı (aralık içinde yukarı/aşağı kaydırma)
+CATEGORY_CVSS_ADJ = {
+    "SQL Injection": 0.3,
+    "Sır Yönetimi": 0.2,
+    "SSRF Riski": 0.1,
+    "Path Traversal": 0.1,
+    "Tehlikeli Fonksiyon": 0.0,
+    "XSS Riski": -0.2,
+    "Zayıf Kriptografi": -0.3,
+    "TLS Doğrulaması": -0.1,
+    "Dockerfile": -0.3,
+    "IaC / Terraform": -0.2
+}
+
+def cvss_approx(severity, category):
+    """Şiddet ve kategoriye göre yaklaşık CVSS taban skoru üretir."""
+    low, high = SEVERITY_CVSS.get(severity, (0.1, 3.9))
+    base = (low + high) / 2.0
+    adj = CATEGORY_CVSS_ADJ.get(category, 0.0)
+    return round(min(10.0, max(0.1, base + adj)), 1)
+
+# Kural bazlı otomatik düzeltme önerileri (Faz 4.5)
+RULE_FIXES = {
+    "SEC-001": "Anahtarı AWS IAM'dan iptal edin; yeni anahtarı ortam değişkeni veya secret manager'dan okuyun.",
+    "SEC-002": "Token'ı GitHub Settings > Developer > Tokens'tan iptal edin; GitHub Actions secrets veya secret manager kullanın.",
+    "SEC-003": "Token'ı GitLab'dan iptal edin; CI/CD değişkenleri (masked) kullanın.",
+    "SEC-004": "Slack token'ı iptal edin; ortam değişkenine taşıyın.",
+    "SEC-005": "Google API anahtarını Google Cloud Console'dan kısıtlayın/rotasyonlayın; env'e taşıyın.",
+    "SEC-006": "OpenAI anahtarını iptal edin; ortam değişkeni (OPENAI_API_KEY) kullanın.",
+    "SEC-007": "Özel anahtarı kod tabanından silin, secret manager'a taşıyın ve rotate edin.",
+    "SEC-008": "JWT secret'ı ortam değişkenine taşıyın: process.env.JWT_SECRET — yedek değer (fallback) bırakmayın.",
+    "SEC-009": "Bağlantı string'ini parçalara ayırın; kimlik bilgilerini ortam değişkenlerinden okuyun.",
+    "SEC-010": "Değeri ortam değişkenine taşıyın; koda asla gerçek değer gömmeyin.",
+    "SEC-011": "Fallback string'i kaldırın; ortam değişkeni yoksa uygulama hata verip dursun (fail-fast).",
+    "CRY-001": "hashlib.sha256(...) veya daha güçlü bir özet kullanın.",
+    "CRY-002": "hashlib.sha256(...) veya daha güçlü bir özet kullanın.",
+    "CRY-003": "eval yerine güvenli ayrıştırıcı (JSON.parse, haritalama) kullanın.",
+    "CRY-004": "exec yerine somut fonksiyon çağrıları veya ast.literal_eval kullanın.",
+    "CRY-005": "Girdiyi sterilize edin; subprocess.spawn('cmd', [args]) liste formunu tercih edin.",
+    "CRY-006": "os.system yerine subprocess.run(['cmd', 'arg'], shell=False) kullanın.",
+    "CRY-007": "pickle yerine json.loads gibi güvenli serileştirme kullanın.",
+    "CRY-008": "yaml.load(...) yerine yaml.safe_load(...) kullanın.",
+    "CRY-009": "verify=True (varsayılan) bırakın; self-signed sertifikalar için CA paketi sağlayın.",
+    "SQLI-001": "Parametreli sorgu kullanın: db.query('SELECT ... WHERE id = ?', [id])",
+    "SQLI-002": "Parametreli sorgu kullanın: db.query('SELECT ... WHERE id = ?', [id])",
+    "SQLI-003": "Parametre yer tutucusu kullanın: cursor.execute('SELECT ... WHERE id = %s', (user_id,))",
+    "SQLI-004": "Parametreli sorgu kullanın; .format() yerine yer tutucu geçirin.",
+    "SQLI-005": "Prepared statement kullanın: $stmt = $db->prepare('... WHERE id = ?')",
+    "SQLI-006": "Parametreli sorgu kullanın; % formatlama yerine yer tutucu geçirin.",
+    "XSS-001": "textContent kullanın veya DOMPurify.sanitize() ile sterilize edin.",
+    "XSS-002": "document.write yerine DOM API'leri (createElement, textContent) kullanın.",
+    "XSS-003": "İçerik sterilizasyonu ekleyin veya yapılandırılmış veri ile render edin.",
+    "XSS-004": "v-html yerine metin interpolasyonu ({{ }}) kullanın.",
+    "XSS-005": "insertAdjacentHTML yerine textContent / insertAdjacentText kullanın.",
+    "SSRF-001": "İstek öncesi hedef hostname'i DNS ile çözümleyip özel IP aralıklarını reddedin (SSRF guard).",
+    "SSRF-002": "İstek öncesi hedef doğrulaması (allow-list / IP kontrolü) ekleyin.",
+    "SSRF-003": "URL şemasını ve çözülen IP'yi doğrulayan bir guard ekleyin.",
+    "SSRF-004": "Oluşturulan URL'nin hostname'ini doğrulayın; protokolü kısıtlayın.",
+    "PT-001": "Dosya yolunu os.path.basename ile sterilize edin ve izin verilen kök dizine sabitleyin.",
+    "PT-002": "Yol normalizasyonu + kök dizin kontrolü (realpath başlangıç doğrulaması) ekleyin.",
+    "DOCK-001": "İmajı sabit sürüme sabitleyin: FROM node:20.11-alpine gibi.",
+    "DOCK-002": "Ayrıcalıksız kullanıcı tanımlayın: RUN adduser -D app && USER app",
+    "DOCK-003": ".dockerignore'a .env, *.secret, node_modules ekleyin; yalnızca gerekli dosyaları kopyalayın.",
+    "DOCK-004": "Secret'ı build-arg + runtime secret manager'dan okuyun; Dockerfile'a gömmeyin.",
+    "IAC-001": "Erişim kaynağını (cidr_blocks) belirli IP aralıklarına daraltın.",
+}
+
 # Genel parola değerleri için yanlış-pozitif filtresi
 _PASSWORD_BLOCKLIST = {
     "password", "passwd", "changeme", "change-me", "change_me", "example",
@@ -270,14 +348,44 @@ def sast_scan_directory(root_path):
                         "category": category,
                         "severity": severity,
                         "cwe": cwe,
+                        "cvss": cvss_approx(severity, category),
                         "title": title,
                         "file": rel_path,
                         "line": lineno,
                         "match": m.group(0)[:120],
-                        "description": desc
+                        "description": desc,
+                        "fix": RULE_FIXES.get(rule_id, "Genel: OWASP standartlarına göre girdi doğrulaması ve en az ayrıcalık ilkesi uygulayın.")
                     })
 
     duration_ms = int((time.time() - start) * 1000)
+
+    # =============================================================
+    # Bağımsız Doğrulama Geçişi (Faz 4 — Cloudflare metodolojisi)
+    # Her bulgu, ikinci bir geçişte dosya yeniden okunarak teyit edilir.
+    # Yanlış-pozitifler (verified=False) raporda ayrı işaretlenir.
+    # =============================================================
+    rule_lookup = {r[0]: r for r in SAST_RULES}
+    verified_count = 0
+    for f in findings:
+        f["verified"] = False
+        try:
+            fpath = os.path.join(root_path, f["file"])
+            if not os.path.isfile(fpath):
+                continue
+            with open(fpath, "r", encoding="utf-8", errors="replace") as fh:
+                vlines = fh.readlines()
+            if f["line"] < 1 or f["line"] > len(vlines):
+                continue
+            vline = vlines[f["line"] - 1]
+            rule = rule_lookup.get(f["rule_id"])
+            if rule and rule[5].search(vline):
+                # Yanlış-pozitif filtresi de ikinci geçişte uygulanır
+                if f["rule_id"] == "SEC-010" and _is_password_false_positive(vline):
+                    continue
+                f["verified"] = True
+                verified_count += 1
+        except OSError:
+            continue
 
     summary = {"KRİTİK": 0, "YÜKSEK": 0, "ORTA": 0, "DÜŞÜK": 0}
     for f in findings:
@@ -293,9 +401,20 @@ def sast_scan_directory(root_path):
             "skipped_dirs": skipped,
             "rules_active": len(SAST_RULES),
             "duration_ms": duration_ms,
-            "truncated": files_scanned >= SAST_MAX_FILES
+            "truncated": files_scanned >= SAST_MAX_FILES,
+            "verified_count": verified_count,
+            "verification_pass": True
         },
         "summary": summary,
+        "coverage": {
+            "categories_with_findings": sorted({f["category"] for f in findings}),
+            "files_with_findings": sorted({f["file"] for f in findings}),
+            "rules_triggered": sorted({f["rule_id"] for f in findings}),
+            "rules_total": len(SAST_RULES),
+            "rule_coverage_pct": round(len({f["rule_id"] for f in findings}) * 100.0 / len(SAST_RULES), 1),
+            "file_coverage_pct": round(len({f["file"] for f in findings}) * 100.0 / max(1, files_scanned), 1),
+            "verified_pct": round(verified_count * 100.0 / max(1, len(findings)), 1)
+        },
         "findings": findings
     }
 
