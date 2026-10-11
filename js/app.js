@@ -1124,7 +1124,8 @@ function renderActiveResults(data) {
     const MODULE_NAMES = {
       sqli: 'SQL Injection', nosqli: 'NoSQL Injection', ssti: 'SSTI',
       open_redirect: 'Open Redirect', xss: 'XSS', csrf: 'CSRF', ssrf: 'SSRF',
-      idor: 'IDOR', ports: 'Port Taraması', deep_headers: 'Derin Başlık'
+      idor: 'IDOR', ports: 'Port Taraması', deep_headers: 'Derin Başlık',
+      browser: 'Tarayıcı Simülasyonu'
     };
     modulesEl.innerHTML = Object.entries(data.modules || {}).map(([mid, m]) => {
       const statusHtml = m.ran
@@ -1134,6 +1135,27 @@ function renderActiveResults(data) {
           : '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-100 text-rose-800">hata</span>');
       return '<div class="p-2.5 rounded-xl border border-stone-200 bg-stone-50 flex items-center justify-between gap-2"><span class="text-xs font-mono font-semibold text-mistral-ink">' + (MODULE_NAMES[mid] || mid) + '</span>' + statusHtml + '</div>';
     }).join('');
+  }
+
+  // Faz 6E: Site haritası (tarayıcı simülasyonu crawler çıktısı)
+  const sitemapCard = document.getElementById('active-sitemap-card');
+  const sitemapList = document.getElementById('active-sitemap-list');
+  if (sitemapCard && sitemapList) {
+    const siteMap = data.site_map || [];
+    if (siteMap.length === 0) {
+      sitemapCard.classList.add('hidden');
+    } else {
+      sitemapCard.classList.remove('hidden');
+      sitemapList.innerHTML = siteMap.map(p => {
+        const statusColor = p.status === 200 ? 'bg-emerald-100 text-emerald-800' : (p.status ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800');
+        return '<div class="flex items-center gap-2 p-2 rounded-lg bg-stone-50 border border-stone-200 text-[11px]">' +
+          '<span class="font-mono text-stone-400 w-12">d' + (p.depth || 0) + '</span>' +
+          '<span class="font-mono px-1.5 py-0.5 rounded text-[10px] font-bold ' + statusColor + '">' + (p.status || 'ERR') + '</span>' +
+          '<span class="font-mono text-mistral-ink truncate flex-1" title="' + escapeHtml(p.url) + '">' + escapeHtml(p.url) + '</span>' +
+          (p.forms > 0 ? '<span class="font-mono text-[10px] text-stone-500">' + p.forms + ' form</span>' : '') +
+          '</div>';
+      }).join('');
+    }
   }
 
   // Zincirleme korelasyon sonuçları (Faz 6A)

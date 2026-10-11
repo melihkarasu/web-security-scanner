@@ -22,6 +22,9 @@ import urllib.request
 import urllib.parse
 import urllib.error
 
+# Faz 6E: Tarayıcı simülasyon motoru (crawler + JS analizi + form enjeksiyonu + clickjacking + oturum)
+from browser_sim_engine import run_browser_simulation
+
 # =============================================================
 # Güvenlik Duvarı Sabitleri
 # =============================================================
@@ -658,12 +661,20 @@ def correlate_findings(findings):
     for f in findings:
         by_test.setdefault(f.get("test", ""), []).append(f)
 
+    def _matching_findings(test):
+        # Tam eşleşme + kısmi eşleşme (Form SQL Injection -> SQL Injection, DOM XSS -> XSS)
+        result = list(by_test.get(test, []))
+        for t, flist in by_test.items():
+            if t != test and test in t:
+                result.extend(flist)
+        return result
+
     def _has(test):
-        return test in by_test and len(by_test[test]) > 0
+        return len(_matching_findings(test)) > 0
 
     def _sev_of(test):
         sevs = {"KRİTİK": 0, "YÜKSEK": 1, "ORTA": 2, "DÜŞÜK": 3, "BİLGİ": 4}
-        return min((sevs.get(f["severity"], 4) for f in by_test.get(test, [])), default=4)
+        return min((sevs.get(f["severity"], 4) for f in _matching_findings(test)), default=4)
 
     # 1. SSRF + yaygın port/DB portu → iç ağ keşfi zinciri
     if _has("SSRF") and _has("Port Taraması"):
@@ -692,7 +703,7 @@ def correlate_findings(findings):
             })
 
     # 3. SQLi (error-based) + verbose hata → veri sızıntısı zinciri
-    sqli_err = [f for f in by_test.get("SQL Injection", []) if "Error-based" in f.get("title", "")]
+    sqli_err = [f for f in _matching_findings("SQL Injection") if "error-based" in f.get("title", "").lower()]
     if sqli_err:
         chains.append({
             "title": "Error-based SQLi + veritabanı hata sızıntısı",
@@ -778,7 +789,7 @@ def run_active_scan(base_url, modules=None):
     if not ETHICAL_GATE.is_confirmed(hostname or ""):
         return {"success": False, "error": "ETIK_ONAY_YOK", "message": "Aktif test için etik onay gerekli."}
 
-    all_modules = ["sqli", "nosqli", "ssti", "open_redirect", "xss", "csrf", "ssrf", "idor", "ports", "deep_headers"]
+    all_modules = ["sqli", "nosqli", "ssti", "open_redirect", "xss", "csrf", "ssrf", "idor", "ports", "deep_headers", "browser"]
     active_modules = modules if modules else all_modules
 
     client = RateLimitedClient()
@@ -820,6 +831,23 @@ def run_active_scan(base_url, modules=None):
         findings += _run("idor", lambda: test_idor_indicators(client, scan_url))
     if "deep_headers" in active_modules:
         findings += _run("deep_headers", lambda: test_deep_headers(scan_url))
+
+    # Faz 6E: Tarayıcı Simülasyonu (crawler + JS + form + clickjacking + oturum)
+    browser_site_map = []
+    if "browser" in active_modules:
+        sim_holder = {}
+        def _browser():
+            sim_holder["result"] = run_browser_simulation(scan_url, client)
+            return sim_holder["result"].get("findings", [])
+        findings += _run("browser", _browser)
+        sim = sim_holder.get("result")
+        if sim:
+            crawl_stats = sim.get("stats", {}).get("crawl", {})
+            if "browser" in module_stats:
+                module_stats["browser"]["pages"] = crawl_stats.get("pages_visited", 0)
+                module_stats["browser"]["forms_found"] = crawl_stats.get("forms_found", 0)
+            browser_site_map = sim.get("site_map", [])
+
     if "ports" in active_modules:
         def _ports():
             f, _open = test_port_scan(hostname)
@@ -842,6 +870,7 @@ def run_active_scan(base_url, modules=None):
         "summary": summary,
         "findings": findings,
         "chains": chains,
+        "site_map": browser_site_map,
         "requests_sent": client.request_count,
         "rate_limit_seconds": RATE_LIMIT_SECONDS,
         "duration_ms": int((time.time() - start) * 1000),

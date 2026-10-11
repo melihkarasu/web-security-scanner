@@ -506,7 +506,7 @@
         </div>
 
         <!-- Modül Seçimi -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-2">
+        <div class="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-6 gap-2">
           <label class="flex items-center gap-1.5 text-[11px] font-mono cursor-pointer p-2 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 transition">
             <input type="checkbox" checked value="sqli" class="active-module-check w-3.5 h-3.5 accent-orange-600" /> SQLi
           </label>
@@ -537,6 +537,9 @@
           <label class="flex items-center gap-1.5 text-[11px] font-mono cursor-pointer p-2 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 transition">
             <input type="checkbox" checked value="deep_headers" class="active-module-check w-3.5 h-3.5 accent-orange-600" /> Başlıklar
           </label>
+          <label class="flex items-center gap-1.5 text-[11px] font-mono cursor-pointer p-2 rounded-lg border border-stone-200 bg-orange-50 hover:bg-orange-100 transition" title="Tarayıcı Simülasyonu: crawler + JS analizi + form enjeksiyonu + clickjacking + oturum akışı">
+            <input type="checkbox" checked value="browser" class="active-module-check w-3.5 h-3.5 accent-orange-600" /> Tarayıcı
+          </label>
         </div>
         <p class="text-[11px] text-stone-500 mt-2.5">
           İpucu: SQL injection ve XSS testleri URL'de parametre gerektirir (örn. <code class="font-mono">?id=1</code>). Rate limit: 1.5 sn/istek, tarama başına maks. 60 istek.
@@ -558,6 +561,16 @@
             <span>Modül Çalışma Durumu</span>
           </h4>
           <div id="active-modules-status" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5"></div>
+        </div>
+
+        <!-- Site Haritası (Tarayıcı Simülasyonu çıktısı) -->
+        <div id="active-sitemap-card" class="hidden bg-white border border-stone-200 rounded-2xl p-5 shadow-xs">
+          <h4 class="font-bold text-sm text-mistral-ink mb-3 flex items-center gap-2">
+            <span>🗺️</span>
+            <span>Keşfedilen Site Haritası</span>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-stone-100 text-stone-600">Crawler</span>
+          </h4>
+          <div id="active-sitemap-list" class="space-y-1.5 max-h-[240px] overflow-y-auto pr-1"></div>
         </div>
 
         <!-- Zincirleme Korelasyon Bulguları -->
@@ -685,6 +698,6 @@
   </footer>
 
   <!-- İstemci Mantığı (Cache-Bust ile) -->
-  <script src="js/app.js?v=20261011f"></script>
+  <script src="js/app.js?v=20261011g"></script>
 </body>
 </html>
