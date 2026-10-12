@@ -22,6 +22,9 @@ import urllib.request
 import urllib.parse
 import urllib.error
 
+# Faz 6F: İş Mantığı Test Motoru
+from business_logic_engine import run_business_logic_scan
+
 # Faz 6E: Tarayıcı simülasyon motoru (crawler + JS analizi + form enjeksiyonu + clickjacking + oturum)
 from browser_sim_engine import run_browser_simulation
 
@@ -780,6 +783,42 @@ def _fetch_headers_only(url):
 # =============================================================
 # Ana Aktif Tarama Orkestratörü
 # =============================================================
+def run_custom_test(client, url, param, payload):
+    """
+    AI orkestratörü tarafından çağrılan, spesifik bir parametreye 
+    özel payload gönderen test fonksiyonu.
+    """
+    params = {param: payload} if param else {}
+    try:
+        resp = client.get(url, params=params)
+        return {
+            "url": url,
+            "param": param,
+            "payload": payload,
+            "status": resp.get("status"),
+            "body": resp.get("body", ""),
+            "headers": resp.get("headers", {})
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+def export_scan_state(base_url, site_map, sast_findings):
+    """
+    Sistemin mevcut durumunu AI ajanlarının anlayacağı 
+    kompakt bir JSON formatına dönüştürür.
+    """
+    return {
+        "target": base_url,
+        "attack_surface": {
+            "pages": [p["url"] for p in site_map],
+            "forms": [f for p in site_map for f in p.get("forms", [])]
+        },
+        "static_findings": [
+            {"test": f["test"], "severity": f["severity"], "title": f["title"]}
+            for f in sast_findings
+        ]
+    }
+
 def run_active_scan(base_url, modules=None):
     """Etik onay sonrası aktif taramayı orkestre eder."""
     parsed = urllib.parse.urlparse(base_url if "://" in base_url else "https://" + base_url)
@@ -789,7 +828,7 @@ def run_active_scan(base_url, modules=None):
     if not ETHICAL_GATE.is_confirmed(hostname or ""):
         return {"success": False, "error": "ETIK_ONAY_YOK", "message": "Aktif test için etik onay gerekli."}
 
-    all_modules = ["sqli", "nosqli", "ssti", "open_redirect", "xss", "csrf", "ssrf", "idor", "ports", "deep_headers", "browser"]
+    all_modules = ["sqli", "nosqli", "ssti", "open_redirect", "xss", "csrf", "ssrf", "idor", "ports", "deep_headers", "browser", "logic"]
     active_modules = modules if modules else all_modules
 
     client = RateLimitedClient()
@@ -847,6 +886,12 @@ def run_active_scan(base_url, modules=None):
                 module_stats["browser"]["pages"] = crawl_stats.get("pages_visited", 0)
                 module_stats["browser"]["forms_found"] = crawl_stats.get("forms_found", 0)
             browser_site_map = sim.get("site_map", [])
+
+    # Faz 6F: İş Mantığı Testleri
+    if "logic" in active_modules:
+        def _logic():
+            return run_business_logic_scan(scan_url, client)
+        findings += _run("logic", _logic)
 
     if "ports" in active_modules:
         def _ports():

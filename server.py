@@ -24,7 +24,8 @@ import threading
 import time
 
 # Faz 3: Aktif tarama motoru (etik onay geçidi + rate limiter içerir)
-from active_scan_engine import ETHICAL_GATE, run_active_scan
+from active_scan_engine import ETHICAL_GATE, run_active_scan, run_custom_test, export_scan_state
+from ai_orchestrator import AIOrchestrator
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -419,33 +420,67 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             "domain": hostname
         })
 
-    def handle_api_active_scan(self, parsed_path):
-        """Etik onay sonrası aktif taramayı yürütür."""
-        qs = urllib.parse.parse_qs(parsed_path.query)
-        raw_url = (qs.get("url") or [""])[0].strip()
-        modules_param = (qs.get("modules") or [""])[0].strip()
-
-        if not raw_url:
-            self.send_json({"success": False, "error": "URL parametresi gereklidir"}, status=400)
-            return
-
-        if not raw_url.startswith("http://") and not raw_url.startswith("https://"):
-            raw_url = "https://" + raw_url
-
-        modules = [m for m in modules_param.split(",") if m] if modules_param else None
-
+    def handle_api_ai_scan(self, parsed_path):
+        """
+        AI Destekli Dinamik Tarama Uç Noktası.
+        Akış: Konfigürasyon -> Etik Onay -> Sistem Durumu -> AI Döngüsü -> Rapor
+        """
         try:
-            result = run_active_scan(raw_url, modules)
-            if not result.get("success") and result.get("error") == "ETIK_ONAY_YOK":
+            # 1. Parametre ve Konfigürasyon Alımı
+            qs = urllib.parse.parse_qs(parsed_path.query)
+            url = (qs.get("url") or [""])[0].strip()
+            if not url:
+                self.send_json({"success": False, "error": "URL parametresi eksik."}, status=400)
+                return
+
+            # LLM Konfigürasyonu (Demo için sorgu parametrelerinden alıyoruz)
+            provider_config = {
+                "provider": (qs.get("provider") or ["vertex"])[0],
+                "project_id": (qs.get("project_id") or ["your-project-id"])[0],
+                "region": (qs.get("region") or ["us-central1"])[0],
+                "auth": {
+                    "type": (qs.get("auth_type") or ["api_key"])[0],
+                    "value": (qs.get("auth_value") or [""])[0]
+                }
+            }
+
+            # 2. Etik Onay Kontrolü
+            parsed_url = urllib.parse.urlparse(url)
+            if not ETHICAL_GATE.is_confirmed(parsed_url.hostname):
                 self.send_json({
                     "success": False,
                     "error": "ETIK_ONAY_YOK",
-                    "message": "Aktif test öncesi etik onay gereklidir. Lütfen onay diyaloğunu kabul edin."
+                    "message": "AI taraması öncesi etik onay gereklidir."
                 }, status=403)
                 return
-            self.send_json(result)
+
+            # 3. Mevcut Sistem Durumunu AI'ya Hazırla
+            # Not: Normalde önceki taramalardan gelen site_map ve sast_findings kullanılır.
+            # Bu noktada basitleştirilmiş bir durum aktarıyoruz.
+            scan_state = export_scan_state(url, [], [])
+
+            # 4. AI Orkestratörünü Başlat
+            orchestrator = AIOrchestrator(provider_config)
+
+            # AI'nın sistem üzerinden test yapmasını sağlayan callback
+            def active_test_callback(test_url, param, payload):
+                client = RateLimitedClient()
+                return run_custom_test(client, test_url, param, payload)
+
+            # Döngüyü yürüt
+            ai_result = orchestrator.orchestrate_scan(
+                target_url=url, 
+                initial_data=scan_state, 
+                active_scanner_callback=active_test_callback
+            )
+
+            self.send_json({
+                "success": True,
+                "ai_report": ai_result
+            })
+
         except Exception as e:
-            self.send_json({"success": False, "error": "Aktif tarama başarısız: %s" % str(e)}, status=500)
+            self.send_json({"success": False, "error": f"AI Scan Error: {str(e)}"}, status=500)
 
     def fetch_headers(self, url):
         # Güvenlik & Pasiflik: Yalnızca başlıkları al, gövdeyi indirme

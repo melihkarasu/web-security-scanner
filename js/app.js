@@ -504,22 +504,27 @@ async function detectScannerMode() {
           modeBadgeEl.innerHTML = '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[11px] font-mono shadow-xs">🟢 Lokal Mod (Tam Başlık Taraması Aktif)</span>';
         }
         if (modeNoticeEl) {
-          modeNoticeEl.className = 'p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-900 mb-4 flex items-start gap-2.5';
-          modeNoticeEl.innerHTML = '<span class="text-base">🚀</span><div><strong>Lokal Sunucu Aktif (127.0.0.1):</strong> HTTP güvenlik başlıkları CORS engeline takılmadan yerel makineniz üzerinden canlı olarak çekilmektedir.</div>';
+          modeNoticeEl.className = 'p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-300 text-xs text-emerald-950 mb-4 flex items-center justify-between gap-3 shadow-xs';
+          modeNoticeEl.innerHTML = `
+            <div class="flex items-center gap-2.5">
+              <span class="text-lg">🚀</span>
+              <div>
+                <strong class="font-bold text-emerald-900">Lokal Sunucu Aktif (127.0.0.1:8765):</strong>
+                <span class="text-emerald-800 text-[11px] block sm:inline">CORS engeli yok. Derin pasif analiz, SAST (42 kural), etik onaylı aktif testler ve AI Red Team orkestrasyonu hazır.</span>
+              </div>
+            </div>
+            <span class="hidden md:inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold border border-emerald-300">TAM YETKİ</span>
+          `;
         }
         return;
       }
     }
   } catch (e) {}
 
-  // GitHub Pages veya Statik Barındırma Modu
+  // GitHub Pages veya Statik Barındırma Modu: Zaten index.html içinde zengin karşılaştırma kartı yüklü
   STATE.mode = 'github_pages';
   if (modeBadgeEl) {
-    modeBadgeEl.innerHTML = '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[11px] font-mono shadow-xs">🟡 GitHub Pages Modu (Pasif DoH)</span>';
-  }
-  if (modeNoticeEl) {
-    modeNoticeEl.className = 'p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 mb-4 flex items-start gap-2.5';
-    modeNoticeEl.innerHTML = '<span class="text-base">ℹ️</span><div><strong>Tarayıcı Kısıtı (CORS):</strong> GitHub Pages üzerinden tarayıcı doğrudan üçüncü parti sitelerin HTTP başlıklarını okuyamaz. DoH DNS canlı sorgulanır. Gerçek başlık analizi için <strong>"cURL Başlık Taraması"</strong> sekmesini kullanabilir veya repoyu yerel makinenizde <code class="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-950 font-bold">python3 server.py</code> ile çalıştırabilirsiniz.</div>';
+    modeBadgeEl.innerHTML = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[11px] font-mono shadow-xs">🟡 GitHub Pages Modu (Pasif DoH Önizlemesi)</span>';
   }
 }
 
@@ -1002,14 +1007,18 @@ function renderSastDeps(deps) {
 // =============================================================
 // FAZ 3: Aktif Güvenlik Testi Mantığı (Etik Onay + Rate-Limited Tarama)
 // =============================================================
-async function startActiveScan() {
+async function startActiveScan(options = {}) {
   const targetInput = document.getElementById('active-target-input');
   const btn = document.getElementById('active-btn');
   const spinner = document.getElementById('active-spinner');
   const btnText = document.getElementById('active-btn-text');
+  const aiBtn = document.getElementById('active-ai-btn');
+  const aiSpinner = document.getElementById('active-ai-spinner');
+  const aiBtnText = document.getElementById('active-ai-btn-text');
   const resultsEl = document.getElementById('active-results');
   const pagesNotice = document.getElementById('active-pages-notice');
   const ethicalCheck = document.getElementById('active-ethical-check');
+  const aiOrchestration = options.aiOrchestration === true;
 
   // Mod kontrolü
   if (STATE.mode !== 'local_api') {
@@ -1041,9 +1050,15 @@ async function startActiveScan() {
   }
 
   // UI: yükleniyor
-  if (btn) btn.disabled = true;
-  if (spinner) spinner.classList.remove('hidden');
-  if (btnText) btnText.innerText = 'Test Ediliyor...';
+  if (aiOrchestration) {
+    if (aiBtn) aiBtn.disabled = true;
+    if (aiSpinner) aiSpinner.classList.remove('hidden');
+    if (aiBtnText) aiBtnText.innerText = 'AI Çalışıyor...';
+  } else {
+    if (btn) btn.disabled = true;
+    if (spinner) spinner.classList.remove('hidden');
+    if (btnText) btnText.innerText = 'Test Ediliyor...';
+  }
   if (resultsEl) resultsEl.classList.remove('hidden');
 
   try {
@@ -1074,12 +1089,49 @@ async function startActiveScan() {
       return;
     }
 
-    STATE.results.activeScan = data;
-    renderActiveResults(data);
+    if (aiOrchestration) {
+      // AI Orkestrasyon modu: /api/ai-scan endpoint'ini çağır
+      const aiData = await startAIOrchestrationScan(rawUrl, modules);
+      if (aiData) {
+        STATE.results.activeScan = aiData;
+        renderActiveResults(aiData);
+      }
+    } else {
+      // Normal aktif tarama
+      // 1. Etik onayı sunucuya gönder (domain bazlı)
+      const confirmRes = await fetch('/api/active-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: rawUrl, confirmed: true }),
+        signal: AbortSignal.timeout(5000)
+      });
+      const confirmData = await confirmRes.json();
+      if (!confirmData.success) {
+        showToast('Onay kaydedilemedi: ' + (confirmData.error || '?'), 'error');
+        return;
+      }
 
-    const s = data.summary;
-    const chainCount = (data.chains || []).length;
-    showToast('Aktif test tamamlandı: ' + data.findings.length + ' bulgu' + (chainCount > 0 ? ' + ' + chainCount + ' risk zinciri' : '') + ' (K:' + (s['KRİTİK'] || 0) + ' Y:' + (s['YÜKSEK'] || 0) + ' O:' + (s['ORTA'] || 0) + ') — ' + data.requests_sent + ' istek', 'success');
+      // 2. Aktif taramayı başlat
+      const scanUrl = '/api/active-scan?url=' + encodeURIComponent(rawUrl) + '&modules=' + encodeURIComponent(modules.join(','));
+      const res = await fetch(scanUrl, { signal: AbortSignal.timeout(300000) });
+      const data = await res.json();
+
+      if (!data.success) {
+        if (data.error === 'ETIK_ONAY_YOK') {
+          showToast('Etik onay bulunamadı. Beyanı işaretleyip tekrar deneyin.', 'warning');
+        } else {
+          showToast('Aktif test hatası: ' + (data.error || data.message || 'Bilinmeyen hata'), 'error');
+        }
+        return;
+      }
+
+      STATE.results.activeScan = data;
+      renderActiveResults(data);
+
+      const s = data.summary;
+      const chainCount = (data.chains || []).length;
+      showToast('Aktif test tamamlandı: ' + data.findings.length + ' bulgu' + (chainCount > 0 ? ' + ' + chainCount + ' risk zinciri' : '') + ' (K:' + (s['KRİTİK'] || 0) + ' Y:' + (s['YÜKSEK'] || 0) + ' O:' + (s['ORTA'] || 0) + ') — ' + data.requests_sent + ' istek', 'success');
+    }
   } catch (err) {
     console.error('Active Scan Error:', err);
     showToast('Aktif test başarısız: ' + err.message, 'error');
@@ -1087,6 +1139,9 @@ async function startActiveScan() {
     if (btn) btn.disabled = false;
     if (spinner) spinner.classList.add('hidden');
     if (btnText) btnText.innerText = 'Aktif Testi Başlat';
+    if (aiBtn) aiBtn.disabled = false;
+    if (aiSpinner) aiSpinner.classList.add('hidden');
+    if (aiBtnText) aiBtnText.innerText = '🤖 AI Orkestrasyon';
   }
 }
 
@@ -1566,6 +1621,196 @@ function switchTab(tabId) {
         btn.className = 'px-4 py-2 rounded-lg text-xs font-semibold text-mistral-slate hover:text-mistral-ink transition-all';
       }
     }
+  }
+}
+
+// =============================================================
+// AI Red Team Orkestrasyon Fonksiyonları
+// =============================================================
+
+function toggleAIConfig() {
+  const panel = document.getElementById('ai-config-panel');
+  if (!panel) return;
+  const isHidden = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !isHidden);
+  const btn = panel.querySelector('button[onclick="toggleAIConfig()"]');
+  if (btn) btn.innerText = isHidden ? 'Paneli Kapat' : 'AI Panelini Aç';
+  if (isHidden) {
+    // Paneli açarken mevcut durumu yansıt
+    updateAIStatusUI();
+  }
+}
+
+function updateAIStatusUI() {
+  const indicator = document.getElementById('ai-status-indicator');
+  const text = document.getElementById('ai-status-text');
+  const provider = document.getElementById('ai-provider');
+  if (!indicator || !text || !provider) return;
+  
+  const val = provider.value;
+  if (val === 'vertex') {
+    indicator.className = 'w-2 h-2 rounded-full bg-emerald-500';
+    text.innerText = 'Vertex AI Seçili (Service Account/JSON gerekli)';
+  } else if (val === 'openrouter') {
+    indicator.className = 'w-2 h-2 rounded-full bg-amber-500';
+    text.innerText = 'OpenRouter Seçili (API Key gerekli)';
+  } else if (val === 'ollama') {
+    indicator.className = 'w-2 h-2 rounded-full bg-sky-500';
+    text.innerText = 'Ollama Seçili (Lokal, anahtar gerekmez)';
+  }
+}
+
+function clearAILog() {
+  const logEl = document.getElementById('ai-thought-log');
+  if (logEl) {
+    logEl.innerHTML = '<div class="text-stone-600">[Sistem] Log temizlendi. Yeni AI taraması başlatıldığında buraya yazılacak.</div>';
+  }
+}
+
+function appendAILog(message, type = 'info') {
+  const logEl = document.getElementById('ai-thought-log');
+  const cardEl = document.getElementById('ai-thought-chain-card');
+  if (!logEl || !cardEl) return;
+  
+  cardEl.classList.remove('hidden');
+  
+  const colors = {
+    'system': 'text-stone-500',
+    'scout': 'text-cyan-400',
+    'strategist': 'text-amber-400',
+    'analyst': 'text-emerald-400',
+    'error': 'text-rose-400',
+    'info': 'text-stone-300',
+    'success': 'text-emerald-400'
+  };
+  
+  const icons = {
+    'system': '⚙️',
+    'scout': '🔍',
+    'strategist': '🎯',
+    'analyst': '🧠',
+    'error': '❌',
+    'info': 'ℹ️',
+    'success': '✅'
+  };
+  
+  const timestamp = new Date().toLocaleTimeString('tr-TR', { hour12: false });
+  const color = colors[type] || colors.info;
+  const icon = icons[type] || icons.info;
+  
+  const entry = document.createElement('div');
+  entry.className = color + ' border-l-2 border-stone-700 pl-2';
+  entry.innerHTML = '<span class="text-stone-600">[' + timestamp + ']</span> <span class="font-bold">' + icon + ' ' + type.toUpperCase() + ':</span> ' + escapeHtml(message);
+  
+  logEl.appendChild(entry);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setAIThinking(state, agentName = '') {
+  const indicator = document.getElementById('ai-thinking-indicator');
+  const text = document.getElementById('ai-thinking-text');
+  if (!indicator || !text) return;
+  
+  if (state === 'thinking') {
+    indicator.className = 'w-2 h-2 rounded-full bg-amber-500 animate-pulse';
+    text.innerText = agentName ? agentName + ' düşünüyor...' : 'AI ajanları çalışıyor...';
+  } else if (state === 'idle') {
+    indicator.className = 'w-2 h-2 rounded-full bg-stone-600';
+    text.innerText = 'Beklemede';
+  } else if (state === 'complete') {
+    indicator.className = 'w-2 h-2 rounded-full bg-emerald-500';
+    text.innerText = 'Analiz tamamlandı';
+  } else if (state === 'error') {
+    indicator.className = 'w-2 h-2 rounded-full bg-rose-500';
+    text.innerText = 'Hata oluştu';
+  }
+}
+
+async function startAIOrchestrationScan(targetUrl, modules) {
+  const aiProvider = document.getElementById('ai-provider');
+  const aiModel = document.getElementById('ai-model');
+  const aiProjectId = document.getElementById('ai-project-id');
+  const aiAuth = document.getElementById('ai-auth');
+  
+  if (!aiProvider || !aiModel || !aiProjectId || !aiAuth) {
+    showToast('AI konfigürasyon elemanları bulunamadı.', 'error');
+    return null;
+  }
+  
+  const provider = aiProvider.value;
+  const model = aiModel.value.trim();
+  const projectId = aiProjectId.value.trim();
+  const auth = aiAuth.value.trim();
+  
+  if (!model) {
+    showToast('Model adı boş olamaz.', 'warning');
+    return null;
+  }
+  
+  if (provider === 'vertex' && (!projectId || !auth)) {
+    showToast('Vertex AI için Project ID ve Service Account JSON/API Key gerekli.', 'warning');
+    return null;
+  }
+  
+  if (provider === 'openrouter' && !auth) {
+    showToast('OpenRouter için API Key gerekli.', 'warning');
+    return null;
+  }
+  
+  // UI: AI log kartını göster ve başlat
+  const cardEl = document.getElementById('ai-thought-chain-card');
+  if (cardEl) cardEl.classList.remove('hidden');
+  clearAILog();
+  appendAILog('AI Red Team orkestrasyonu başlatılıyor...', 'system');
+  appendAILog('Sağlayıcı: ' + provider + ' | Model: ' + model, 'info');
+  setAIThinking('thinking', 'The Scout');
+  
+  try {
+    const res = await fetch('/api/ai-scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: targetUrl,
+        modules: modules,
+        ai_config: {
+          provider: provider,
+          model: model,
+          project_id: projectId,
+          auth: auth
+        }
+      }),
+      signal: AbortSignal.timeout(600000) // 10 dakika timeout (AI döngüleri için)
+    });
+    
+    const data = await res.json();
+    
+    if (!data.success) {
+      appendAILog('Orkestrasyon hatası: ' + (data.error || data.message || 'Bilinmeyen hata'), 'error');
+      setAIThinking('error');
+      showToast('AI tarama hatası: ' + (data.error || 'Bilinmeyen hata'), 'error');
+      return null;
+    }
+    
+    // AI thought chain loglarını işle
+    if (data.thought_chain && Array.isArray(data.thought_chain)) {
+      for (const entry of data.thought_chain) {
+        appendAILog(entry.message, entry.agent || 'info');
+        // Simüle edilmiş agent geçişleri için thinking indicator güncelle
+        if (entry.agent === 'scout') setAIThinking('thinking', 'The Strategist');
+        else if (entry.agent === 'strategist') setAIThinking('thinking', 'The Analyst');
+      }
+    }
+    
+    appendAILog('AI orkestrasyonu başarıyla tamamlandı. Toplam ' + (data.findings?.length || 0) + ' bulgu üretildi.', 'success');
+    setAIThinking('complete');
+    
+    return data;
+    
+  } catch (err) {
+    appendAILog('İstek hatası: ' + err.message, 'error');
+    setAIThinking('error');
+    showToast('AI orkestrasyon isteği başarısız: ' + err.message, 'error');
+    return null;
   }
 }
 

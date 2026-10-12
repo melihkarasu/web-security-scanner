@@ -109,17 +109,95 @@
     
     <!-- Çalışma Modu & Yasal/Etik Sorumluluk Bildirimi -->
     <div class="mb-5 space-y-3">
-      <!-- Dinamik Mod Rozeti ve Açıklaması (JS ile doldurulur) -->
-      <div id="scanner-mode-notice" class="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5 shadow-xs">
-        <span class="text-base">ℹ️</span>
-        <div>
-          <div class="flex items-center gap-2 mb-1">
-            <strong>Çalışma Modu:</strong>
-            <span id="scanner-mode-badge"><span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[11px] font-mono">🟡 GitHub Pages Modu (Pasif DoH)</span></span>
+    <!-- Çalışma Modu & Yasal/Etik Sorumluluk Bildirimi -->
+    <div class="mb-5 space-y-3">
+      <!-- Dinamik Mod Rozeti ve Karşılaştırma / Bilgilendirme Alanı -->
+      <div id="scanner-mode-notice" class="rounded-2xl border border-orange-200/90 bg-gradient-to-br from-orange-50/80 via-amber-50/40 to-white p-5 sm:p-6 text-xs text-mistral-ink shadow-xs">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4 pb-4 border-b border-orange-200/60">
+          <div>
+            <div class="flex items-center gap-2 mb-2">
+              <span id="scanner-mode-badge"><span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[11px] font-mono">🟡 GitHub Pages Modu (Pasif DoH Önizlemesi)</span></span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-900 border border-orange-300 font-bold text-[11px] font-mono">⚡ Asıl Güç Yerel (Standalone) Sürümde</span>
+            </div>
+            <h2 class="text-base sm:text-lg font-bold font-editorial text-mistral-ink">
+              Bu canlı web sürümü pasif bir önizlemedir. Tam güç için Lokal Sürümü çalıştırın!
+            </h2>
+            <p class="text-[11px] text-mistral-slate mt-1 max-w-3xl leading-relaxed">
+              Tarayıcı güvenlik sınırları (CORS) nedeniyle online ortamda üçüncü parti sitelere doğrudan aktif test veya yerel kaynak kod analizi yapılamaz. <strong>SAST, Aktif Zafiyet Testleri ve AI Red Team Orkestrasyonu</strong> yalnızca yerel makinenizde sıfır bağımlılıkla çalışan Standalone sürümde tam yetkiyle çalışır.
+            </p>
           </div>
-          <p class="text-[11px] text-amber-800 leading-relaxed">
-            Tarayıcı güvenlik kısıtı (CORS) nedeniyle GitHub Pages üzerinden üçüncü parti sitelerin HTTP başlıkları doğrudan okunamaz. DoH DNS canlı sorgulanır. Gerçek başlık analizi için <strong>"cURL Başlık Taraması"</strong> sekmesini kullanabilir veya repoyu lokalde <code class="font-mono bg-amber-100/80 px-1 py-0.5 rounded font-bold">python3 server.py</code> ile çalıştırabilirsiniz.
-          </p>
+          <div class="flex flex-col sm:flex-row gap-2 shrink-0">
+            <a href="https://github.com/melihkarasu/web-security-scanner" target="_blank" rel="noopener" class="px-4 py-2.5 rounded-xl bg-mistral-orange hover:bg-[#e04406] text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2">
+              <span>🚀</span>
+              <span>GitHub Reposuna Git</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Online vs Lokal Karşılaştırma Tablosu -->
+        <div id="scanner-mode-table" class="overflow-x-auto mb-3">
+          <table class="w-full text-left text-xs border border-stone-200 rounded-xl overflow-hidden bg-white shadow-xs">
+            <thead class="bg-stone-50 border-b border-stone-200 text-mistral-ink font-semibold">
+              <tr>
+                <th class="py-2 px-3">Güvenlik Modülü / Yetenek</th>
+                <th class="py-2 px-3 text-center">🟡 Bu Online Demo</th>
+                <th class="py-2 px-3 text-center bg-emerald-50/60 text-emerald-950 font-bold">🟢 Standalone (Lokal Python Modu)</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-stone-100 text-stone-700 text-[11px]">
+              <tr>
+                <td class="py-1.5 px-3 font-medium">DoH DNS Taraması (DMARC, SPF, DNSSEC, CAA, IPv6)</td>
+                <td class="py-1.5 px-3 text-center text-emerald-700 font-semibold">✅ Canlı & Tam</td>
+                <td class="py-1.5 px-3 text-center bg-emerald-50/30 text-emerald-800 font-bold">✅ Canlı & Tam</td>
+              </tr>
+              <tr>
+                <td class="py-1.5 px-3 font-medium">HTTP Güvenlik Başlıkları Analizi (CSP, HSTS, XFO)</td>
+                <td class="py-1.5 px-3 text-center text-amber-700">⚠️ Yarı-Otomatik (cURL Yapıştırma)</td>
+                <td class="py-1.5 px-3 text-center bg-emerald-50/30 text-emerald-800 font-bold">✅ %100 Otomatik (CORS Engeli Yok)</td>
+              </tr>
+              <tr>
+                <td class="py-1.5 px-3 font-medium">Derin Pasif Analiz (Cookies, TLS 1.0/1.1, robots.txt, Tech Fingerprint)</td>
+                <td class="py-1.5 px-3 text-center text-stone-400">❌ Tarayıcı Kısıtı</td>
+                <td class="py-1.5 px-3 text-center bg-emerald-50/30 text-emerald-800 font-bold">✅ Tam ve Ayrıntılı</td>
+              </tr>
+              <tr>
+                <td class="py-1.5 px-3 font-medium">SAST — Kaynak Kod Analizi (42 kural, 10 kategori, Google OSV CVE)</td>
+                <td class="py-1.5 px-3 text-center text-stone-400">❌ Web'de Mümkün Değil</td>
+                <td class="py-1.5 px-3 text-center bg-emerald-50/30 text-emerald-800 font-bold">✅ Tam Tarama (Yerel Dizin)</td>
+              </tr>
+              <tr>
+                <td class="py-1.5 px-3 font-medium">Aktif Güvenlik Testleri (SQLi, XSS, CSRF, SSRF, IDOR, Port Scan)</td>
+                <td class="py-1.5 px-3 text-center text-stone-400">❌ Sıfır İstek Politikası</td>
+                <td class="py-1.5 px-3 text-center bg-emerald-50/30 text-emerald-800 font-bold">✅ Etik Onay & Rate Limit ile Aktif</td>
+              </tr>
+              <tr>
+                <td class="py-1.5 px-3 font-medium">🤖 AI Red Team Orkestrasyonu (The Scout, The Strategist, The Analyst)</td>
+                <td class="py-1.5 px-3 text-center text-stone-400">❌ Yok</td>
+                <td class="py-1.5 px-3 text-center bg-emerald-50/30 text-emerald-800 font-bold">✅ Vertex AI / OpenRouter / Ollama</td>
+              </tr>
+              <tr>
+                <td class="py-1.5 px-3 font-medium">Raporlama Seçenekleri</td>
+                <td class="py-1.5 px-3 text-center text-amber-700">⚠️ Temel Markdown</td>
+                <td class="py-1.5 px-3 text-center bg-emerald-50/30 text-emerald-800 font-bold">✅ Markdown + JSON + HTML (CVSS & CWE)</td>
+              </tr>
+              <tr>
+                <td class="py-1.5 px-3 font-medium">Kurulum & Bağımlılık</td>
+                <td class="py-1.5 px-3 text-center text-stone-600">Sıfır Kurulum (Tarayıcı)</td>
+                <td class="py-1.5 px-3 text-center bg-emerald-50/30 text-emerald-800 font-bold">Tek Komutla Çalışır (Python 3 Stdlib, Sıfır pip)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Tek Komutla Çalıştırma Kılavuzu -->
+        <div id="scanner-mode-command" class="bg-stone-900 rounded-xl p-3 text-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="font-mono text-[11px] overflow-x-auto text-emerald-400 select-all">
+            <span class="text-stone-500"># Lokal sunucuyu sıfır bağımlılıkla tek komutta başlatın:</span><br>
+            git clone https://github.com/melihkarasu/web-security-scanner.git && cd web-security-scanner && python3 server.py
+          </div>
+          <a href="https://github.com/melihkarasu/web-security-scanner#readme" target="_blank" rel="noopener" class="text-xs text-white hover:text-emerald-300 underline shrink-0 font-medium">
+            Dokümantasyonu Oku &rarr;
+          </a>
         </div>
       </div>
 
@@ -438,6 +516,46 @@
       </div>
     </div>
 
+    <!-- AI Konfigürasyon Paneli (Global) -->
+    <div id="ai-config-panel" class="mb-6 bg-white border-2 border-mistral-orange/30 rounded-2xl p-5 shadow-xs hidden">
+      <div class="flex items-center gap-2 mb-4 pb-2 border-b border-stone-100">
+        <span class="text-lg">🤖</span>
+        <h3 class="text-base font-bold font-editorial text-mistral-ink">AI Red Team Orkestrasyon Paneli</h3>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">LLM Sağlayıcı</label>
+          <select id="ai-provider" class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none">
+            <option value="vertex">Vertex AI (Google Cloud)</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="ollama">Ollama (Lokal)</option>
+          </select>
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Model</label>
+          <input type="text" id="ai-model" value="gemini-1.5-pro" class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none" />
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Project ID (Vertex)</label>
+          <input type="text" id="ai-project-id" placeholder="your-project-id" class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none" />
+        </div>
+      </div>
+
+      <div class="mt-4 space-y-1">
+        <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Kimlik Doğrulama (API Key veya Service Account JSON)</label>
+        <textarea id="ai-auth" rows="2" placeholder="Paste your API Key or JSON Service Account content here..." class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none"></textarea>
+      </div>
+      
+      <div class="mt-4 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span id="ai-status-indicator" class="w-2 h-2 rounded-full bg-stone-300"></span>
+          <span id="ai-status-text" class="text-[10px] font-mono text-mistral-slate">AI Modülü Hazır (Beklemede)</span>
+        </div>
+        <button onclick="toggleAIConfig()" class="text-[10px] font-bold text-mistral-orange hover:underline cursor-pointer">Paneli Kapat</button>
+      </div>
+    </div>
+
     <!-- SEKME 4: AKTİF GÜVENLİK TESTİ -->
     <div id="tab-content-active" class="hidden space-y-6">
 
@@ -502,6 +620,15 @@
           >
             <span id="active-spinner" class="hidden animate-spin">⏳</span>
             <span id="active-btn-text">Aktif Testi Başlat</span>
+          </button>
+          <button
+            id="active-ai-btn"
+            onclick="startActiveScan({ aiOrchestration: true })"
+            class="px-6 py-3 rounded-xl bg-amber-600 text-white font-semibold text-sm hover:bg-amber-700 transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            title="AI Red Team orkestrasyonu ile akıllı tarama başlat (AI panel konfigürasyonu gerekli)"
+          >
+            <span id="active-ai-spinner" class="hidden animate-spin">⏳</span>
+            <span id="active-ai-btn-text">🤖 AI Orkestrasyon</span>
           </button>
         </div>
 
@@ -596,6 +723,25 @@
             <span id="active-findings-count" class="text-[11px] font-mono text-stone-500"></span>
           </div>
           <div id="active-findings-list" class="space-y-2.5 max-h-[600px] overflow-y-auto pr-1"></div>
+        </div>
+
+        <!-- AI Thought Chain Log (Terminal Görünümü) -->
+        <div id="ai-thought-chain-card" class="hidden bg-stone-950 border border-stone-700 rounded-2xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-3 pb-2 border-b border-stone-700">
+            <h4 class="font-bold text-sm text-stone-200 flex items-center gap-2">
+              <span>🧠</span>
+              <span>AI Thought Chain Log</span>
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-900/50 text-amber-300 border border-amber-700">Sanal Red Team</span>
+            </h4>
+            <div class="flex items-center gap-2">
+              <span id="ai-thinking-indicator" class="w-2 h-2 rounded-full bg-stone-600 animate-pulse"></span>
+              <span id="ai-thinking-text" class="text-[10px] font-mono text-stone-500">Beklemede</span>
+              <button onclick="clearAILog()" class="text-[10px] text-stone-500 hover:text-amber-400 transition">Temizle</button>
+            </div>
+          </div>
+          <div id="ai-thought-log" class="font-mono text-[11px] text-stone-300 bg-black/50 rounded-lg p-4 max-h-[400px] overflow-y-auto space-y-1" style="font-family: 'JetBrains Mono', monospace;">
+            <div class="text-stone-600">[Sistem] AI Red Team orkestrasyonu başlatılmadı. Lütfen AI Konfigürasyon Panelinden sağlayıcı seçip 'Aktif Testi Başlat' butonuna basın.</div>
+          </div>
         </div>
       </div>
     </div>
