@@ -1,0 +1,14 @@
+services:
+  web-security-scanner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: web-security-scanner:latest
+    container_name: web-security-scanner
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8765
+      - NO_BROWSER=1

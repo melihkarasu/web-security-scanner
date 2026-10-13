@@ -24,20 +24,22 @@ import threading
 import time
 
 # Faz 3: Aktif tarama motoru (etik onay geçidi + rate limiter içerir)
-from active_scan_engine import ETHICAL_GATE, run_active_scan, run_custom_test, export_scan_state
+from active_scan_engine import ETHICAL_GATE, run_active_scan, run_custom_test, export_scan_state, RateLimitedClient
 from ai_orchestrator import AIOrchestrator
+from ai_connector import AIProviderFactory
 
-HOST = "127.0.0.1"
-DEFAULT_PORT = 8765
+HOST = os.environ.get("HOST", "127.0.0.1")
+DEFAULT_PORT = int(os.environ.get("PORT", "8765"))
+NO_BROWSER = os.environ.get("NO_BROWSER", "0").lower() in ("1", "true", "yes")
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 WebSecurityScanner/1.0"
 TIMEOUT_SECONDS = 8
 
 class ScannerHTTPHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
-        # Yerel istemci için CORS başlıkları (aynı makine içinde sorunsuz çalışma)
+        # Yerel istemci ve konteyner için CORS başlıkları
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         super().end_headers()
 
     def do_OPTIONS(self):
@@ -50,6 +52,16 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         # Faz 3: Etik onay ucu — aktif test öncesi kullanıcı beyanı
         if parsed.path == "/api/active-confirm":
             self.handle_api_active_confirm()
+            return
+
+        # AI Red Team Orkestrasyonu (POST istekleri)
+        if parsed.path == "/api/ai-scan":
+            self.handle_api_ai_scan_post()
+            return
+
+        # AI Sağlayıcı Bağlantı Testi (OpenAI Compatible, Vertex, Gemini API vb.)
+        if parsed.path == "/api/ai-test":
+            self.handle_api_ai_test()
             return
 
         self.send_json({"success": False, "error": "Bilinmeyen POST ucu"}, status=404)
@@ -75,6 +87,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         # 1d. API: /api/active-scan?url=... (Aktif Güvenlik Testi - Faz 3)
         if parsed.path == "/api/active-scan":
             self.handle_api_active_scan(parsed)
+            return
+
+        # 1e. API: /api/ai-scan (GET uyumluluğu)
+        if parsed.path == "/api/ai-scan":
+            self.handle_api_ai_scan(parsed)
             return
 
         # 2. API: /api/status (sunucu aktif mi kontrolü)
@@ -420,31 +437,112 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             "domain": hostname
         })
 
+    def handle_api_ai_test(self):
+        """AI Sağlayıcı bağlantısını test eder (OpenAI Compatible, Vertex, Gemini API vb.)."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length > 0 else b"{}"
+            data = json.loads(body.decode("utf-8") or "{}")
+        except (ValueError, json.JSONDecodeError):
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+
+        provider_config = data.get("ai_config") or data
+        try:
+            connector = AIProviderFactory.create_connector(provider_config)
+            test_res = connector.test_connection()
+            self.send_json(test_res)
+        except Exception as e:
+            self.send_json({"success": False, "error": f"Bağlantı hatası: {str(e)}"}, status=400)
+
+    def handle_api_ai_scan_post(self):
+        """AI Destekli Dinamik Tarama (POST uç noktası)."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length > 0 else b"{}"
+            data = json.loads(body.decode("utf-8") or "{}")
+        except (ValueError, json.JSONDecodeError):
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+
+        url = (data.get("url") or "").strip()
+        modules = data.get("modules") or []
+        ai_config = data.get("ai_config") or {}
+
+        if not url:
+            self.send_json({"success": False, "error": "URL parametresi eksik."}, status=400)
+            return
+
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://" + url
+
+        try:
+            parsed_url = urllib.parse.urlparse(url)
+            hostname = parsed_url.hostname
+        except Exception:
+            hostname = None
+
+        if not hostname or not ETHICAL_GATE.is_confirmed(hostname):
+            self.send_json({
+                "success": False,
+                "error": "ETIK_ONAY_YOK",
+                "message": f"'{hostname or url}' hedefi için AI taraması öncesi etik onay gereklidir."
+            }, status=403)
+            return
+
+        try:
+            scan_state = export_scan_state(url, modules, [])
+            orchestrator = AIOrchestrator(ai_config)
+
+            def active_test_callback(test_url, param, payload):
+                client = RateLimitedClient()
+                return run_custom_test(client, test_url, param, payload)
+
+            ai_result = orchestrator.orchestrate_scan(
+                target_url=url,
+                initial_data=scan_state,
+                active_scanner_callback=active_test_callback
+            )
+
+            thought_chain = []
+            for item in ai_result.get("history", []):
+                thought_chain.append({
+                    "agent": "scout" if item.get("step") == 1 else ("strategist" if item.get("step") == 2 else "analyst"),
+                    "message": f"Adım {item.get('step')}: {item.get('result')}"
+                })
+
+            self.send_json({
+                "success": True,
+                "ai_report": ai_result,
+                "thought_chain": thought_chain,
+                "findings": ai_result.get("verified_findings", [])
+            })
+        except Exception as e:
+            self.send_json({"success": False, "error": f"AI Scan Error: {str(e)}"}, status=500)
+
     def handle_api_ai_scan(self, parsed_path):
         """
-        AI Destekli Dinamik Tarama Uç Noktası.
-        Akış: Konfigürasyon -> Etik Onay -> Sistem Durumu -> AI Döngüsü -> Rapor
+        AI Destekli Dinamik Tarama Uç Noktası (GET uyumluluğu).
         """
         try:
-            # 1. Parametre ve Konfigürasyon Alımı
             qs = urllib.parse.parse_qs(parsed_path.query)
             url = (qs.get("url") or [""])[0].strip()
             if not url:
                 self.send_json({"success": False, "error": "URL parametresi eksik."}, status=400)
                 return
 
-            # LLM Konfigürasyonu (Demo için sorgu parametrelerinden alıyoruz)
             provider_config = {
-                "provider": (qs.get("provider") or ["vertex"])[0],
-                "project_id": (qs.get("project_id") or ["your-project-id"])[0],
-                "region": (qs.get("region") or ["us-central1"])[0],
+                "provider": (qs.get("provider") or ["openai"])[0],
+                "model": (qs.get("model") or ["gpt-4o"])[0],
+                "base_url": (qs.get("base_url") or ["https://api.openai.com/v1"])[0],
+                "project_id": (qs.get("project_id") or [""])[0],
+                "region": (qs.get("region") or ["global"])[0],
                 "auth": {
                     "type": (qs.get("auth_type") or ["api_key"])[0],
                     "value": (qs.get("auth_value") or [""])[0]
                 }
             }
 
-            # 2. Etik Onay Kontrolü
             parsed_url = urllib.parse.urlparse(url)
             if not ETHICAL_GATE.is_confirmed(parsed_url.hostname):
                 self.send_json({
@@ -454,20 +552,13 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
                 }, status=403)
                 return
 
-            # 3. Mevcut Sistem Durumunu AI'ya Hazırla
-            # Not: Normalde önceki taramalardan gelen site_map ve sast_findings kullanılır.
-            # Bu noktada basitleştirilmiş bir durum aktarıyoruz.
             scan_state = export_scan_state(url, [], [])
-
-            # 4. AI Orkestratörünü Başlat
             orchestrator = AIOrchestrator(provider_config)
 
-            # AI'nın sistem üzerinden test yapmasını sağlayan callback
             def active_test_callback(test_url, param, payload):
                 client = RateLimitedClient()
                 return run_custom_test(client, test_url, param, payload)
 
-            # Döngüyü yürüt
             ai_result = orchestrator.orchestrate_scan(
                 target_url=url, 
                 initial_data=scan_state, 
@@ -518,12 +609,13 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         # Temiz terminal çıktısı (yalnızca önemli olaylar)
         sys.stderr.write(f"[{time.strftime('%H:%M:%S')}] {self.address_string()} - {format % args}\n")
 
-def find_available_port(start_port=DEFAULT_PORT, max_attempts=10):
+def find_available_port(host=HOST, start_port=DEFAULT_PORT, max_attempts=10):
     import socket
     for port in range(start_port, start_port + max_attempts):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
-                s.bind((HOST, port))
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind((host, port))
                 return port
             except OSError:
                 continue
@@ -532,27 +624,36 @@ def find_available_port(start_port=DEFAULT_PORT, max_attempts=10):
 def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-    port = find_available_port(DEFAULT_PORT)
+    port = find_available_port(HOST, DEFAULT_PORT)
     if not port:
         print(f"HATA: {DEFAULT_PORT}-{DEFAULT_PORT+10} aralığında boş port bulunamadı.", file=sys.stderr)
         sys.exit(1)
 
     server = HTTPServer((HOST, port), ScannerHTTPHandler)
-    url = f"http://{HOST}:{port}"
+    display_host = "127.0.0.1" if HOST in ("0.0.0.0", "") else HOST
+    url = f"http://{display_host}:{port}"
 
     print("=" * 65)
-    print(" 🛡️  Web Security Scanner — Yerel Sunucu (Local Mode)")
+    print(" 🛡️  Web Security Scanner — Yerel & Docker Sunucu (Local Mode)")
     print("=" * 65)
     print(f" • Adres:          {url}")
-    print(f" • Dinlenen IP:    {HOST} (Yalnızca yerel cihaz — dışarıya kapalı)")
+    print(f" • Dinlenen Ağ:    {HOST}:{port}")
     print(f" • Başlık API:     {url}/api/headers?url=https://example.com")
     print(f" • Durum:          {url}/api/status")
     print("=" * 65)
-    print(" Tarayıcınız açılıyor... Kapatmak için Ctrl+C tuşlarına basın.\n")
 
-    # Tarayıcıyı otomatik açma (isteğe bağlı bayrak --no-browser ile kapatılabilir)
-    if "--no-browser" not in sys.argv:
+    should_open_browser = (
+        not NO_BROWSER and
+        "--no-browser" not in sys.argv and
+        HOST not in ("0.0.0.0",) and
+        not os.path.exists("/.dockerenv")
+    )
+
+    if should_open_browser:
+        print(" Tarayıcınız açılıyor... Kapatmak için Ctrl+C tuşlarına basın.\n")
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+    else:
+        print(" Tarayıcı açma atlandı (Headless / Docker modu). Sunucu hazır.\n")
 
     try:
         server.serve_forever()

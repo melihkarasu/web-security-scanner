@@ -50,7 +50,7 @@ Web Security Scanner removes that trade-off.
 Open **[melihkarasu.github.io/web-security-scanner](https://melihkarasu.github.io/web-security-scanner/)** in your browser.  
 Passive DNS + header analysis works instantly. For deep header audits, paste `curl -I https://target.com` output into the "cURL" tab.
 
-### Option 2: Full Power — Local Mode (Recommended)
+### Option 2: Full Power — Local Mode (Terminal)
 ```bash
 # Linux / macOS
 git clone https://github.com/melihkarasu/web-security-scanner.git
@@ -63,6 +63,20 @@ cd web-security-scanner
 python server.py
 ```
 Your browser opens `http://127.0.0.1:8765` automatically. Green **"🟢 Local Mode"** badge confirms full capability.
+
+### Option 3: Full Power — Docker Mode (Containerized)
+Zero environment setup on host machine. Runs isolated with non-root security:
+```bash
+# Docker Compose ile tek komutla başlatın:
+docker compose up -d
+
+# Veya standart Docker CLI ile:
+docker build -t web-security-scanner .
+docker run -d -p 8765:8765 --name web-security-scanner web-security-scanner
+```
+Arayüze tarayıcınızdan **`http://localhost:8765`** adresinden erişebilirsiniz.
+
+> **LLM / API Ayarları:** Kurulum anında `.env` veya komut satırı ile uğraşmanız gerekmez. Kurulum bittikten sonra arayüzdeki **🤖 AI Red Team Paneli** üzerinden OpenAI Compatible, Google Gemini veya Vertex AI ayarlarınızı doğrudan yapabilir ve test edebilirsiniz.
 
 **Stop anytime:** `Ctrl + C` in terminal.
 
@@ -126,12 +140,14 @@ Click **"🤖 AI Orchestration"** to deploy a virtual three-agent Red Team:
 
 **Live "Thought Chain" terminal** streams each agent's reasoning in real time.
 
-**Supported LLM Providers:**
-- **Vertex AI (Google Cloud)** — Enterprise, `gemini-1.5-pro/flash`, Service Account or API Key
-- **OpenRouter** — 100+ models (`claude-3.5-sonnet`, `gpt-4o`, etc.), API Key
-- **Ollama (Local)** — `llama3.1`, `mistral`, `codellama` — **fully offline, zero cost**
+**Supported LLM Providers (Configurable from Web UI):**
+- **OpenAI Compatible (Any Endpoint)** — Base URL (`https://api.openai.com/v1`, DeepSeek, Groq, Mistral, vLLM, LM Studio, LocalAI vb.), API Key, Model (`gpt-4o`, `deepseek-chat` vb.).
+- **Google Cloud Vertex AI** — **Bölge (Region): `global` (us-central1 DEĞİL!)**, Güncel Modeller: **`gemini-3.1-pro`**, **`gemini-3.8-flash`**, Kimlik Doğrulama: Service Account JSON içeriği veya Vertex API Key.
+- **Google Gemini API (Google AI Studio)** — Doğrudan Gemini API anahtarı (`AIza...`), Güncel Modeller: **`gemini-3.1-pro`**, **`gemini-3.8-flash`**.
+- **OpenRouter** — 100+ model (`google/gemini-3.1-pro`, `google/gemini-3.8-flash`, `claude-3.5-sonnet`, `gpt-4o` vb.), API Key.
+- **Ollama (Yerel / Host)** — `gemma2`, `llama3.1`, `codellama` — **tamamen çevrimdışı, sıfır maliyet**.
 
-> **Privacy by design:** Keys and Service Account JSON **never touch disk**. They live only in browser session memory (RAM) and vanish on reload.
+> **Kurulum Sonrası Arayüzden Kolay Yönetim:** Tüm API anahtarları, Base URL ve model tercihleri web arayüzündeki **AI Red Team Orkestrasyon Paneli** üzerinden girilir, **"⚡ Bağlantıyı Test Et"** butonu ile anında doğrulanır ve tarayıcının `LocalStorage` alanında saklanır. Diske veya konteyner ortamına hassas veri yazılmaz.
 
 ### 6. Professional Reporting
 - **Markdown** — Human-readable, version-control friendly

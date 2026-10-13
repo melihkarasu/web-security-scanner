@@ -1634,10 +1634,136 @@ function toggleAIConfig() {
   const isHidden = panel.classList.contains('hidden');
   panel.classList.toggle('hidden', !isHidden);
   const btn = panel.querySelector('button[onclick="toggleAIConfig()"]');
-  if (btn) btn.innerText = isHidden ? 'Paneli Kapat' : 'AI Panelini Aç';
+  if (btn) btn.innerText = isHidden ? '✕ Paneli Kapat' : '🤖 AI Panelini Aç';
   if (isHidden) {
-    // Paneli açarken mevcut durumu yansıt
     updateAIStatusUI();
+  }
+}
+
+function setModelPreset(name) {
+  const modelInput = document.getElementById('ai-model');
+  if (modelInput) {
+    modelInput.value = name;
+    saveAIConfig(false);
+  }
+}
+
+function onAIProviderChange() {
+  const provider = document.getElementById('ai-provider')?.value || 'openai';
+  const baseUrlContainer = document.getElementById('ai-base-url-container');
+  const projectIdContainer = document.getElementById('ai-project-id-container');
+  const regionContainer = document.getElementById('ai-region-container');
+  const authTypeContainer = document.getElementById('ai-auth-type-container');
+  const authLabel = document.getElementById('ai-auth-label');
+  const authInput = document.getElementById('ai-auth');
+  const modelInput = document.getElementById('ai-model');
+  const baseUrlInput = document.getElementById('ai-base-url');
+  const regionInput = document.getElementById('ai-region');
+
+  // Varsayılan görünürlükleri sıfırla
+  baseUrlContainer?.classList.add('hidden');
+  projectIdContainer?.classList.add('hidden');
+  regionContainer?.classList.add('hidden');
+  authTypeContainer?.classList.add('hidden');
+
+  if (provider === 'openai') {
+    baseUrlContainer?.classList.remove('hidden');
+    if (authLabel) authLabel.innerText = 'OpenAI Compatible API Key (sk-...)';
+    if (authInput) authInput.placeholder = 'sk-... (veya yerel model için boş / anahtarınız)';
+    if (baseUrlInput && (!baseUrlInput.value || baseUrlInput.value.includes('localhost:11434'))) {
+      baseUrlInput.value = 'https://api.openai.com/v1';
+    }
+  } else if (provider === 'gemini') {
+    if (authLabel) authLabel.innerText = 'Google AI Studio Gemini API Key (AIza...)';
+    if (authInput) authInput.placeholder = 'AIzaSy...';
+    if (modelInput && (!modelInput.value || modelInput.value === 'gpt-4o')) {
+      modelInput.value = 'gemini-3.1-pro';
+    }
+  } else if (provider === 'vertex') {
+    projectIdContainer?.classList.remove('hidden');
+    regionContainer?.classList.remove('hidden');
+    authTypeContainer?.classList.remove('hidden');
+    if (regionInput && (!regionInput.value || regionInput.value === 'us-central1')) {
+      regionInput.value = 'global';
+    }
+    if (modelInput && (!modelInput.value || modelInput.value === 'gpt-4o')) {
+      modelInput.value = 'gemini-3.1-pro';
+    }
+    onAuthTypeChange();
+  } else if (provider === 'openrouter') {
+    if (authLabel) authLabel.innerText = 'OpenRouter API Key (sk-or-...)';
+    if (authInput) authInput.placeholder = 'sk-or-v1-...';
+    if (modelInput && (!modelInput.value || modelInput.value === 'gpt-4o')) {
+      modelInput.value = 'google/gemini-3.1-pro';
+    }
+  } else if (provider === 'ollama') {
+    baseUrlContainer?.classList.remove('hidden');
+    if (authLabel) authLabel.innerText = 'Kimlik Doğrulama (İsteğe bağlı)';
+    if (authInput) authInput.placeholder = 'Yerel Ollama için genellikle boş bırakılır';
+    if (baseUrlInput && (!baseUrlInput.value || baseUrlInput.value.includes('api.openai.com'))) {
+      baseUrlInput.value = 'http://localhost:11434';
+    }
+    if (modelInput && (!modelInput.value || modelInput.value.includes('gemini') || modelInput.value === 'gpt-4o')) {
+      modelInput.value = 'gemma2';
+    }
+  }
+
+  updateAIStatusUI();
+  saveAIConfig(false);
+}
+
+function onAuthTypeChange() {
+  const authType = document.getElementById('ai-auth-type')?.value || 'service_account';
+  const authLabel = document.getElementById('ai-auth-label');
+  const authInput = document.getElementById('ai-auth');
+  if (!authLabel || !authInput) return;
+
+  if (authType === 'service_account') {
+    authLabel.innerText = 'Vertex Service Account JSON İçeriği (veya JSON Dosya Yolu)';
+    authInput.placeholder = '{\n  "type": "service_account",\n  "project_id": "...",\n  "private_key": "-----BEGIN PRIVATE KEY-----..."\n}';
+  } else {
+    authLabel.innerText = 'Vertex AI API Key';
+    authInput.placeholder = 'AQ.Ab... veya API Key';
+  }
+}
+
+function saveAIConfig(notify = true) {
+  try {
+    const config = {
+      provider: document.getElementById('ai-provider')?.value || 'openai',
+      model: document.getElementById('ai-model')?.value || 'gemini-3.1-pro',
+      base_url: document.getElementById('ai-base-url')?.value || '',
+      project_id: document.getElementById('ai-project-id')?.value || '',
+      region: document.getElementById('ai-region')?.value || 'global',
+      auth_type: document.getElementById('ai-auth-type')?.value || 'service_account',
+      auth: document.getElementById('ai-auth')?.value || ''
+    };
+    localStorage.setItem('wss_ai_config', JSON.stringify(config));
+    updateAIStatusUI();
+    if (notify) showToast('AI ayarları tarayıcı hafızasına (LocalStorage) kaydedildi.', 'success');
+  } catch (e) {
+    console.error('AI ayarları kaydedilemedi:', e);
+  }
+}
+
+function loadAIConfig() {
+  try {
+    const raw = localStorage.getItem('wss_ai_config');
+    if (!raw) {
+      onAIProviderChange();
+      return;
+    }
+    const config = JSON.parse(raw);
+    if (config.provider && document.getElementById('ai-provider')) document.getElementById('ai-provider').value = config.provider;
+    if (config.model && document.getElementById('ai-model')) document.getElementById('ai-model').value = config.model;
+    if (config.base_url && document.getElementById('ai-base-url')) document.getElementById('ai-base-url').value = config.base_url;
+    if (config.project_id && document.getElementById('ai-project-id')) document.getElementById('ai-project-id').value = config.project_id;
+    if (config.region && document.getElementById('ai-region')) document.getElementById('ai-region').value = config.region;
+    if (config.auth_type && document.getElementById('ai-auth-type')) document.getElementById('ai-auth-type').value = config.auth_type;
+    if (config.auth && document.getElementById('ai-auth')) document.getElementById('ai-auth').value = config.auth;
+    onAIProviderChange();
+  } catch (e) {
+    console.error('AI ayarları yüklenemedi:', e);
   }
 }
 
@@ -1645,18 +1771,88 @@ function updateAIStatusUI() {
   const indicator = document.getElementById('ai-status-indicator');
   const text = document.getElementById('ai-status-text');
   const provider = document.getElementById('ai-provider');
+  const model = document.getElementById('ai-model')?.value || '';
   if (!indicator || !text || !provider) return;
   
   const val = provider.value;
-  if (val === 'vertex') {
-    indicator.className = 'w-2 h-2 rounded-full bg-emerald-500';
-    text.innerText = 'Vertex AI Seçili (Service Account/JSON gerekli)';
+  if (val === 'openai') {
+    indicator.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500';
+    text.innerText = `OpenAI Compatible Aktif (${model || 'Endpoint'})`;
+  } else if (val === 'gemini') {
+    indicator.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
+    text.innerText = `Gemini API Aktif (${model || 'gemini-3.1-pro'})`;
+  } else if (val === 'vertex') {
+    indicator.className = 'w-2.5 h-2.5 rounded-full bg-indigo-500';
+    text.innerText = `Vertex AI (Bölge: global, Model: ${model || 'gemini-3.1-pro'})`;
   } else if (val === 'openrouter') {
-    indicator.className = 'w-2 h-2 rounded-full bg-amber-500';
-    text.innerText = 'OpenRouter Seçili (API Key gerekli)';
+    indicator.className = 'w-2.5 h-2.5 rounded-full bg-purple-500';
+    text.innerText = `OpenRouter Aktif (${model || 'Modeller'})`;
   } else if (val === 'ollama') {
-    indicator.className = 'w-2 h-2 rounded-full bg-sky-500';
-    text.innerText = 'Ollama Seçili (Lokal, anahtar gerekmez)';
+    indicator.className = 'w-2.5 h-2.5 rounded-full bg-sky-500';
+    text.innerText = `Ollama Aktif (${model || 'Lokal Model'})`;
+  }
+}
+
+async function testAIConnection() {
+  const btn = document.getElementById('ai-test-btn');
+  const spinner = document.getElementById('ai-test-spinner');
+  const btnText = document.getElementById('ai-test-btn-text');
+  
+  const provider = document.getElementById('ai-provider')?.value || 'openai';
+  const model = document.getElementById('ai-model')?.value.trim() || '';
+  const baseUrl = document.getElementById('ai-base-url')?.value.trim() || '';
+  const projectId = document.getElementById('ai-project-id')?.value.trim() || '';
+  const region = document.getElementById('ai-region')?.value.trim() || 'global';
+  const authType = document.getElementById('ai-auth-type')?.value || 'service_account';
+  const auth = document.getElementById('ai-auth')?.value.trim() || '';
+
+  if (!model) {
+    showToast('Lütfen test edilecek model adını belirtin.', 'warning');
+    return;
+  }
+
+  saveAIConfig(false);
+
+  if (btn) btn.disabled = true;
+  spinner?.classList.remove('hidden');
+  if (btnText) btnText.innerText = 'Test Ediliyor...';
+
+  try {
+    const res = await fetch('/api/ai-test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ai_config: {
+          provider: provider,
+          model: model,
+          base_url: baseUrl,
+          project_id: projectId,
+          region: region,
+          auth: {
+            type: authType,
+            value: auth
+          },
+          api_key: auth
+        }
+      }),
+      signal: AbortSignal.timeout(30000)
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.message || 'LLM Bağlantısı Başarılı!', 'success');
+      appendAILog(`[Test] ${provider} (${model}) bağlantısı başarılı: ${data.message || 'OK'}`, 'success');
+    } else {
+      showToast(`Bağlantı Başarısız: ${data.error || 'Bilinmeyen hata'}`, 'error');
+      appendAILog(`[Test Hatası] ${data.error || 'Bilinmeyen hata'}`, 'error');
+    }
+  } catch (err) {
+    showToast(`Test isteği başarısız: ${err.message}`, 'error');
+    appendAILog(`[Test İstek Hatası] ${err.message}`, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    spinner?.classList.add('hidden');
+    if (btnText) btnText.innerText = '⚡ Bağlantıyı Test Et';
   }
 }
 
@@ -1727,42 +1923,37 @@ function setAIThinking(state, agentName = '') {
 }
 
 async function startAIOrchestrationScan(targetUrl, modules) {
-  const aiProvider = document.getElementById('ai-provider');
-  const aiModel = document.getElementById('ai-model');
-  const aiProjectId = document.getElementById('ai-project-id');
-  const aiAuth = document.getElementById('ai-auth');
+  const aiProvider = document.getElementById('ai-provider')?.value || 'openai';
+  const aiModel = document.getElementById('ai-model')?.value.trim() || 'gemini-3.1-pro';
+  const aiBaseUrl = document.getElementById('ai-base-url')?.value.trim() || '';
+  const aiProjectId = document.getElementById('ai-project-id')?.value.trim() || '';
+  const aiRegion = document.getElementById('ai-region')?.value.trim() || 'global';
+  const aiAuthType = document.getElementById('ai-auth-type')?.value || 'service_account';
+  const aiAuth = document.getElementById('ai-auth')?.value.trim() || '';
   
-  if (!aiProvider || !aiModel || !aiProjectId || !aiAuth) {
-    showToast('AI konfigürasyon elemanları bulunamadı.', 'error');
-    return null;
-  }
-  
-  const provider = aiProvider.value;
-  const model = aiModel.value.trim();
-  const projectId = aiProjectId.value.trim();
-  const auth = aiAuth.value.trim();
-  
-  if (!model) {
+  if (!aiModel) {
     showToast('Model adı boş olamaz.', 'warning');
     return null;
   }
   
-  if (provider === 'vertex' && (!projectId || !auth)) {
-    showToast('Vertex AI için Project ID ve Service Account JSON/API Key gerekli.', 'warning');
+  if (aiProvider === 'vertex' && (!aiProjectId || !aiAuth)) {
+    showToast('Vertex AI için Project ID ve Service Account JSON/API Key gereklidir.', 'warning');
     return null;
   }
   
-  if (provider === 'openrouter' && !auth) {
-    showToast('OpenRouter için API Key gerekli.', 'warning');
+  if ((aiProvider === 'gemini' || aiProvider === 'openrouter') && !aiAuth) {
+    showToast(`${aiProvider} için API Key gereklidir.`, 'warning');
     return null;
   }
+
+  saveAIConfig(false);
   
   // UI: AI log kartını göster ve başlat
   const cardEl = document.getElementById('ai-thought-chain-card');
   if (cardEl) cardEl.classList.remove('hidden');
   clearAILog();
   appendAILog('AI Red Team orkestrasyonu başlatılıyor...', 'system');
-  appendAILog('Sağlayıcı: ' + provider + ' | Model: ' + model, 'info');
+  appendAILog('Sağlayıcı: ' + aiProvider + ' | Model: ' + aiModel + (aiProvider === 'vertex' ? ' (Bölge: ' + aiRegion + ')' : ''), 'info');
   setAIThinking('thinking', 'The Scout');
   
   try {
@@ -1773,13 +1964,19 @@ async function startAIOrchestrationScan(targetUrl, modules) {
         url: targetUrl,
         modules: modules,
         ai_config: {
-          provider: provider,
-          model: model,
-          project_id: projectId,
-          auth: auth
+          provider: aiProvider,
+          model: aiModel,
+          base_url: aiBaseUrl,
+          project_id: aiProjectId,
+          region: aiRegion,
+          auth: {
+            type: aiAuthType,
+            value: aiAuth
+          },
+          api_key: aiAuth
         }
       }),
-      signal: AbortSignal.timeout(600000) // 10 dakika timeout (AI döngüleri için)
+      signal: AbortSignal.timeout(600000) // 10 dakika timeout
     });
     
     const data = await res.json();
@@ -1795,7 +1992,6 @@ async function startAIOrchestrationScan(targetUrl, modules) {
     if (data.thought_chain && Array.isArray(data.thought_chain)) {
       for (const entry of data.thought_chain) {
         appendAILog(entry.message, entry.agent || 'info');
-        // Simüle edilmiş agent geçişleri için thinking indicator güncelle
         if (entry.agent === 'scout') setAIThinking('thinking', 'The Strategist');
         else if (entry.agent === 'strategist') setAIThinking('thinking', 'The Analyst');
       }
@@ -1818,6 +2014,7 @@ async function startAIOrchestrationScan(targetUrl, modules) {
 document.addEventListener('DOMContentLoaded', () => {
   // Çalışma modunu tespit et (Lokal API vs GitHub Pages)
   detectScannerMode();
+  loadAIConfig();
 
   const inputEl = document.getElementById('target-input');
   if (inputEl) {

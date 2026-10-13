@@ -517,42 +517,99 @@
     </div>
 
     <!-- AI Konfigürasyon Paneli (Global) -->
-    <div id="ai-config-panel" class="mb-6 bg-white border-2 border-mistral-orange/30 rounded-2xl p-5 shadow-xs hidden">
-      <div class="flex items-center gap-2 mb-4 pb-2 border-b border-stone-100">
-        <span class="text-lg">🤖</span>
-        <h3 class="text-base font-bold font-editorial text-mistral-ink">AI Red Team Orkestrasyon Paneli</h3>
+    <div id="ai-config-panel" class="mb-6 bg-white border-2 border-mistral-orange/40 rounded-2xl p-5 shadow-sm hidden">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-stone-200">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🤖</span>
+          <div>
+            <h3 class="text-base font-bold font-editorial text-mistral-ink">AI Red Team & LLM Orkestrasyon Paneli</h3>
+            <p class="text-[11px] text-mistral-slate">OpenAI Compatible, Google Gemini API ve Vertex AI (bölge: global) yapılandırması.</p>
+          </div>
+        </div>
+        <button onclick="toggleAIConfig()" class="text-xs font-bold text-mistral-slate hover:text-mistral-ink px-2 py-1 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 transition cursor-pointer">✕ Kapat</button>
       </div>
       
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Sağlayıcı Seçimi -->
         <div class="space-y-1">
           <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">LLM Sağlayıcı</label>
-          <select id="ai-provider" class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none">
-            <option value="vertex">Vertex AI (Google Cloud)</option>
+          <select id="ai-provider" onchange="onAIProviderChange()" class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none">
+            <option value="openai">OpenAI Compatible (Özel Endpoint / DeepSeek / Groq vb.)</option>
+            <option value="gemini">Google Gemini API (Doğrudan Key - AI Studio)</option>
+            <option value="vertex">Google Cloud Vertex AI (Bölge: global)</option>
             <option value="openrouter">OpenRouter</option>
-            <option value="ollama">Ollama (Lokal)</option>
+            <option value="ollama">Ollama (Lokal / Host)</option>
           </select>
         </div>
+
+        <!-- Model Seçimi -->
         <div class="space-y-1">
-          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Model</label>
-          <input type="text" id="ai-model" value="gemini-1.5-pro" class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none" />
+          <div class="flex items-center justify-between">
+            <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Model</label>
+            <span class="text-[9px] text-stone-500 font-mono">Hızlı seçin:</span>
+          </div>
+          <input type="text" id="ai-model" value="gemini-3.1-pro" placeholder="örn: gemini-3.1-pro, gemini-3.8-flash, gpt-4o" class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none" />
+          <div class="flex flex-wrap gap-1 mt-1">
+            <button type="button" onclick="setModelPreset('gemini-3.1-pro')" class="px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-mono hover:bg-orange-200 transition">gemini-3.1-pro</button>
+            <button type="button" onclick="setModelPreset('gemini-3.8-flash')" class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-mono hover:bg-amber-200 transition">gemini-3.8-flash</button>
+            <button type="button" onclick="setModelPreset('gpt-4o')" class="px-1.5 py-0.5 rounded bg-stone-100 text-stone-700 text-[10px] font-mono hover:bg-stone-200 transition">gpt-4o</button>
+            <button type="button" onclick="setModelPreset('deepseek-chat')" class="px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 text-[10px] font-mono hover:bg-sky-200 transition">deepseek-chat</button>
+          </div>
         </div>
-        <div class="space-y-1">
-          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Project ID (Vertex)</label>
-          <input type="text" id="ai-project-id" placeholder="your-project-id" class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none" />
+
+        <!-- Base URL (OpenAI Compatible & Ollama için) -->
+        <div id="ai-base-url-container" class="space-y-1">
+          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Base URL (Endpoint)</label>
+          <input type="text" id="ai-base-url" value="https://api.openai.com/v1" placeholder="https://api.openai.com/v1" class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none" />
+          <p class="text-[10px] text-stone-500">Örn: https://api.deepseek.com/v1 veya http://localhost:11434/v1</p>
+        </div>
+
+        <!-- Project ID (Vertex AI için) -->
+        <div id="ai-project-id-container" class="space-y-1 hidden">
+          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Project ID (Google Cloud)</label>
+          <input type="text" id="ai-project-id" placeholder="my-gcp-project-id" class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none" />
+        </div>
+
+        <!-- Bölge / Region (Vertex AI için: global) -->
+        <div id="ai-region-container" class="space-y-1 hidden">
+          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Bölge (Region - Önerilen: global)</label>
+          <input type="text" id="ai-region" value="global" placeholder="global" class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none" />
+          <p class="text-[10px] text-emerald-700 font-medium">✓ Bölge "global" olarak ayarlanmalıdır (us-central1 değil).</p>
+        </div>
+
+        <!-- Kimlik Doğrulama Türü (Vertex için) -->
+        <div id="ai-auth-type-container" class="space-y-1 hidden">
+          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Vertex Kimlik Doğrulama Türü</label>
+          <select id="ai-auth-type" onchange="onAuthTypeChange()" class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none">
+            <option value="service_account">Service Account (JSON Anahtarı - Önerilen)</option>
+            <option value="api_key">Vertex API Key</option>
+          </select>
         </div>
       </div>
 
-      <div class="mt-4 space-y-1">
-        <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Kimlik Doğrulama (API Key veya Service Account JSON)</label>
-        <textarea id="ai-auth" rows="2" placeholder="Paste your API Key or JSON Service Account content here..." class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none"></textarea>
+      <!-- Kimlik Doğrulama Alanı -->
+      <div id="ai-auth-container" class="mt-4 space-y-1">
+        <label id="ai-auth-label" class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">API Key veya Service Account JSON İçeriği</label>
+        <textarea id="ai-auth" rows="3" placeholder="sk-... veya Service Account JSON içeriğini buraya yapıştırın..." class="w-full p-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none"></textarea>
+        <p class="text-[10px] text-stone-500">Anahtarlarınız sunucu diske yazılmaz; hafızada ve istemci tarafında LocalStorage içinde tutulur.</p>
       </div>
       
-      <div class="mt-4 flex items-center justify-between gap-3">
+      <!-- Aksiyon ve Durum Barı -->
+      <div class="mt-4 pt-3 border-t border-stone-200 flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-2">
-          <span id="ai-status-indicator" class="w-2 h-2 rounded-full bg-stone-300"></span>
-          <span id="ai-status-text" class="text-[10px] font-mono text-mistral-slate">AI Modülü Hazır (Beklemede)</span>
+          <span id="ai-status-indicator" class="w-2.5 h-2.5 rounded-full bg-stone-300"></span>
+          <span id="ai-status-text" class="text-xs font-mono text-mistral-slate">AI Modülü Hazır</span>
         </div>
-        <button onclick="toggleAIConfig()" class="text-[10px] font-bold text-mistral-orange hover:underline cursor-pointer">Paneli Kapat</button>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="saveAIConfig(true)" class="px-3.5 py-1.5 rounded-lg border border-stone-300 bg-white hover:bg-stone-50 text-xs font-bold text-mistral-ink transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+            <span>💾</span>
+            <span>Ayarları Kaydet</span>
+          </button>
+          <button type="button" id="ai-test-btn" onclick="testAIConnection()" class="px-4 py-1.5 rounded-lg bg-mistral-orange hover:bg-[#e04406] text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+            <span id="ai-test-spinner" class="hidden animate-spin">⏳</span>
+            <span id="ai-test-btn-text">⚡ Bağlantıyı Test Et</span>
+          </button>
+        </div>
       </div>
     </div>
 
