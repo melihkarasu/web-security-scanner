@@ -519,7 +519,8 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             return
 
         try:
-            scan_state = export_scan_state(url, modules, [])
+            site_map = [{"url": url, "forms": []}]
+            scan_state = export_scan_state(url, site_map, [])
             orchestrator = AIOrchestrator(ai_config)
 
             def active_test_callback(test_url, param, payload):

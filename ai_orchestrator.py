@@ -88,10 +88,27 @@ class AIOrchestrator:
                 # JSON temizleme (LLM bazen markdown blokları ekler)
                 json_start = plan_raw.find('[')
                 json_end = plan_raw.rfind(']') + 1
-                plan = json.loads(plan_raw[json_start:json_end])
+                if json_start != -1 and json_end > json_start:
+                    plan = json.loads(plan_raw[json_start:json_end])
+                else:
+                    plan = json.loads(plan_raw)
             except Exception as e:
                 print(f"[!] Strategy parsing error: {e}")
                 break
+
+            if isinstance(plan, dict):
+                # Dict gelirse listesini bul
+                for v in plan.values():
+                    if isinstance(v, list):
+                        plan = v
+                        break
+                else:
+                    plan = [plan]
+            elif not isinstance(plan, list):
+                plan = []
+
+            # Yalnızca dict objelerini filtrele
+            plan = [t for t in plan if isinstance(t, dict)]
 
             if not plan:
                 print("[*] Strategist decided no more tests are needed.")
@@ -100,12 +117,14 @@ class AIOrchestrator:
             # 3. AKTİF TEST (Sistem tarafından yürütülür)
             loop_results = []
             for task in plan:
-                print(f"[*] Testing {task.get('param')} with AI payload...")
+                param = task.get('param') or 'target'
+                payload = task.get('payload') or ''
+                print(f"[*] Testing {param} with AI payload...")
                 # Aktif tarama motoruna testi yaptır
                 response = active_scanner_callback(
                     task.get('url', target_url), 
-                    task.get('param'), 
-                    task.get('payload')
+                    param, 
+                    payload
                 )
                 loop_results.append({"task": task, "response": response})
 

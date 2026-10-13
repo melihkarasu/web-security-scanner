@@ -807,15 +807,26 @@ def export_scan_state(base_url, site_map, sast_findings):
     Sistemin mevcut durumunu AI ajanlarının anlayacağı 
     kompakt bir JSON formatına dönüştürür.
     """
+    pages = []
+    forms = []
+    for p in (site_map or []):
+        if isinstance(p, dict):
+            if "url" in p: pages.append(p["url"])
+            forms.extend(p.get("forms", []))
+        elif isinstance(p, str):
+            pages.append(p)
+
     return {
         "target": base_url,
         "attack_surface": {
-            "pages": [p["url"] for p in site_map],
-            "forms": [f for p in site_map for f in p.get("forms", [])]
+            "pages": pages,
+            "forms": forms
         },
         "static_findings": [
-            {"test": f["test"], "severity": f["severity"], "title": f["title"]}
-            for f in sast_findings
+            {"test": f.get("test", "sast") if isinstance(f, dict) else str(f),
+             "severity": f.get("severity", "info") if isinstance(f, dict) else "info",
+             "title": f.get("title", "") if isinstance(f, dict) else ""}
+            for f in (sast_findings or [])
         ]
     }
 
