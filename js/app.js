@@ -2010,20 +2010,463 @@ async function startAIOrchestrationScan(targetUrl, modules) {
   }
 }
 
+// =============================================================
+// UNIFIED SCANNER CONTROLLER (TEK MERKEZLİ TARAMA YÖNETİCİSİ)
+// =============================================================
+
+function onActiveModuleToggle() {
+  const modActive = document.getElementById('mod-active')?.checked;
+  const modAi = document.getElementById('mod-ai')?.checked;
+  const eth = document.getElementById('unified-ethical-container');
+  if (eth) {
+    eth.style.display = (modActive || modAi) ? 'block' : 'none';
+  }
+}
+
+function onAIModuleToggle() {
+  onActiveModuleToggle();
+}
+
+function switchDetailTab(tabId) {
+  document.querySelectorAll('.detail-tab-content').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.detail-tab-btn').forEach(btn => {
+    btn.classList.remove('border-b-2', 'border-mistral-orange', 'text-mistral-orange', 'font-bold');
+    btn.classList.add('text-mistral-slate');
+  });
+
+  const target = document.getElementById(tabId);
+  if (target) target.classList.remove('hidden');
+
+  const btn = document.getElementById('btn-' + tabId);
+  if (btn) {
+    btn.classList.add('border-b-2', 'border-mistral-orange', 'text-mistral-orange', 'font-bold');
+    btn.classList.remove('text-mistral-slate');
+  }
+}
+
+function selectPreset(domain) {
+  const input = document.getElementById('unified-target-input');
+  if (input) {
+    input.value = domain;
+    input.focus();
+  }
+}
+
+function showScanError(title, message, steps = []) {
+  const card = document.getElementById('scan-error-card');
+  const t = document.getElementById('scan-error-title');
+  const m = document.getElementById('scan-error-message');
+  const ul = document.getElementById('scan-error-steps');
+
+  if (!card) return;
+  card.classList.remove('hidden');
+  if (t) t.innerText = title;
+  if (m) m.innerText = message;
+  if (ul) {
+    ul.innerHTML = steps.map(s => `<li>${escapeHtml(s)}</li>`).join('');
+  }
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function hideScanError() {
+  const card = document.getElementById('scan-error-card');
+  if (card) card.classList.add('hidden');
+}
+
+function updateProgressBar(percent, statusText) {
+  const pContainer = document.getElementById('scan-progress-container');
+  const pBar = document.getElementById('scan-progress-bar');
+  const pText = document.getElementById('scan-progress-percent');
+  const pStatus = document.getElementById('scan-progress-status');
+
+  if (pContainer) pContainer.classList.remove('hidden');
+  if (pBar) pBar.style.width = percent + '%';
+  if (pText) pText.innerText = Math.round(percent) + '%';
+  if (pStatus) {
+    pStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-mistral-orange animate-ping"></span><span>${escapeHtml(statusText)}</span>`;
+  }
+}
+
+function completeProgressBar() {
+  updateProgressBar(100, 'Tarama başarıyla tamamlandı.');
+  setTimeout(() => {
+    const pContainer = document.getElementById('scan-progress-container');
+    if (pContainer) pContainer.classList.add('hidden');
+  }, 1200);
+}
+
+function renderUnifiedDashboard(domain, findings, reqCount, elapsedSec) {
+  const dashDomain = document.getElementById('dash-score-domain');
+  const dashScoreBadge = document.getElementById('dash-score-badge');
+  const dashScorePoints = document.getElementById('dash-score-points');
+  const dashCritical = document.getElementById('dash-critical-count');
+  const dashWarning = document.getElementById('dash-warning-count');
+  const dashRequests = document.getElementById('dash-requests-count');
+  const dashTime = document.getElementById('dash-time-elapsed');
+  const badgeFindings = document.getElementById('badge-findings-count');
+  const listEl = document.getElementById('unified-findings-list');
+
+  if (dashDomain) dashDomain.innerText = domain;
+  if (dashRequests) dashRequests.innerText = reqCount;
+  if (dashTime) dashTime.innerText = `Süre: ${elapsedSec}s`;
+
+  // Skor
+  const score = STATE.score || 85;
+  const grade = STATE.grade || 'B';
+  if (dashScorePoints) dashScorePoints.innerText = `${score} / 100 Puan`;
+  if (dashScoreBadge) {
+    dashScoreBadge.innerText = grade;
+    if (grade.startsWith('A')) {
+      dashScoreBadge.className = 'w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-2xl font-black font-editorial border border-emerald-300';
+    } else if (grade.startsWith('B')) {
+      dashScoreBadge.className = 'w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-2xl font-black font-editorial border border-amber-300';
+    } else {
+      dashScoreBadge.className = 'w-14 h-14 rounded-2xl bg-rose-100 text-rose-800 flex items-center justify-center text-2xl font-black font-editorial border border-rose-300';
+    }
+  }
+
+  // Tehdit sayıları
+  let crit = 0;
+  let warn = 0;
+  findings.forEach(f => {
+    const s = (f.severity || '').toUpperCase();
+    if (s.includes('KRİTİK') || s.includes('YÜKSEK')) crit++;
+    else warn++;
+  });
+
+  if (dashCritical) dashCritical.innerText = crit;
+  if (dashWarning) dashWarning.innerText = warn;
+  if (badgeFindings) badgeFindings.innerText = findings.length;
+
+  // Bulguları listele
+  if (!listEl) return;
+  if (findings.length === 0) {
+    listEl.innerHTML = `
+      <div class="p-8 text-center rounded-2xl border border-emerald-200 bg-emerald-50/50">
+        <span class="text-3xl">🎉</span>
+        <h4 class="font-bold text-emerald-950 mt-2">Kritik Güvenlik Açığı Tespit Edilmedi!</h4>
+        <p class="text-xs text-emerald-800 mt-1">Yapılan pasif ve aktif güvenlik kontrollerinden başarıyla geçildi.</p>
+      </div>
+    `;
+    return;
+  }
+
+  listEl.innerHTML = findings.map(f => {
+    const sev = f.severity || 'ORTA';
+    const isHigh = sev.includes('KRİTİK') || sev.includes('YÜKSEK');
+    const badgeBg = isHigh ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-amber-100 text-amber-800 border-amber-200';
+
+    return `
+      <div class="p-4 rounded-2xl border border-stone-200 bg-white shadow-xs hover:border-stone-300 transition">
+        <div class="flex items-start justify-between gap-3 mb-2">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border ${badgeBg}">
+              ${escapeHtml(sev)}
+            </span>
+            <span class="text-xs font-mono text-stone-400">[${escapeHtml(f.type)}]</span>
+            <h4 class="text-xs sm:text-sm font-bold text-mistral-ink">${escapeHtml(f.title)}</h4>
+          </div>
+        </div>
+        <p class="text-xs text-mistral-slate leading-relaxed mb-2">${escapeHtml(f.desc)}</p>
+        ${f.evidence ? `
+          <div class="p-2.5 rounded-xl bg-stone-900 text-stone-200 font-mono text-[11px] mb-2 overflow-x-auto">
+            <span class="text-stone-500 font-bold"># Kanıt / Yanıt:</span> ${escapeHtml(f.evidence)}
+          </div>
+        ` : ''}
+        ${f.fix ? `
+          <div class="p-2.5 rounded-xl bg-stone-50 border border-stone-200 text-[11px] text-stone-700">
+            <strong class="text-mistral-ink">🛠️ Çözüm & İyileştirme:</strong> ${escapeHtml(f.fix)}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+async function startUnifiedScan() {
+  hideScanError();
+  const input = document.getElementById('unified-target-input');
+  const btn = document.getElementById('unified-scan-btn');
+  const spinner = document.getElementById('unified-scan-spinner');
+  const btnText = document.getElementById('unified-scan-btn-text');
+
+  let raw = input ? input.value.trim() : '';
+  if (!raw) {
+    showToast('Lütfen taranacak bir alan adı veya URL girin.', 'warning');
+    input?.focus();
+    return;
+  }
+
+  // Otomatik https:// ekleme
+  if (!raw.startsWith('http://') && !raw.startsWith('https://')) {
+    raw = 'https://' + raw;
+  }
+
+  let cleanUrl = raw;
+  let cleanDomain = '';
+  try {
+    const u = new URL(cleanUrl);
+    cleanDomain = u.hostname;
+    cleanUrl = u.origin + u.pathname;
+  } catch (e) {
+    showScanError('Geçersiz Alan Adı Formatı', 'Girdiğiniz adres standart bir internet adresine (URL) uymuyor: ' + raw, [
+      'Alan adını "example.com" veya "https://example.com" şeklinde girin.',
+      'Boşluk veya Türkçe özel karakter barındırmadığından emin olun.'
+    ]);
+    return;
+  }
+
+  STATE.currentDomain = cleanDomain;
+  STATE.targetUrl = cleanUrl;
+
+  const modPassive = document.getElementById('mod-passive')?.checked ?? true;
+  const modDeep = document.getElementById('mod-deep')?.checked ?? true;
+  const modActive = document.getElementById('mod-active')?.checked ?? false;
+  const modAi = document.getElementById('mod-ai')?.checked ?? false;
+
+  if (!modPassive && !modDeep && !modActive && !modAi) {
+    showToast('En az bir test modülü seçmelisiniz.', 'warning');
+    return;
+  }
+
+  // Etik onay kontrolü
+  if (modActive || modAi) {
+    const ethical = document.getElementById('unified-ethical-check');
+    if (!ethical || !ethical.checked) {
+      showScanError('Etik Onay Gerekli', 'Aktif güvenlik testi veya AI Red Team analizi için etik sorumluluk beyanını onaylamanız zorunludur.', [
+        'Aşağıdaki sarı kutudaki "Yasal & Etik Kullanım Beyanı" kutucuğunu işaretleyin.',
+        'Sistemin sahibi olduğunuzdan veya yazılı test iznine sahip olduğunuzdan emin olun.'
+      ]);
+      return;
+    }
+  }
+
+  // UI durumunu güncelle
+  if (btn) btn.disabled = true;
+  if (spinner) spinner.classList.remove('hidden');
+  if (btnText) btnText.innerText = 'Taranıyor...';
+
+  document.getElementById('scan-empty-state')?.classList.add('hidden');
+  document.getElementById('scan-results-dashboard')?.classList.remove('hidden');
+
+  const startTime = performance.now();
+  let totalRequests = 0;
+  let allFindings = [];
+
+  try {
+    // -------------------------------------------------------------
+    // 1. PASİF BAŞLIK & DNS TARAMASI
+    // -------------------------------------------------------------
+    if (modPassive) {
+      updateProgressBar(15, `[1/4] ${cleanDomain} için HTTP başlıkları ve DNS kayıtları sorgulanıyor...`);
+      
+      let headerMap = {};
+      try {
+        const hRes = await fetchLocalApiHeaders(cleanUrl);
+        totalRequests++;
+        if (hRes.success) {
+          headerMap = hRes.headers;
+          STATE.results.headersSource = 'local_live';
+        }
+      } catch (e) {
+        console.warn('Local header proxy hatası:', e);
+      }
+
+      const headerEval = evaluateHeaders(headerMap);
+      STATE.results.headers = headerEval;
+
+      updateProgressBar(30, `[1/4] Cloudflare & Google DoH üzerinden DNSSEC, DMARC, SPF sorgulanıyor...`);
+      const dnsReport = await performDnsSecurityAudit(cleanDomain);
+      totalRequests += 5;
+      STATE.results.dns = dnsReport;
+
+      const finalGrade = calculateFinalGrade(headerEval.totalScore, headerEval.maxScore, dnsReport);
+      STATE.score = finalGrade.finalScore;
+      STATE.grade = finalGrade.letter;
+
+      renderHeaderResults(headerEval);
+      renderDnsResults(dnsReport);
+
+      // Başlık bulgularını ekle
+      Object.entries(headerEval.evaluations).forEach(([k, item]) => {
+        if (!item.pass) {
+          allFindings.push({
+            type: 'HEADER',
+            severity: item.critical ? 'YÜKSEK' : 'ORTA',
+            title: `Eksik veya Zayıf Başlık: ${item.name}`,
+            desc: item.note,
+            fix: item.fix?.nginx || item.fix?.apache || 'Başlığı sunucunuza ekleyin.'
+          });
+        }
+      });
+      if (dnsReport.dmarc.status !== 'strong') {
+        allFindings.push({
+          type: 'DNS',
+          severity: dnsReport.dmarc.status === 'missing' ? 'YÜKSEK' : 'ORTA',
+          title: 'DMARC E-posta Koruması Yetersiz',
+          desc: dnsReport.dmarc.note || 'DMARC kaydı bulunamadı; phishing ve spoofing riski mevcut.',
+          fix: 'TXT kaydı ekleyin: v=DMARC1; p=reject; rua=mailto:dmarc@' + cleanDomain
+        });
+      }
+      if (dnsReport.spf.status !== 'strong') {
+        allFindings.push({
+          type: 'DNS',
+          severity: 'ORTA',
+          title: 'SPF Kaydı Zayıf veya Eksik',
+          desc: dnsReport.spf.note || 'SPF kaydında katı kural (-all) kullanılmalıdır.',
+          fix: 'TXT kaydı: v=spf1 mx ~all veya -all'
+        });
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 2. DERİN PASİF KEŞİF (Cookies, TLS, Robots, Tech)
+    // -------------------------------------------------------------
+    if (modDeep) {
+      updateProgressBar(50, `[2/4] Derin pasif analiz: Çerez güvenliği, robots.txt ve teknoloji parmak izi...`);
+      try {
+        const dRes = await fetch('/api/deep-scan?url=' + encodeURIComponent(cleanUrl));
+        totalRequests += 4;
+        const dData = await dRes.json();
+        if (dData.success) {
+          STATE.results.deepScan = dData;
+          renderDeepScanResults(dData);
+
+          if (dData.cookies) {
+            dData.cookies.forEach(c => {
+              if (c.flags?.includes('Eksik Secure') || c.flags?.includes('Eksik HttpOnly')) {
+                allFindings.push({
+                  type: 'COOKIE',
+                  severity: 'ORTA',
+                  title: `Güvensiz Çerez Yapılandırması: ${c.name}`,
+                  desc: `${c.name} çerezinde güvenlik bayrakları eksik: ${c.flags.join(', ')}`,
+                  fix: 'Set-Cookie başlığına "Secure; HttpOnly; SameSite=Lax" bayraklarını ekleyin.'
+                });
+              }
+            });
+          }
+          if (dData.robots_txt?.sensitive_paths?.length > 0) {
+            allFindings.push({
+              type: 'ROBOTS',
+              severity: 'DÜŞÜK',
+              title: 'robots.txt İçinde Hassas Dizin İfşası',
+              desc: 'robots.txt dosyasında hassas dizinler listelenmiş: ' + dData.robots_txt.sensitive_paths.join(', '),
+              fix: 'Hassas yönetim yollarını robots.txt dosyasına yazmak yerine kimlik doğrulama ile koruyun.'
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Derin tarama hatası:', e);
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 3. AKTİF ZAFİYET TARAMASI
+    // -------------------------------------------------------------
+    if (modActive) {
+      updateProgressBar(70, `[3/4] Aktif güvenlik testleri: SQLi, XSS, CSRF, SSRF & Portlar taranıyor...`);
+      try {
+        // Etik onayı sunucuya kaydet
+        const confirmRes = await fetch('/api/active-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: cleanUrl, confirmed: true })
+        });
+        const confirmData = await confirmRes.json();
+        if (!confirmData.success) {
+          throw new Error(confirmData.error || 'Etik onay sunucu tarafından reddedildi.');
+        }
+
+        const activeUrl = '/api/active-scan?url=' + encodeURIComponent(cleanUrl) + '&modules=sqli,xss,csrf,ssrf,idor,ports';
+        const aRes = await fetch(activeUrl);
+        const aData = await aRes.json();
+        
+        if (aData.success && aData.findings) {
+          STATE.results.activeScan = aData;
+          totalRequests += (aData.requests_sent || 15);
+          renderActiveResults(aData);
+
+          aData.findings.forEach(f => {
+            allFindings.push({
+              type: 'ACTIVE',
+              severity: f.severity || 'YÜKSEK',
+              title: f.title || f.name || 'Aktif Zafiyet',
+              desc: f.desc || f.detail || f.description || '',
+              evidence: f.evidence || '',
+              fix: f.remediation || f.fix || 'Girdi doğrulama ve çıktı sanitizasyonu uygulayın.'
+            });
+          });
+        } else if (!aData.success) {
+          console.warn('Aktif tarama uyarısı:', aData.error || aData.message);
+        }
+      } catch (e) {
+        console.error('Aktif tarama hatası:', e);
+        showToast('Aktif test uyarısı: ' + e.message, 'warning');
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 4. AI RED TEAM ORKESTRASYONU
+    // -------------------------------------------------------------
+    if (modAi) {
+      updateProgressBar(90, `[4/4] AI Red Team ajanları (Scout, Strategist, Analyst) çalıştırılıyor...`);
+      try {
+        const aiRes = await startAIOrchestrationScan(cleanUrl, ['sqli', 'xss', 'csrf', 'ssrf']);
+        if (aiRes && aiRes.findings) {
+          aiRes.findings.forEach(f => {
+            allFindings.push({
+              type: 'AI_REDTEAM',
+              severity: 'KRİTİK',
+              title: '🤖 AI Tespit: ' + (f.finding?.reason || 'Zafiyet Zinciri'),
+              desc: 'Parametre: ' + (f.finding?.param || '') + ' | Payload: ' + (f.finding?.payload || ''),
+              evidence: f.verdict || '',
+              fix: 'İlgili girdiyi parametrik hale getirin ve WAF kurallarını sıkılaştırın.'
+            });
+          });
+        }
+      } catch (e) {
+        console.error('AI tarama hatası:', e);
+      }
+    }
+
+    // -------------------------------------------------------------
+    // SONUÇLARI GÜNCELLE VE DASHBOARD'U DOLDUR
+    // -------------------------------------------------------------
+    completeProgressBar();
+
+    const elapsedSec = ((performance.now() - startTime) / 1000).toFixed(1);
+    renderUnifiedDashboard(cleanDomain, allFindings, totalRequests, elapsedSec);
+
+    showToast(`Tarama tamamlandı! Toplam ${allFindings.length} bulgu listelendi.`, 'success');
+
+  } catch (err) {
+    console.error('Tarama genel hatası:', err);
+    showScanError('Tarama Başarısız Oldu', 'İstek yürütülürken beklenmeyen bir hata ile karşılaşıldı: ' + err.message, [
+      'Hedef sunucunun erişilebilir olduğundan emin olun.',
+      'Hedef sitenin HTTPS protokolünü desteklediğini kontrol edin.',
+      'Lokal sunucu çalışmıyorsa /api/status uç noktasını doğrulayın.'
+    ]);
+  } finally {
+    if (btn) btn.disabled = false;
+    if (spinner) spinner.classList.add('hidden');
+    if (btnText) btnText.innerText = '🚀 Taramayı Başlat';
+  }
+}
+
 // DOM Hazır Olduğunda
 document.addEventListener('DOMContentLoaded', () => {
-  // Çalışma modunu tespit et (Lokal API vs GitHub Pages)
   detectScannerMode();
   loadAIConfig();
 
-  const inputEl = document.getElementById('target-input');
-  if (inputEl) {
-    inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') startSecurityScan();
+  const uInput = document.getElementById('unified-target-input');
+  if (uInput) {
+    uInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') startUnifiedScan();
     });
   }
 
-  if (inputEl && !inputEl.value) {
-    inputEl.value = '';
-  }
+  // Modül toggle durumunu başlat
+  onActiveModuleToggle();
+  updateAIStatusUI();
 });
+

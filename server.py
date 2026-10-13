@@ -437,6 +437,34 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             "domain": hostname
         })
 
+    def handle_api_active_scan(self, parsed_path):
+        """Etik onay sonrası aktif taramayı yürütür."""
+        qs = urllib.parse.parse_qs(parsed_path.query)
+        raw_url = (qs.get("url") or [""])[0].strip()
+        modules_param = (qs.get("modules") or [""])[0].strip()
+
+        if not raw_url:
+            self.send_json({"success": False, "error": "URL parametresi gereklidir"}, status=400)
+            return
+
+        if not raw_url.startswith("http://") and not raw_url.startswith("https://"):
+            raw_url = "https://" + raw_url
+
+        modules = [m for m in modules_param.split(",") if m] if modules_param else None
+
+        try:
+            result = run_active_scan(raw_url, modules)
+            if not result.get("success") and result.get("error") == "ETIK_ONAY_YOK":
+                self.send_json({
+                    "success": False,
+                    "error": "ETIK_ONAY_YOK",
+                    "message": "Aktif test öncesi etik onay gereklidir. Lütfen onay diyaloğunu kabul edin."
+                }, status=403)
+                return
+            self.send_json(result)
+        except Exception as e:
+            self.send_json({"success": False, "error": "Aktif tarama başarısız: %s" % str(e)}, status=500)
+
     def handle_api_ai_test(self):
         """AI Sağlayıcı bağlantısını test eder (OpenAI Compatible, Vertex, Gemini API vb.)."""
         try:
