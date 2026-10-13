@@ -1093,7 +1093,7 @@ async function startActiveScan(options = {}) {
       // AI Orkestrasyon modu: /api/ai-scan endpoint'ini çağır
       const aiData = await startAIOrchestrationScan(rawUrl, modules);
       if (aiData) {
-        STATE.results.activeScan = aiData;
+        STATE.results.aiScan = aiData;
         renderActiveResults(aiData);
       }
     } else {
@@ -1397,6 +1397,82 @@ function exportMarkdownReport() {
         for (const v of vulnDeps) {
           md += `- **${v.name}@${v.version}** (${v.ecosystem}) — ${v.vuln_count} CVE: ${v.vulns.map(x => x.id).join(', ')}\n`;
         }
+      }
+    }
+  }
+
+  // ⚡ Faz 3: Aktif Güvenlik Testi bulguları
+  const act = STATE.results.activeScan;
+  if (act && act.success) {
+    md += `\n---\n\n## ⚡ 6. Aktif Güvenlik Testi Bulguları\n\n`;
+    md += `**Gönderilen istek:** ${act.requests_sent || 0} • **Süre:** ${((act.duration_ms || 0) / 1000).toFixed(1)} sn • **Rate limit:** ${act.rate_limit_seconds || 1.5} sn/istek\n\n`;
+    if ((act.findings || []).length === 0) {
+      md += `- ✅ Aktif test bulgusu tespit edilmedi.\n`;
+    } else {
+      for (const f of act.findings) {
+        md += `- **${f.severity}** [${f.test} · ${f.cwe || '-'}] ${f.title}\n`;
+        md += `  - Kanıt: \`${(f.evidence || '').slice(0, 160).replace(/\n/g, ' ')}\`\n`;
+        if (f.fix && f.fix !== '-') md += `  - Çözüm: ${f.fix}\n`;
+      }
+    }
+    if ((act.chains || []).length) {
+      md += `\n### 🔗 Risk Zincirleri (Korelasyon)\n\n`;
+      for (const c of act.chains) {
+        md += `- **${c.severity}** ${c.title} — ${c.description}\n  - Çözüm: ${c.fix}\n`;
+      }
+    }
+  }
+
+  // 🤖 AI Red Team (kanıt doğrulamalı hat)
+  const ai = STATE.results.aiScan;
+  if (ai && ai.success) {
+    const rep = ai.ai_report || {};
+    md += `\n---\n\n## 🤖 7. AI Red Team Orkestrasyonu (Scout → Strategist → Analyst → Reporter)\n\n`;
+    md += `**Tur:** ${rep.loops || 0} • **Çalıştırılan AI testi:** ${rep.tests_executed || 0} • **Kanıtı doğrulanmış bulgu:** ${(ai.findings || []).length} • **Toplam istek:** ${ai.requests_sent || 0}\n\n`;
+    if (ai.narrative_report) md += `${ai.narrative_report}\n\n`;
+    if ((ai.findings || []).length) {
+      md += `### Kanıtı Doğrulanmış AI Bulguları\n\n`;
+      for (const f of ai.findings) {
+        md += `- **${f.severity}** [${f.cwe || '-'}] ${f.title}\n`;
+        md += `  - Kanıt: \`${(f.evidence || '').slice(0, 200).replace(/\n/g, ' ')}\`\n`;
+        if (f.verdict_detail && f.verdict_detail.reasoning) md += `  - Gerekçe: ${f.verdict_detail.reasoning}\n`;
+        if (f.fix && f.fix !== '-') md += `  - Çözüm: ${f.fix}\n`;
+      }
+    }
+    if ((ai.baseline_findings || []).length) {
+      md += `\n### Deterministik Motor Bulguları (AI bağlam kaynağı)\n\n`;
+      for (const f of ai.baseline_findings) {
+        md += `- **${f.severity}** [${f.test} · ${f.cwe || '-'}] ${f.title}\n`;
+      }
+    }
+    if ((rep.executed_tests || []).length) {
+      md += `\n### Çalıştırılan AI Testleri\n\n`;
+      for (const t of rep.executed_tests) {
+        md += `- ${t.verdict === 'VULNERABLE' ? '✅' : '⬜'} \`${(t.url || '').slice(0, 90)}\` param=\`${t.param}\` payload=\`${String(t.payload).slice(0, 50)}\` → ${t.verdict}\n`;
+      }
+    }
+  }
+
+  // ⚔️ Strix otonom pentest (gerçek araç çıktısı)
+  const sx = STATE.results.strixScan;
+  if (sx && sx.success) {
+    const sc = sx.scan || {};
+    md += `\n---\n\n## ⚔️ 8. Strix Otonom AI Pentest Raporu\n\n`;
+    md += `**Çalıştırma:** \`${sc.run_name || '-'}\` • **Mod:** ${sc.mode || '-'} • **Durum:** ${sc.run_status || '-'} • **Süre:** ${sc.elapsed_sec || 0} sn${sc.llm_cost_usd ? ` • **LLM maliyeti:** $${sc.llm_cost_usd}` : ''}\n\n`;
+    if ((sx.findings || []).length === 0) {
+      md += `- ✅ Strix doğrulanmış bulgu üretmedi.\n`;
+    } else {
+      for (const f of sx.findings) {
+        md += `### ${f.severity} — ${(f.title || '').replace(/^\[STRIX\]\s*/, '')}\n\n`;
+        const ep = `${(f.method || '').trim()} ${(f.endpoint || '').trim()}`.trim();
+        md += `- **CVSS:** ${f.cvss != null ? f.cvss : '-'} • **CWE:** ${f.cwe || '-'} • **Endpoint:** ${ep ? '\`' + ep + '\`' : '-'}\n`;
+        if (f.description) md += `- **Açıklama:** ${f.description}\n`;
+        if (f.impact) md += `- **Etki:** ${f.impact}\n`;
+        if (f.evidence) md += `- **Kanıt:** \`${f.evidence.slice(0, 250).replace(/\n/g, ' ')}\`\n`;
+        if (f.confidence) md += `- **Güven:** ${f.confidence}\n`;
+        if (f.poc) md += `- **PoC:**\n\n\`\`\`\n${f.poc.slice(0, 800)}\n\`\`\`\n`;
+        if (f.fix && f.fix !== '-') md += `- **Çözüm:** ${f.fix}\n`;
+        md += `\n`;
       }
     }
   }
@@ -2407,6 +2483,7 @@ async function startUnifiedScan() {
       updateProgressBar(90, `[4/4] AI Red Team ajanları (Scout, Strategist, Analyst) çalıştırılıyor...`);
       try {
         const aiRes = await startAIOrchestrationScan(cleanUrl, ['sqli', 'xss', 'csrf', 'ssrf']);
+        if (aiRes) STATE.results.aiScan = aiRes;
         if (aiRes && aiRes.findings) {
           totalRequests += aiRes.requests_sent || 0;
           aiRes.findings.forEach(f => {
@@ -2664,9 +2741,12 @@ async function pollStrixStatus() {
     const logEl = document.getElementById('strix-log');
     if (logEl && d.log_tail) { logEl.textContent = d.log_tail; logEl.scrollTop = logEl.scrollHeight; }
 
-    if (d.finding_count > 0) {
+    if (d.finding_count > 0 || !d.running) {
       const rep = await (await fetch('/api/strix-report?scan_id=' + encodeURIComponent(STRIX_ACTIVE_ID), { signal: AbortSignal.timeout(15000) })).json();
-      if (rep.success) renderStrixFindings(rep.findings || []);
+      if (rep.success) {
+        STATE.results.strixScan = rep;  // rapor dışa aktarmaya (MD/JSON/HTML) dahil
+        renderStrixFindings(rep.findings || []);
+      }
     }
 
     if (!d.running) {

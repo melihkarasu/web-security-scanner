@@ -53,15 +53,19 @@ Passive DNS + header analysis works instantly. For deep header audits, paste `cu
 
 ### Option 2: Full Power — Local Mode (Terminal)
 ```bash
-# Linux / macOS
+# Tek komut (temel kurulum — çekirdek sıfır bağımlılık):
+curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash
+
+# Tek komut (Strix dahil — AI pentest sandbox'ıyla birlikte):
+curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --full
+
+# Tek komut (Docker, Strix dahil):
+curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --docker
+
+# Alternatif — klasik yol:
 git clone https://github.com/melihkarasu/web-security-scanner.git
 cd web-security-scanner
 python3 server.py
-
-# Windows (PowerShell)
-git clone https://github.com/melihkarasu/web-security-scanner.git
-cd web-security-scanner
-python server.py
 ```
 Your browser opens `http://127.0.0.1:8765` automatically. Green **"🟢 Local Mode"** badge confirms full capability.
 
@@ -76,6 +80,8 @@ docker build -t web-security-scanner .
 docker run -d -p 8765:8765 --name web-security-scanner web-security-scanner
 ```
 Arayüze tarayıcınızdan **`http://localhost:8765`** adresinden erişebilirsiniz.
+
+> **Docker + Strix (override dosyası ile):** `docker compose -f docker-compose.yml -f docker-compose.strix.yml up -d --build` — strix-agent CLI imaja kurulur, host Docker socket mount edilir (sandbox konteynerleri host daemon'da çalışır).
 
 > **LLM / API Ayarları:** Kurulum anında `.env` veya komut satırı ile uğraşmanız gerekmez. Kurulum bittikten sonra arayüzdeki **🤖 AI Red Team Paneli** üzerinden OpenAI Compatible, Google Gemini veya Vertex AI ayarlarınızı doğrudan yapabilir ve test edebilirsiniz.
 
@@ -177,6 +183,8 @@ docker pull ghcr.io/usestrix/strix-sandbox   # pentest sandbox imajı
 Kurulum durumu ve tespit edilen yetenekler **Strix** sekmesinde otomatik gösterilir; kurulu değilse uygulamanın kalanı tam çalışmaya devam eder ve kurulum komutu önerilir. Özel konum için `STRIX_BIN` ortam değişkenini kullanın.
 
 > **Not:** Strix sandbox'ı izole bir Docker konteyneridir; `localhost` hedeflerini test etmek için hedefi Docker bridge IP'si (ör. `http://172.17.0.1:3000`) üzerinden verin.
+
+> **Kapsam şeffaflığı:** Panel, Strix'in çekirdek akışını açığa çıkarır (hedef, mod, talimat, tur/bütçe limitleri, çoklu hedef, `--fail-on`, iptal, canlı bulgu/loğ). İleri CLI bayrakları (`--resume`, `--target-list`, `--mcp-config`, `--workspace-file`, `--scope-mode`/`--diff-base`) bu uygulama üzerinden değil, Strix CLI'sının kendisiyle kullanılabilir — motor tam güçte çalışır, sarmalayıcı tüm bayrakları aracılaştırmaz.
 
 ### 6. Professional Reporting
 - **Markdown** — Human-readable, version-control friendly

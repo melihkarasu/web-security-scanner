@@ -1,0 +1,28 @@
+# Strix dahil Docker kurulumu (override dosyası)
+# Kullanım:
+#   docker compose -f docker-compose.yml -f docker-compose.strix.yml up -d --build
+#
+# Eklenenler:
+#   - strix-agent CLI (imaj içine pip ile kurulur; uygulama çekirdeği sıfır-bağımlılık kalır)
+#   - docker-cli + host Docker socket mount → Strix sandbox konteynerleri host daemon'da çalışır
+#   - user: root (docker.sock erişimi için; yalnızca localhost'a yayınlanan port ile birlikte değerlendirin)
+services:
+  web-security-scanner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_STRIX: "1"
+    image: web-security-scanner:strix
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - strix_scans:/app/strix_scans
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8765
+      - NO_BROWSER=1
+      - STRIX_TELEMETRY=0
+
+volumes:
+  strix_scans:

@@ -707,6 +707,8 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         url = (data.get("url") or "").strip()
         mode = (data.get("mode") or "standard").strip().lower()
         instruction = (data.get("instruction") or "").strip()[:2000]
+        fail_on = (data.get("fail_on") or None)
+        extra_targets = data.get("extra_targets") or []
         ai_config = data.get("ai_config") or {}
         try:
             max_turns = int(data.get("max_turns") or 120)
@@ -732,7 +734,9 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             return
 
         result = STRIX_MANAGER.start(url, ai_config, mode=mode,
-                                     instruction=instruction, max_turns=max_turns)
+                                     instruction=instruction, max_turns=max_turns,
+                                     max_budget=data.get("max_budget"),
+                                     fail_on=fail_on, extra_targets=extra_targets)
         self.send_json(result, status=200 if result.get("success") else 400)
 
     def handle_api_strix_status(self, parsed_path):

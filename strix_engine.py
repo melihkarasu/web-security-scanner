@@ -332,7 +332,7 @@ class StrixManager:
         self._scans = {}  # scan_id -> StrixScan
 
     def start(self, target, ai_config, mode="standard", instruction="",
-              max_turns=120, max_budget=None):
+              max_turns=120, max_budget=None, fail_on=None, extra_targets=None):
         if mode not in SCAN_MODES:
             mode = "standard"
         binary = _which_strix()
@@ -364,8 +364,14 @@ class StrixManager:
 
             cmd = [binary, "--target", target, "--non-interactive", "--scan-mode", mode,
                    "--max-turns", str(max_turns)]
+            # Çoklu hedef (beyaz-kutu: kaynak + canlı URL birlikte taranabilir)
+            for t in (extra_targets or [])[:5]:
+                if isinstance(t, str) and t.strip():
+                    cmd += ["--target", t.strip()]
             if max_budget:
                 cmd += ["--max-budget", str(max_budget)]
+            if fail_on in ("critical", "high", "medium", "low", "info"):
+                cmd += ["--fail-on", fail_on]
             if instruction:
                 cmd += ["--instruction", instruction]
 
