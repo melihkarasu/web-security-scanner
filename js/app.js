@@ -2280,15 +2280,15 @@ async function startUnifiedScan() {
       totalRequests += 5;
       STATE.results.dns = dnsReport;
 
-      const finalGrade = calculateFinalGrade(headerEval.totalScore, headerEval.maxScore, dnsReport);
-      STATE.score = finalGrade.finalScore;
-      STATE.grade = finalGrade.letter;
+      const finalGrade = calculateFinalGrade(headerEval.score || 0, headerEval.maxScore || 100, dnsReport);
+      STATE.score = finalGrade.finalScore || 0;
+      STATE.grade = finalGrade.letter || 'B';
 
       renderHeaderResults(headerEval);
       renderDnsResults(dnsReport);
 
       // Başlık bulgularını ekle
-      Object.entries(headerEval.evaluations).forEach(([k, item]) => {
+      Object.entries(headerEval.headers || {}).forEach(([k, item]) => {
         if (!item.pass) {
           allFindings.push({
             type: 'HEADER',
@@ -2299,7 +2299,7 @@ async function startUnifiedScan() {
           });
         }
       });
-      if (dnsReport.dmarc.status !== 'strong') {
+      if (dnsReport?.dmarc?.status && dnsReport.dmarc.status !== 'strong') {
         allFindings.push({
           type: 'DNS',
           severity: dnsReport.dmarc.status === 'missing' ? 'YÜKSEK' : 'ORTA',
@@ -2308,7 +2308,7 @@ async function startUnifiedScan() {
           fix: 'TXT kaydı ekleyin: v=DMARC1; p=reject; rua=mailto:dmarc@' + cleanDomain
         });
       }
-      if (dnsReport.spf.status !== 'strong') {
+      if (dnsReport?.spf?.status && dnsReport.spf.status !== 'strong') {
         allFindings.push({
           type: 'DNS',
           severity: 'ORTA',
