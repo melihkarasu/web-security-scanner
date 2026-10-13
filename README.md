@@ -35,7 +35,8 @@ Web Security Scanner removes that trade-off.
 | **Deep Passive Scan** (Cookies, TLS, robots.txt, Mixed Content, Tech Fingerprint) | ❌ | ✅ |
 | **SAST — Source Code Analysis** (42 rules, 10 categories, OSV CVE check) | ❌ | ✅ |
 | **Active Security Testing** (SQLi, XSS, CSRF, SSRF, IDOR, Ports) | ❌ | ✅ (Ethics gate + rate limit) |
-| **AI Red Team Orchestration** (Scout → Strategist → Analyst) | ❌ | ✅ Vertex AI / OpenRouter / Ollama |
+| **AI Red Team Orchestration** (Scout → Strategist → Analyst, kanıt doğrulamalı) | ❌ | ✅ Vertex AI / OpenRouter / Ollama |
+| **Strix Otonom AI Pentest** (gerçek araç entegrasyonu — Docker sandbox, PoC, CVSS) | ❌ | ✅ (`pip install strix-agent`) |
 | **Reports** (Markdown, JSON, HTML — CVSS + CWE + Evidence) | Basic only | ✅ Full |
 | **Localhost / Internal Network Testing** | ❌ | ✅ |
 | **Request Origin** | Your browser (DoH APIs) | Your machine IP |
@@ -129,14 +130,19 @@ Rate-limited (1.5 s/req, max 60 req/scan), read-only payloads, mandatory ethical
 | **Port Scan** | 24 common TCP ports; DB/infra ports highlighted |
 | **Deep Headers** | CSP directive breakdown, CORS wildcard+credentials risk, Cache-Control gaps |
 
-### 5. AI Red Team Orchestration — **New in v6**
-Click **"🤖 AI Orchestration"** to deploy a virtual three-agent Red Team:
+### 5. AI Red Team Orchestration — **v7: Kanıt Doğrulamalı Hat**
+Click **"🤖 AI Orchestration"** to deploy a virtual Red Team fed by **real scan data**:
 
 | Agent | Role | Output |
 |-------|------|--------|
-| **🔍 The Scout** | Reconnaissance | Maps attack surface, discovers forms/parameters, identifies entry points |
-| **🎯 The Strategist** | Attack Planning | Selects optimal modules, payloads, and execution order based on Scout intel |
-| **🧠 The Analyst** | Correlation & Triage | Chains findings into exploit paths (e.g., XSS + IDOR → Account Takeover), prioritizes remediation |
+| **🔍 The Scout** | Reconnaissance | Crawler site haritası, formlar, HTTP başlıkları ve temel aktif tarama bulgularını analiz eder; saldırı yüzeyini haritalar |
+| **🎯 The Strategist** | Attack Planning | Yüzeyden somut, tekrarlanmayan hipotezler üretir; her probe rate-limited canlı istemciyle **gerçekten gönderilir** |
+| **🧠 The Analyst** | Evidence Triage | Yalnızca görünen HTTP kanıtına bakarak JSON verdict verir (TP/FP + güven + CWE) |
+| **📋 The Reporter** | Final Narrative | Doğrulanmış AI bulguları + deterministik motor sonuçlarını tek yönetici raporunda sentezler |
+
+**Live "Thought Chain" terminal** streams each agent's reasoning in real time.
+
+> **Doğrulama ilkesi (Strix metodolojisi):** Bir bulgu ancak canlı prob gönderilip yanıtta somut kanıt (DB hata imzası, escape edilmemiş yansıma, değerlendirilmiş şablon ifadesi) görüldüyse raporlanır — spekülatif bulgu yayınlanmaz. E2E doğrulama: kasıtlı zayıf test uygulamasında SQLi (CWE-89) ve reflected XSS (CWE-79) PoC kanıtıyla tespit edildi.
 
 **Live "Thought Chain" terminal** streams each agent's reasoning in real time.
 
@@ -148,6 +154,29 @@ Click **"🤖 AI Orchestration"** to deploy a virtual three-agent Red Team:
 - **Ollama (Yerel / Host)** — `gemma2`, `llama3.1`, `codellama` — **tamamen çevrimdışı, sıfır maliyet**.
 
 > **Kurulum Sonrası Arayüzden Kolay Yönetim:** Tüm API anahtarları, Base URL ve model tercihleri web arayüzündeki **AI Red Team Orkestrasyon Paneli** üzerinden girilir, **"⚡ Bağlantıyı Test Et"** butonu ile anında doğrulanır ve tarayıcının `LocalStorage` alanında saklanır. Diske veya konteyner ortamına hassas veri yazılmaz.
+
+### 5b. Strix Otonom AI Pentest — **Gerçek Araç Entegrasyonu (v7)**
+
+Kendi AI hattına ek olarak, **[Strix](https://github.com/usestrix/strix) CLI gerçek bir alt süreç olarak yönetilir** (Strix sekmesi → "Strix Taraması Başlat"):
+
+| Özellik | Açıklama |
+|---------|----------|
+| **Otonom çoklu-ajan pentest** | Strix'in kendi ajan topolojisi, Docker izole sandbox içinde çalışır |
+| **Gerçek istismar doğrulaması (PoC)** | Her bulgu çalıştırılabilir PoC scripti + HTTP exchange kanıtıyla gelir |
+| **CVSS 3.1 + CWE** | Strix'in yapılandırılmış `vulnerabilities.json` çıktısı doğrudan bu uygulamanın bulgu şemasına eşlenir |
+| **Tarama modları** | `quick` / `standard` / `deep` — panelden seçilir |
+| **Canlı takip** | `run.json` + `vulnerabilities.json` üzerinden durum/bulgu/loğ polling; tarama bitmeden bulgular panele akar |
+| **Kontrol** | `--max-turns` / `--max-budget` limitleri, tek eşzamanlı tarama, panel içi Durdur (SIGTERM) |
+| **Güvenlik** | Etik onay geçidi zorunlu; `STRIX_TELEMETRY=0` (telemetri kapalı); AI Ayarları panelindeki LLM yapılandırması kullanılır |
+
+**Kurulum (uygulamanın sıfır-bağımlılık ilkesi korunur — Strix harici araçtır):**
+```bash
+pip install strix-agent          # veya: pipx install strix-agent
+docker pull ghcr.io/usestrix/strix-sandbox   # pentest sandbox imajı
+```
+Kurulum durumu ve tespit edilen yetenekler **Strix** sekmesinde otomatik gösterilir; kurulu değilse uygulamanın kalanı tam çalışmaya devam eder ve kurulum komutu önerilir. Özel konum için `STRIX_BIN` ortam değişkenini kullanın.
+
+> **Not:** Strix sandbox'ı izole bir Docker konteyneridir; `localhost` hedeflerini test etmek için hedefi Docker bridge IP'si (ör. `http://172.17.0.1:3000`) üzerinden verin.
 
 ### 6. Professional Reporting
 - **Markdown** — Human-readable, version-control friendly
@@ -176,14 +205,15 @@ Every finding includes: **Evidence** (HTTP response / code line), **Severity**, 
 
 ```
 web-security-scanner/
-├── server.py                 # HTTP server + API endpoints (headers, deep-scan, SAST, active, AI)
+├── server.py                 # HTTP server + API endpoints (headers, deep-scan, SAST, active, AI, Strix)
 ├── sast_engine.py            # 42-rule SAST engine + OSV dependency check
 ├── active_scan_engine.py     # Active test modules + rate limiter + ethics gate
 ├── browser_sim_engine.py     # Headless crawler, JS analyzer, form injector, clickjacking, session flow
 ├── business_logic_engine.py  # Numeric manipulation, workflow bypass, race condition tests
 ├── ai_connector.py           # Vertex AI / OpenRouter / Ollama unified client
-├── ai_orchestrator.py        # 3-agent loop (Scout → Strategist → Analyst) + cost controls
-├── index.html                # 5-tab UI (Audit, cURL, SAST, Active, Checklist)
+├── ai_orchestrator.py        # Kanıt doğrulamalı ajan hattı (Scout→Strategist→Analyst→Reporter)
+├── strix_engine.py           # Strix CLI subprocess yönetimi (start/status/report/cancel + şema eşleme)
+├── index.html                # 7-sekmeli UI (Audit, cURL, SAST, Active, AI, Strix)
 ├── js/app.js                 # Client logic, SSE log streaming, report generation
 ├── css/mistral-theme.css     # Mistral AI design system
 └── README.md
@@ -195,7 +225,12 @@ web-security-scanner/
 - `GET  /api/sast?path=` — Source code scan
 - `POST /api/active-confirm` — Ethics confirmation
 - `GET  /api/active-scan?url=&modules=` — Active scan (post-confirmation)
-- `POST /api/ai-scan` — AI Red Team orchestration
+- `POST /api/ai-scan` — AI Red Team orkestrasyonu (kanıt doğrulamalı)
+- `GET  /api/strix-capabilities` — Strix kurulum + yetenek tespiti
+- `POST /api/strix-scan` — Strix otonom pentest başlat (etik onaylı)
+- `GET  /api/strix-status?scan_id=` — canlı durum + bulgu akışı
+- `GET  /api/strix-report?scan_id=` — tam Strix raporu (PoC + CVSS)
+- `POST /api/strix-cancel` — taramayı durdur
 
 ---
 
@@ -205,7 +240,7 @@ This tool synthesizes battle-tested methodologies from three outstanding open-so
 
 | Project | Contribution | Adaptation |
 |---------|--------------|------------|
-| **[Strix](https://github.com/usestrix/strix)** | Active exploitation methodology: SQLi (error/boolean/time), XSS, CSRF, SSRF, evidence generation | Reimplemented in stdlib Python; deterministic, rate-limited, ethics-gated |
+| **[Strix](https://github.com/usestrix/strix)** | **Doğrudan araç entegrasyonu:** Strix CLI alt süreç olarak yönetilir — Docker sandbox PoC üretimi, CVSS/CWE şeması ve `vulnerabilities.json` raporu bu uygulamanın paneline akar; doğrulanmış-bulgu metodolojisi AI orkestratörüne model alınmıştır. Deterministik modüller (SQLi/XSS/CSRF/SSRF) ayrıca stdlib Python'a yeniden yazılmıştır. | rate-limited, ethics-gated, zero-dependency çalışır |
 | **[security-check](https://github.com/ersinkoc/security-check)** | SAST rule design: secrets, crypto, injection sinks, Dockerfile/IaC, OWASP-aligned categories | 42 rules ported + verification pass + CVSS/CWE enrichment + OSV integration |
 | **[Cloudflare Security Audit Skill](https://github.com/cloudflare/security-audit-skill)** | Finding lifecycle: evidence-based findings, independent verification pass, coverage tracking | Applied to both SAST and active findings; Markdown/JSON/HTML report pipeline |
 
