@@ -1865,10 +1865,7 @@ function clearAILog() {
 
 function appendAILog(message, type = 'info') {
   const logEl = document.getElementById('ai-thought-log');
-  const cardEl = document.getElementById('ai-thought-chain-card');
-  if (!logEl || !cardEl) return;
-  
-  cardEl.classList.remove('hidden');
+  if (!logEl) return;
   
   const colors = {
     'system': 'text-stone-500',
@@ -1948,9 +1945,8 @@ async function startAIOrchestrationScan(targetUrl, modules) {
 
   saveAIConfig(false);
   
-  // UI: AI log kartını göster ve başlat
-  const cardEl = document.getElementById('ai-thought-chain-card');
-  if (cardEl) cardEl.classList.remove('hidden');
+  // UI: AI düşünce akışı sekmesine geç ve başlat
+  if (typeof switchDetailTab === 'function') switchDetailTab('tab-ai');
   clearAILog();
   appendAILog('AI Red Team orkestrasyonu başlatılıyor...', 'system');
   appendAILog('Sağlayıcı: ' + aiProvider + ' | Model: ' + aiModel + (aiProvider === 'vertex' ? ' (Bölge: ' + aiRegion + ')' : ''), 'info');
@@ -1976,7 +1972,7 @@ async function startAIOrchestrationScan(targetUrl, modules) {
           api_key: aiAuth
         }
       }),
-      signal: AbortSignal.timeout(600000) // 10 dakika timeout
+      signal: AbortSignal.timeout(900000) // 15 dk: keşif fazı + AI döngüleri (rate-limit'li)
     });
     
     const data = await res.json();
@@ -1988,17 +1984,16 @@ async function startAIOrchestrationScan(targetUrl, modules) {
       return null;
     }
     
-    // AI thought chain loglarını işle
+    // AI thought chain loglarını işle (sunucu tüm aşamaları biriktirip döndürür)
     if (data.thought_chain && Array.isArray(data.thought_chain)) {
       for (const entry of data.thought_chain) {
         appendAILog(entry.message, entry.agent || 'info');
-        if (entry.agent === 'scout') setAIThinking('thinking', 'The Strategist');
-        else if (entry.agent === 'strategist') setAIThinking('thinking', 'The Analyst');
       }
     }
     
-    appendAILog('AI orkestrasyonu başarıyla tamamlandı. Toplam ' + (data.findings?.length || 0) + ' bulgu üretildi.', 'success');
+    appendAILog('AI orkestrasyonu tamamlandı: ' + (data.findings?.length || 0) + ' doğrulanmış bulgu (' + (data.requests_sent || 0) + ' istek).', 'success');
     setAIThinking('complete');
+    renderAIReportCard(data);
     
     return data;
     
@@ -2413,14 +2408,15 @@ async function startUnifiedScan() {
       try {
         const aiRes = await startAIOrchestrationScan(cleanUrl, ['sqli', 'xss', 'csrf', 'ssrf']);
         if (aiRes && aiRes.findings) {
+          totalRequests += aiRes.requests_sent || 0;
           aiRes.findings.forEach(f => {
             allFindings.push({
               type: 'AI_REDTEAM',
-              severity: 'KRİTİK',
-              title: '🤖 AI Tespit: ' + (f.finding?.reason || 'Zafiyet Zinciri'),
-              desc: 'Parametre: ' + (f.finding?.param || '') + ' | Payload: ' + (f.finding?.payload || ''),
-              evidence: f.verdict || '',
-              fix: 'İlgili girdiyi parametrik hale getirin ve WAF kurallarını sıkılaştırın.'
+              severity: f.severity || 'YÜKSEK',
+              title: '🤖 AI Doğruladı: ' + (f.title || 'Kanıtlanmış Zafiyet'),
+              desc: (f.verdict_detail && f.verdict_detail.reasoning) || f.description || 'Analyst kanıtı HTTP yanıtında doğruladı.',
+              evidence: f.evidence || '',
+              fix: f.fix || 'Girdi doğrulama + çıktı kodlama + parametreli sorgu uygulayın.'
             });
           });
         }
@@ -2468,5 +2464,246 @@ document.addEventListener('DOMContentLoaded', () => {
   // Modül toggle durumunu başlat
   onActiveModuleToggle();
   updateAIStatusUI();
+  loadStrixCapabilities();
 });
+
+// =============================================================
+// AI RED TEAM — Nihai Rapor Kartı (v2: doğrulanmış bulgu şeması)
+// =============================================================
+function renderAIReportCard(data) {
+  // 1) Narrative rapor (Reporter ajanı, Markdown benzeri hafif render)
+  const card = document.getElementById('ai-narrative-card');
+  const body = document.getElementById('ai-narrative-body');
+  const meta = document.getElementById('ai-narrative-meta');
+  const narrative = (data.narrative_report || data.ai_report?.narrative_report || '').trim();
+  if (card && body) {
+    if (narrative) {
+      card.classList.remove('hidden');
+      body.innerHTML = narrative.split('\n').map(line => {
+        const t = line.trim();
+        if (!t) return '';
+        if (/^#{1,4}\s/.test(t)) return '<h5 class="font-bold text-mistral-ink mt-2">' + escapeHtml(t.replace(/^#+\s*/, '')) + '</h5>';
+        if (/^\d+[.)]\s/.test(t)) return '<div class="pl-4">• ' + escapeHtml(t) + '</div>';
+        if (/^[-*]\s/.test(t)) return '<div class="pl-4">• ' + escapeHtml(t.slice(2)) + '</div>';
+        return '<p>' + escapeHtml(t) + '</p>';
+      }).join('');
+      if (meta) meta.innerText = (data.ai_report?.loops || 0) + ' tur · ' + (data.ai_report?.tests_executed || 0) + ' AI testi · ' + (data.requests_sent || 0) + ' istek';
+    } else {
+      card.classList.add('hidden');
+    }
+  }
+
+  // 3) Deterministik motor bulguları (AI context kaynağı — şeffaflık için gösterilir)
+  const bcard = document.getElementById('ai-baseline-card');
+  const blist = document.getElementById('ai-baseline-list');
+  const baseline = data.baseline_findings || [];
+  if (bcard && blist) {
+    if (baseline.length === 0) {
+      bcard.classList.add('hidden');
+    } else {
+      bcard.classList.remove('hidden');
+      const sevBadgeB = { 'KRİTİK': 'bg-rose-600 text-white', 'YÜKSEK': 'bg-orange-500 text-white', 'ORTA': 'bg-amber-500 text-white', 'DÜŞÜK': 'bg-stone-500 text-white', 'BİLGİ': 'bg-sky-600 text-white' };
+      blist.innerHTML = baseline.map(f =>
+        '<div class="flex items-start gap-2 p-2 rounded-xl border border-stone-200 bg-stone-50 text-[11px]">' +
+        '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono shrink-0 ' + (sevBadgeB[f.severity] || 'bg-stone-400 text-white') + '">' + escapeHtml(f.severity || '?') + '</span>' +
+        '<div><span class="font-bold text-mistral-ink">' + escapeHtml(f.title || '') + '</span>' +
+        '<span class="text-stone-500 ml-1">[' + escapeHtml(f.test || '') + ' · ' + escapeHtml(f.cwe || '-') + ']</span>' +
+        (f.evidence ? '<div class="font-mono text-[10px] text-stone-500 mt-0.5 truncate">' + escapeHtml(String(f.evidence).slice(0, 140)) + '</div>' : '') +
+        '</div></div>').join('');
+    }
+  }
+
+  // 2) Doğrulanmış AI bulguları
+  const fcard = document.getElementById('ai-findings-card');
+  const flist = document.getElementById('ai-findings-list');
+  const findings = data.findings || [];
+  if (fcard && flist) {
+    if (findings.length === 0) {
+      fcard.classList.remove('hidden');
+      flist.innerHTML = '<div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">✅ AI ajanları kanıtı doğrulanmış bir zafiyet tespit etmedi (çalıştırılan test: ' + (data.ai_report?.tests_executed || 0) + ').</div>';
+    } else {
+      fcard.classList.remove('hidden');
+      const sevBadge = { 'KRİTİK': 'bg-rose-600 text-white', 'YÜKSEK': 'bg-orange-500 text-white', 'ORTA': 'bg-amber-500 text-white', 'DÜŞÜK': 'bg-stone-500 text-white' };
+      flist.innerHTML = findings.map(f =>
+        '<div class="p-3 rounded-xl border border-amber-200 bg-white">' +
+        '<div class="flex items-center gap-2 mb-1 flex-wrap">' +
+        '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono ' + (sevBadge[f.severity] || 'bg-stone-500 text-white') + '">' + escapeHtml(f.severity || 'ORTA') + '</span>' +
+        '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-100 border border-stone-200">' + escapeHtml(f.cwe || '-') + '</span>' +
+        (f.verdict_detail?.confidence ? '<span class="text-[10px] font-mono text-stone-500">güven: ' + escapeHtml(f.verdict_detail.confidence) + '</span>' : '') +
+        '</div>' +
+        '<div class="text-xs font-bold text-mistral-ink mb-1">' + escapeHtml(f.title || '') + '</div>' +
+        (f.evidence ? '<div class="text-[10px] font-mono bg-stone-900 text-emerald-300 p-2 rounded-lg overflow-x-auto mb-1"><code>' + escapeHtml(f.evidence) + '</code></div>' : '') +
+        (f.verdict_detail?.reasoning ? '<p class="text-[11px] text-stone-600">' + escapeHtml(f.verdict_detail.reasoning) + '</p>' : '') +
+        (f.fix ? '<p class="text-[11px] text-emerald-800 bg-emerald-50 rounded-lg px-2 py-1 mt-1"><strong>Çözüm:</strong> ' + escapeHtml(f.fix) + '</p>' : '') +
+        '</div>').join('');
+    }
+  }
+}
+
+// =============================================================
+// STRIX — Gerçek Strix CLI Pentest Paneli (subprocess tabanlı)
+// =============================================================
+let STRIX_POLL_TIMER = null;
+let STRIX_ACTIVE_ID = null;
+
+function strixGetTargetUrl() {
+  let raw = (document.getElementById('unified-target-input')?.value || '').trim();
+  if (!raw) raw = STATE.targetUrl || '';
+  if (raw && !raw.startsWith('http://') && !raw.startsWith('https://')) raw = 'https://' + raw;
+  return raw;
+}
+
+function strixAIConfig() {
+  return {
+    provider: document.getElementById('ai-provider')?.value || 'openai',
+    model: (document.getElementById('ai-model')?.value || '').trim(),
+    base_url: (document.getElementById('ai-base-url')?.value || '').trim(),
+    project_id: (document.getElementById('ai-project-id')?.value || '').trim(),
+    region: (document.getElementById('ai-region')?.value || 'global').trim(),
+    auth: {
+      type: document.getElementById('ai-auth-type')?.value || 'api_key',
+      value: (document.getElementById('ai-auth')?.value || '').trim()
+    },
+    api_key: (document.getElementById('ai-auth')?.value || '').trim()
+  };
+}
+
+async function loadStrixCapabilities() {
+  const el = document.getElementById('strix-capabilities');
+  if (!el) return;
+  if (STATE.mode !== 'local_api') {
+    el.innerHTML = '⚠️ Strix yalnızca lokal sunucu modunda çalışır (<code>python3 server.py</code>).';
+    return;
+  }
+  try {
+    const res = await fetch('/api/strix-capabilities', { signal: AbortSignal.timeout(15000) });
+    const d = await res.json();
+    if (!d.installed) {
+      el.innerHTML = '❌ Strix kurulu değil. Kurulum: <code>' + escapeHtml(d.install_hint || 'pip install strix-agent') + '</code> — ardından sayfayı yenileyin.';
+      return;
+    }
+    el.innerHTML = '✅ <strong>Strix ' + escapeHtml(d.version || '') + '</strong> kurulu · Sandbox: ' +
+      (d.sandbox_image ? '<code>' + escapeHtml(d.sandbox_image) + '</code>' : 'imaj bekleniyor (docker pull ghcr.io/usestrix/strix-sandbox)') +
+      '<br>' + (d.features || []).map(f => '• ' + escapeHtml(f)).join('<br>');
+  } catch (e) {
+    el.innerText = 'Strix durumu alınamadı: ' + e.message;
+  }
+}
+
+async function startStrixScan() {
+  if (STATE.mode !== 'local_api') { showToast('Strix yalnızca lokal sunucu modunda çalışır.', 'warning'); return; }
+  const target = strixGetTargetUrl();
+  if (!target) { showToast('Önce üstteki hedef alanına bir URL girin.', 'warning'); return; }
+  const eth = document.getElementById('unified-ethical-check');
+  if (eth && !eth.checked) { showToast('Strix pentest için etik sorumluluk beyanını onaylayın.', 'warning'); return; }
+
+  const btn = document.getElementById('strix-start-btn');
+  if (btn) btn.disabled = true;
+  try {
+    // Etik onayı sunucuya kaydet (aktif test altyapısıyla aynı geçit)
+    await fetch('/api/active-confirm', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: target, confirmed: true })
+    });
+
+    const res = await fetch('/api/strix-scan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: target, mode: document.getElementById('strix-mode')?.value || 'standard', ai_config: strixAIConfig() }),
+      signal: AbortSignal.timeout(30000)
+    });
+    const d = await res.json();
+    if (!d.success) {
+      showToast('Strix başlatılamadı: ' + (d.message || d.error || '?'), 'error');
+      if (d.capabilities && !d.capabilities.installed) loadStrixCapabilities();
+      return;
+    }
+    STRIX_ACTIVE_ID = d.scan_id;
+    showToast('Strix taraması başladı: ' + d.scan_id + ' (' + d.mode + ')', 'success');
+    document.getElementById('strix-status-card')?.classList.remove('hidden');
+    document.getElementById('strix-cancel-btn')?.classList.remove('hidden');
+    if (STRIX_POLL_TIMER) clearInterval(STRIX_POLL_TIMER);
+    STRIX_POLL_TIMER = setInterval(pollStrixStatus, 4000);
+    pollStrixStatus();
+    switchDetailTab('tab-strix');
+  } catch (e) {
+    showToast('Strix isteği başarısız: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function cancelStrixScan() {
+  if (!STRIX_ACTIVE_ID) return;
+  try {
+    await fetch('/api/strix-cancel', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scan_id: STRIX_ACTIVE_ID })
+    });
+    showToast('Strix taraması durduruluyor…', 'info');
+  } catch (e) { showToast('İptal başarısız: ' + e.message, 'error'); }
+}
+
+async function pollStrixStatus() {
+  if (!STRIX_ACTIVE_ID) return;
+  try {
+    const res = await fetch('/api/strix-status?scan_id=' + encodeURIComponent(STRIX_ACTIVE_ID), { signal: AbortSignal.timeout(10000) });
+    const d = await res.json();
+    if (!d.success) return;
+
+    const dot = document.getElementById('strix-status-dot');
+    const txt = document.getElementById('strix-status-text');
+    const el = document.getElementById('strix-elapsed');
+    const sum = document.getElementById('strix-summary');
+    if (el) el.innerText = d.elapsed_sec + ' sn · ' + (d.run_name || '') ;
+    if (sum) {
+      const s = d.severity_summary || {};
+      sum.innerText = 'durum: ' + d.run_status + ' · bulgu: ' + d.finding_count +
+        (Object.keys(s).length ? ' (' + Object.entries(s).map(([k, v]) => k + ':' + v).join(', ') + ')' : '') +
+        (d.llm_cost_usd ? ' · maliyet: $' + Number(d.llm_cost_usd).toFixed(2) : '');
+    }
+    const logEl = document.getElementById('strix-log');
+    if (logEl && d.log_tail) { logEl.textContent = d.log_tail; logEl.scrollTop = logEl.scrollHeight; }
+
+    if (d.finding_count > 0) {
+      const rep = await (await fetch('/api/strix-report?scan_id=' + encodeURIComponent(STRIX_ACTIVE_ID), { signal: AbortSignal.timeout(15000) })).json();
+      if (rep.success) renderStrixFindings(rep.findings || []);
+    }
+
+    if (!d.running) {
+      if (STRIX_POLL_TIMER) { clearInterval(STRIX_POLL_TIMER); STRIX_POLL_TIMER = null; }
+      document.getElementById('strix-cancel-btn')?.classList.add('hidden');
+      if (dot) { dot.className = 'w-2.5 h-2.5 rounded-full ' + (d.exit_code === 0 ? 'bg-emerald-500' : 'bg-amber-500'); }
+      if (txt) txt.innerText = d.finding_count > 0
+        ? 'Tamamlandı — ' + d.finding_count + ' PoC doğrulanmış bulgu.'
+        : 'Tamamlandı — doğrulanmış bulgu yok (exit ' + d.exit_code + ').';
+      showToast('Strix bitti: ' + d.finding_count + ' bulgu (' + Math.round(d.elapsed_sec) + ' sn)', 'success');
+    } else if (dot) {
+      dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse';
+      if (txt) txt.innerText = 'Strix otonom pentest çalışıyor…';
+    }
+  } catch (e) { /* geçici ağ hatası: sonraki turda dene */ }
+}
+
+function renderStrixFindings(findings) {
+  const card = document.getElementById('strix-findings-card');
+  const list = document.getElementById('strix-findings-list');
+  if (!card || !list) return;
+  if (!findings.length) { card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  const sevBadge = { 'KRİTİK': 'bg-rose-600 text-white', 'YÜKSEK': 'bg-orange-500 text-white', 'ORTA': 'bg-amber-500 text-white', 'DÜŞÜK': 'bg-stone-500 text-white', 'BİLGİ': 'bg-sky-600 text-white' };
+  list.innerHTML = findings.map(f =>
+    '<div class="p-3 rounded-xl border border-rose-200 bg-white">' +
+    '<div class="flex items-center gap-2 mb-1 flex-wrap">' +
+    '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono ' + (sevBadge[f.severity] || 'bg-stone-500 text-white') + '">' + escapeHtml(f.severity) + '</span>' +
+    (f.cvss != null ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-rose-50 border border-rose-200 text-rose-700">CVSS ' + escapeHtml(String(f.cvss)) + '</span>' : '') +
+    '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-100 border border-stone-200">' + escapeHtml(f.cwe || '-') + '</span>' +
+    (f.endpoint ? '<span class="text-[10px] font-mono text-stone-500 truncate">' + escapeHtml((f.method || '') + ' ' + f.endpoint) + '</span>' : '') +
+    '</div>' +
+    '<div class="text-xs font-bold text-mistral-ink mb-1">' + escapeHtml((f.title || '').replace(/^\[STRIX\]\s*/, '')) + '</div>' +
+    (f.description ? '<p class="text-[11px] text-stone-600 mb-1">' + escapeHtml(f.description) + '</p>' : '') +
+    (f.evidence ? '<div class="text-[10px] font-mono bg-stone-900 text-emerald-300 p-2 rounded-lg overflow-x-auto mb-1 max-h-32 overflow-y-auto"><code>' + escapeHtml(f.evidence) + '</code></div>' : '') +
+    (f.poc ? '<details class="mb-1"><summary class="text-[10px] font-bold text-mistral-orange cursor-pointer">PoC scripti</summary><pre class="text-[10px] font-mono bg-stone-950 text-amber-200 p-2 rounded-lg overflow-x-auto mt-1">' + escapeHtml(f.poc) + '</pre></details>' : '') +
+    (f.fix && f.fix !== '-' ? '<p class="text-[11px] text-emerald-800 bg-emerald-50 rounded-lg px-2 py-1"><strong>Çözüm:</strong> ' + escapeHtml(f.fix) + '</p>' : '') +
+    '</div>').join('');
+}
 

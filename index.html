@@ -413,6 +413,11 @@
             <span>🤖</span>
             <span>AI Düşünce Akışı (Log)</span>
           </button>
+
+          <button type="button" onclick="switchDetailTab('tab-strix')" id="btn-tab-strix" class="detail-tab-btn px-4 py-2.5 rounded-t-xl text-mistral-slate hover:text-mistral-ink font-semibold flex items-center gap-1.5 transition">
+            <span>⚔️</span>
+            <span>Strix Pentest</span>
+          </button>
         </div>
 
         <!-- Sekme İçerikleri -->
@@ -449,6 +454,24 @@
 
           <!-- SEKME 6: AI Düşünce Akışı -->
           <div id="tab-ai" class="detail-tab-content hidden space-y-4">
+            <!-- AI Nihai Rapor (Scout→Strategist→Analyst→Reporter çıktısı) -->
+            <div id="ai-narrative-card" class="hidden p-4 sm:p-5 rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-50/70 to-white">
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <h4 class="text-sm font-bold font-editorial text-mistral-ink">🤖 AI Red Team Nihai Raporu</h4>
+                <span id="ai-narrative-meta" class="text-[10px] font-mono text-mistral-slate"></span>
+              </div>
+              <div id="ai-narrative-body" class="text-xs text-stone-700 leading-relaxed space-y-2"></div>
+            </div>
+            <!-- AI doğrulanmış bulgu özeti -->
+            <div id="ai-findings-card" class="hidden space-y-2">
+              <h4 class="text-sm font-bold font-editorial text-mistral-ink">✅ Kanıtı Doğrulanmış AI Bulguları</h4>
+              <div id="ai-findings-list" class="space-y-2"></div>
+            </div>
+            <!-- Deterministik motor (AI context kaynağı) bulguları -->
+            <div id="ai-baseline-card" class="hidden space-y-2">
+              <h4 class="text-sm font-bold font-editorial text-mistral-ink">🔎 Deterministik Motor Bulguları <span class="text-[10px] font-mono text-mistral-slate font-normal">(AI ajanlarının beslendiği gerçek tarama)</span></h4>
+              <div id="ai-baseline-list" class="space-y-2"></div>
+            </div>
             <div class="bg-stone-950 border border-stone-800 rounded-2xl p-4 shadow-xl">
               <div class="flex items-center justify-between pb-2 mb-3 border-b border-stone-800 text-xs font-mono text-stone-400">
                 <span class="text-amber-400 font-bold">🤖 Virtual Red Team Thought Stream</span>
@@ -457,6 +480,42 @@
               <div id="ai-thought-log" class="font-mono text-[11px] text-stone-300 bg-black/60 rounded-xl p-4 max-h-[400px] overflow-y-auto space-y-1.5">
                 <div class="text-stone-600">[Sistem] AI Red Team hazır. Taramada 'AI Red Team' seçildiğinde ajan akışı buraya yansıyacaktır.</div>
               </div>
+            </div>
+          </div>
+
+          <!-- SEKME 7: Strix AI Pentest -->
+          <div id="tab-strix" class="detail-tab-content hidden space-y-4">
+            <div class="p-4 rounded-2xl border border-stone-200 bg-stone-50">
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <h4 class="text-sm font-bold font-editorial text-mistral-ink">⚔️ Strix Otonom AI Pentest (Gerçek Araç Entegrasyonu)</h4>
+                <div class="flex items-center gap-2">
+                  <select id="strix-mode" class="p-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-mono outline-none">
+                    <option value="quick">quick (hızlı)</option>
+                    <option value="standard" selected>standard</option>
+                    <option value="deep">deep (derin)</option>
+                  </select>
+                  <button type="button" id="strix-start-btn" onclick="startStrixScan()" class="px-3 py-1.5 rounded-xl bg-mistral-orange hover:bg-[#e04406] text-white text-[11px] font-bold transition shadow-xs">Strix Taraması Başlat</button>
+                  <button type="button" id="strix-cancel-btn" onclick="cancelStrixScan()" class="hidden px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold transition">Durdur</button>
+                </div>
+              </div>
+              <div id="strix-capabilities" class="text-[11px] text-mistral-slate leading-relaxed">Strix kurulum durumu kontrol ediliyor…</div>
+              <p class="text-[10px] text-stone-400 mt-2">Strix, Docker sandbox içinde otonom ajanlarla gerçek istismar doğrulaması (PoC) üretir. AI Ayarları panelindeki LLM yapılandırması kullanılır; telemetri kapalıdır (STRIX_TELEMETRY=0).</p>
+            </div>
+            <div id="strix-status-card" class="hidden p-4 rounded-2xl border border-amber-200 bg-amber-50/50 text-xs">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span id="strix-status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+                <span id="strix-status-text" class="font-bold text-amber-900">Tarama çalışıyor…</span>
+                <span id="strix-elapsed" class="font-mono text-[10px] text-stone-500 ml-auto"></span>
+              </div>
+              <div id="strix-summary" class="font-mono text-[11px] text-stone-600"></div>
+            </div>
+            <div id="strix-findings-card" class="hidden space-y-2">
+              <h4 class="text-sm font-bold font-editorial text-mistral-ink">🛡️ Strix Doğrulanmış Bulguları (PoC + CVSS)</h4>
+              <div id="strix-findings-list" class="space-y-2"></div>
+            </div>
+            <div class="bg-stone-950 border border-stone-800 rounded-2xl p-4">
+              <div class="text-[11px] font-mono text-stone-500 mb-2">strix_output.log (canlı)</div>
+              <div id="strix-log" class="font-mono text-[10px] text-emerald-300/90 bg-black/60 rounded-xl p-3 max-h-[280px] overflow-y-auto whitespace-pre-wrap"></div>
             </div>
           </div>
 
@@ -483,6 +542,6 @@
   </footer>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261014b"></script>
 </body>
 </html>

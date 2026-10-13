@@ -552,6 +552,7 @@ def run_browser_simulation(base_url, client, ethical_gate_check=True):
         "summary": summary,
         "findings": findings,
         "site_map": crawl_result["pages"],
+        "forms": crawl_result["all_forms"],
         "requests_sent": client.request_count,
         "duration_ms": int((time.time() - start) * 1000),
         "disclaimer": "Tarayıcı simülasyonu rate-limited ve zararsız payload'larla yürütülmüştür."

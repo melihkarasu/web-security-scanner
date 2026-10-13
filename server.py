@@ -24,9 +24,10 @@ import threading
 import time
 
 # Faz 3: Aktif tarama motoru (etik onay geçidi + rate limiter içerir)
-from active_scan_engine import ETHICAL_GATE, run_active_scan, run_custom_test, export_scan_state, RateLimitedClient
+from active_scan_engine import ETHICAL_GATE, run_active_scan, run_custom_test, export_scan_state, RateLimitedClient, RATE_LIMIT_SECONDS
 from ai_orchestrator import AIOrchestrator
 from ai_connector import AIProviderFactory
+from strix_engine import STRIX_MANAGER, strix_capabilities
 
 HOST = os.environ.get("HOST", "127.0.0.1")
 DEFAULT_PORT = int(os.environ.get("PORT", "8765"))
@@ -64,6 +65,16 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_ai_test()
             return
 
+        # Strix AI Pentest: tarama başlat (alt süreç; etik onay zorunlu)
+        if parsed.path == "/api/strix-scan":
+            self.handle_api_strix_scan_post()
+            return
+
+        # Strix AI Pentest: taramayı iptal et
+        if parsed.path == "/api/strix-cancel":
+            self.handle_api_strix_cancel()
+            return
+
         self.send_json({"success": False, "error": "Bilinmeyen POST ucu"}, status=404)
 
     def do_GET(self):
@@ -92,6 +103,26 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         # 1e. API: /api/ai-scan (GET uyumluluğu)
         if parsed.path == "/api/ai-scan":
             self.handle_api_ai_scan(parsed)
+            return
+
+        # 1f. API: /api/strix-capabilities (Strix kurulum + özellik tespiti)
+        if parsed.path == "/api/strix-capabilities":
+            self.send_json(strix_capabilities())
+            return
+
+        # 1g. API: /api/strix-status?scan_id= (canlı durum + bulgu akışı)
+        if parsed.path == "/api/strix-status":
+            self.handle_api_strix_status(parsed)
+            return
+
+        # 1h. API: /api/strix-report?scan_id= (tam Strix raporu)
+        if parsed.path == "/api/strix-report":
+            self.handle_api_strix_report(parsed)
+            return
+
+        # 1i. API: /api/strix-runs (tarama listesi)
+        if parsed.path == "/api/strix-runs":
+            self.send_json({"success": True, "runs": STRIX_MANAGER.list_runs()})
             return
 
         # 2. API: /api/status (sunucu aktif mi kontrolü)
@@ -519,35 +550,103 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             return
 
         try:
-            site_map = [{"url": url, "forms": []}]
-            scan_state = export_scan_state(url, site_map, [])
-            orchestrator = AIOrchestrator(ai_config)
-
-            def active_test_callback(test_url, param, payload):
-                client = RateLimitedClient()
-                return run_custom_test(client, test_url, param, payload)
-
-            ai_result = orchestrator.orchestrate_scan(
-                target_url=url,
-                initial_data=scan_state,
-                active_scanner_callback=active_test_callback
-            )
-
-            thought_chain = []
-            for item in ai_result.get("history", []):
-                thought_chain.append({
-                    "agent": "scout" if item.get("step") == 1 else ("strategist" if item.get("step") == 2 else "analyst"),
-                    "message": f"Adım {item.get('step')}: {item.get('result')}"
-                })
-
-            self.send_json({
-                "success": True,
-                "ai_report": ai_result,
-                "thought_chain": thought_chain,
-                "findings": ai_result.get("verified_findings", [])
-            })
+            result = self._run_ai_pipeline(url, modules, ai_config)
+            if not result.get("success"):
+                self.send_json(result, status=400)
+                return
+            self.send_json(result)
         except Exception as e:
             self.send_json({"success": False, "error": f"AI Scan Error: {str(e)}"}, status=500)
+
+    def _run_ai_pipeline(self, url, modules, ai_config):
+        """
+        AI Red Team hattı (Strix metodolojisi — doğrulanmış bulgu ilkesi):
+        1. Gerçek keşif: crawler + derin başlık + seçili aktif modüller (rate-limited)
+        2. Bu gerçek saldırı yüzeyi AI orkestratörüne context olarak verilir
+        3. Her LLM hipoteji aynı rate-limited istemciyle CANLI doğrulanır
+        4. Analyst yapılandırılmış verdict verir; Reporter yönetici özeti yazar
+        """
+        thought_chain = []
+
+        def emit(agent, message):
+            thought_chain.append({"agent": agent, "message": str(message)[:500], "ts": int(time.time() * 1000)})
+
+        # --- 1. Gerçek keşif / baseline taraması ---
+        emit("system", "Aşama 1/3 — Keşif: site haritası, formlar, başlıklar ve temel aktif modüller taranıyor…")
+        base_modules = list(dict.fromkeys((modules or []) + ["browser", "deep_headers"]))
+        base_modules = [m for m in base_modules if m not in ("ports", "logic")]  # AI hattında gürültü/yavaşlık üreten modüller kapalı
+        t0 = time.time()
+        base = run_active_scan(url, base_modules)
+        if not base.get("success"):
+            return {"success": False, "error": base.get("error", "BASELINE_TARAMA_HATASI"),
+                    "message": base.get("message", "Temel tarama başlatılamadı.")}
+        emit("system", "Keşif tamam: %d istek, %d temel bulgu, %d sayfa, %d form." % (
+            base.get("requests_sent", 0), len(base.get("findings", [])),
+            len(base.get("site_map", [])), len(base.get("forms", []))))
+
+        # HTTP başlıkları (AI context'ine eklenecek; HEAD/GET fallback)
+        try:
+            resp_headers, _status, _final = self.fetch_headers(url)
+        except Exception:
+            resp_headers = {}
+
+        scan_state = export_scan_state(
+            url,
+            base.get("site_map", []),
+            base.get("findings", []),
+            forms=base.get("forms", []),
+            headers=resp_headers,
+            tech=[t for t in ((base.get("modules") or {}).get("browser") or {}).get("technologies", [])]
+        )
+
+        # --- 2+3. Orkestrasyon (tüm AI testleri TEK paylaşımlı rate-limited istemciyle) ---
+        emit("system", "Aşama 2/3 — AI ajanları (Scout → Strategist → Analyst) gerçek keşif verisiyle çalışıyor…")
+        try:
+            orchestrator = AIOrchestrator(ai_config)
+        except ValueError as e:
+            return {"success": False, "error": "AI_YAPILANDIRMA", "message": str(e)}
+
+        ai_client = RateLimitedClient()
+
+        def active_test_callback(test_url, param, payload):
+            return run_custom_test(ai_client, test_url, param, payload)
+
+        ai_result = orchestrator.orchestrate_scan(
+            target_url=url,
+            initial_data=scan_state,
+            active_scanner_callback=active_test_callback,
+            progress_callback=emit
+        )
+
+        # --- 4. Birleştirilmiş yanıt ---
+        findings = ai_result.get("verified_findings", [])
+        summary = {"KRİTİK": 0, "YÜKSEK": 0, "ORTA": 0, "DÜŞÜK": 0, "BİLGİ": 0}
+        for f in findings:
+            summary[f.get("severity", "ORTA")] = summary.get(f.get("severity", "ORTA"), 0) + 1
+
+        emit("system", "Aşama 3/3 — Tamamlandı: %d tur, %d AI testi, %d doğrulanmış bulgu (%d istek)." % (
+            ai_result.get("loops", 0), ai_result.get("tests_executed", 0), len(findings), ai_client.request_count))
+
+        return {
+            "success": True,
+            "ai_report": ai_result,
+            "thought_chain": thought_chain,
+            "findings": findings,
+            "summary": summary,
+            "narrative_report": ai_result.get("narrative_report", ""),
+            "requests_sent": base.get("requests_sent", 0) + ai_client.request_count,
+            "duration_ms": int((time.time() - t0) * 1000),
+            "rate_limit_seconds": RATE_LIMIT_SECONDS,
+            "modules": {
+                "recon": {"ran": True, "findings": len(base.get("findings", []))},
+                "ai_orchestrator": {"ran": True, "findings": len(findings)}
+            },
+            "baseline_findings": base.get("findings", []),
+            "site_map": base.get("site_map", []),
+            "chains": base.get("chains", []),
+            "errors": ai_result.get("errors", []),
+            "disclaimer": "AI bulguları yalnızca kanıtı HTTP yanıtıyla doğrulanmış zafiyetlerdir; spekülatif bulgu yayınlanmaz."
+        }
 
     def handle_api_ai_scan(self, parsed_path):
         """
@@ -573,7 +672,10 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             }
 
             parsed_url = urllib.parse.urlparse(url)
-            if not ETHICAL_GATE.is_confirmed(parsed_url.hostname):
+            if not url.startswith("http://") and not url.startswith("https://"):
+                url = "https://" + url
+                parsed_url = urllib.parse.urlparse(url)
+            if not parsed_url.hostname or not ETHICAL_GATE.is_confirmed(parsed_url.hostname):
                 self.send_json({
                     "success": False,
                     "error": "ETIK_ONAY_YOK",
@@ -581,26 +683,90 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
                 }, status=403)
                 return
 
-            scan_state = export_scan_state(url, [], [])
-            orchestrator = AIOrchestrator(provider_config)
-
-            def active_test_callback(test_url, param, payload):
-                client = RateLimitedClient()
-                return run_custom_test(client, test_url, param, payload)
-
-            ai_result = orchestrator.orchestrate_scan(
-                target_url=url, 
-                initial_data=scan_state, 
-                active_scanner_callback=active_test_callback
-            )
-
-            self.send_json({
-                "success": True,
-                "ai_report": ai_result
-            })
+            # Yeni hat (POST ile aynı): gerçek keşif + doğrulamalı orkestrasyon
+            result = self._run_ai_pipeline(url, [], provider_config)
+            self.send_json(result, status=200 if result.get("success") else 400)
 
         except Exception as e:
             self.send_json({"success": False, "error": f"AI Scan Error: {str(e)}"}, status=500)
+
+    # =============================================================
+    # STRIX: Gerçek Strix CLI entegrasyonu (subprocess + dosya tabanlı durum)
+    # Başlatma etik onay geçidine bağlıdır; durum/rapor uçları salt-okurdur.
+    # =============================================================
+    def handle_api_strix_scan_post(self):
+        """Strix otonom pentest taramasını başlatır."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length > 0 else b"{}"
+            data = json.loads(body.decode("utf-8") or "{}")
+        except (ValueError, json.JSONDecodeError):
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+
+        url = (data.get("url") or "").strip()
+        mode = (data.get("mode") or "standard").strip().lower()
+        instruction = (data.get("instruction") or "").strip()[:2000]
+        ai_config = data.get("ai_config") or {}
+        try:
+            max_turns = int(data.get("max_turns") or 120)
+        except (TypeError, ValueError):
+            max_turns = 120
+
+        if not url:
+            self.send_json({"success": False, "error": "url alanı gereklidir"}, status=400)
+            return
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://" + url
+
+        try:
+            hostname = urllib.parse.urlparse(url).hostname
+        except ValueError:
+            hostname = None
+        if not hostname or not ETHICAL_GATE.is_confirmed(hostname):
+            self.send_json({
+                "success": False,
+                "error": "ETIK_ONAY_YOK",
+                "message": "Strix pentest öncesi etik onay gereklidir. Lütfen onay diyaloğunu kabul edin."
+            }, status=403)
+            return
+
+        result = STRIX_MANAGER.start(url, ai_config, mode=mode,
+                                     instruction=instruction, max_turns=max_turns)
+        self.send_json(result, status=200 if result.get("success") else 400)
+
+    def handle_api_strix_status(self, parsed_path):
+        qs = urllib.parse.parse_qs(parsed_path.query)
+        scan_id = (qs.get("scan_id") or [""])[0].strip()
+        scan = STRIX_MANAGER.get(scan_id)
+        if not scan:
+            self.send_json({"success": False, "error": "Tarama bulunamadı: %s" % scan_id}, status=404)
+            return
+        self.send_json(scan.status())
+
+    def handle_api_strix_report(self, parsed_path):
+        qs = urllib.parse.parse_qs(parsed_path.query)
+        scan_id = (qs.get("scan_id") or [""])[0].strip()
+        scan = STRIX_MANAGER.get(scan_id)
+        if not scan:
+            self.send_json({"success": False, "error": "Tarama bulunamadı: %s" % scan_id}, status=404)
+            return
+        self.send_json(scan.report())
+
+    def handle_api_strix_cancel(self):
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length > 0 else b"{}"
+            data = json.loads(body.decode("utf-8") or "{}")
+        except (ValueError, json.JSONDecodeError):
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+        scan_id = (data.get("scan_id") or "").strip()
+        scan = STRIX_MANAGER.get(scan_id)
+        if not scan:
+            self.send_json({"success": False, "error": "Tarama bulunamadı"}, status=404)
+            return
+        self.send_json(scan.cancel())
 
     def fetch_headers(self, url):
         # Güvenlik & Pasiflik: Yalnızca başlıkları al, gövdeyi indirme

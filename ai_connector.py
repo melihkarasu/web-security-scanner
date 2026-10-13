@@ -1,10 +1,29 @@
 import json
 import os
 import base64
+import socket
+import time
 import urllib.request
 import urllib.parse
 import urllib.error
 from abc import ABC, abstractmethod
+
+# Reasoning modeller (DeepSeek-R1, Evren vb.) 60 sn'yi aşabiliyor — geniş timeout
+# + tek otomatik tekrar deneme (yalnızca ağ/timeout hatalarında; HTTP hatalarında değil)
+LLM_TIMEOUT = 180
+
+
+def _urlopen_with_retry(req, timeout=LLM_TIMEOUT, retries=1):
+    last_err = None
+    for _ in range(retries + 1):
+        try:
+            return urllib.request.urlopen(req, timeout=timeout)
+        except urllib.error.HTTPError:
+            raise  # sağlayıcı hata kodu döndü: tekrar denemenin anlamı yok
+        except (urllib.error.URLError, socket.timeout, TimeoutError) as e:
+            last_err = e
+            time.sleep(2)
+    raise last_err
 
 # =============================================================
 # Faz 6G: AI Bağlantı Katmanı (AI Connector Layer)
@@ -65,11 +84,15 @@ class OpenAICompatibleConnector(AIConnector):
         try:
             data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers=headers)
-            with urllib.request.urlopen(req, timeout=60) as resp:
+            with _urlopen_with_retry(req) as resp:
                 res_data = json.loads(resp.read().decode("utf-8"))
                 choices = res_data.get("choices", [])
                 if choices and "message" in choices[0]:
-                    return choices[0]["message"].get("content", "")
+                    msg = choices[0]["message"]
+                    # Reasoning modellerde (DeepSeek-R1, Evren vb.) content boş kalıp
+                    # reasoning alanında metin dönebilir — her ikisini de değerlendir.
+                    content = msg.get("content") or msg.get("reasoning") or ""
+                    return content
                 return json.dumps(res_data)
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8", errors="replace")
@@ -196,7 +219,7 @@ class VertexAIConnector(AIConnector):
 
         try:
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
-            with urllib.request.urlopen(req, timeout=60) as response:
+            with _urlopen_with_retry(req) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
                 if "candidates" in res_data and len(res_data["candidates"]) > 0:
                     parts = res_data["candidates"][0].get("content", {}).get("parts", [])
@@ -236,7 +259,7 @@ class GeminiAPIConnector(AIConnector):
 
         try:
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
-            with urllib.request.urlopen(req, timeout=60) as response:
+            with _urlopen_with_retry(req) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
                 if "candidates" in res_data and len(res_data["candidates"]) > 0:
                     parts = res_data["candidates"][0].get("content", {}).get("parts", [])
@@ -271,7 +294,7 @@ class OpenRouterConnector(AIConnector):
         }
         try:
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
-            with urllib.request.urlopen(req, timeout=60) as response:
+            with _urlopen_with_retry(req) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
                 return res_data["choices"][0]["message"]["content"]
         except Exception as e:
@@ -297,7 +320,7 @@ class OllamaConnector(AIConnector):
         }
         try:
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"))
-            with urllib.request.urlopen(req, timeout=60) as response:
+            with _urlopen_with_retry(req) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
                 return res_data["message"]["content"]
         except Exception as e:

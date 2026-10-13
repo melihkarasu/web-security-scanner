@@ -4,3 +4,8 @@ node_modules/
 .env
 __pycache__/
 *.pyc
+
+# Strix tarama çalışma dizinleri (geçici)
+strix_scans/
+strix_runs/
+.venv-strix/

@@ -787,46 +787,96 @@ def run_custom_test(client, url, param, payload):
     """
     AI orkestratörü tarafından çağrılan, spesifik bir parametreye 
     özel payload gönderen test fonksiyonu.
+
+    Mevcut query parametreleri KORUNUR ve aynı addaki parametre payload ile
+    DEĞİŞTİRİLİR (ikiz parametre oluşmaz — hedef ilk değeri okuduğu için
+    aksi halde payload hiç işlenmezdi).
+
+    Yanıt gövdesi ve başlıklar LLM bağlamına sığacak şekilde kırpılır
+    (256 KB ham gövde → token patlaması → devre kesici; kanıt için ilk 3 KB yeter).
     """
-    params = {param: payload} if param else {}
+    merged_url = url
+    if param:
+        try:
+            parsed = urllib.parse.urlparse(url)
+            existing = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query, keep_blank_values=True).items()}
+            existing[param] = payload
+            merged_url = urllib.parse.urlunparse((
+                parsed.scheme, parsed.netloc, parsed.path, parsed.params,
+                urllib.parse.urlencode(existing), ""))
+        except ValueError:
+            merged_url = url
     try:
-        resp = client.get(url, params=params)
+        resp = client.get(merged_url)
+        body = resp.get("body", "") or ""
+        headers = resp.get("headers", {}) or {}
+        try:
+            headers_s = json.dumps(headers)[:800]
+        except Exception:
+            headers_s = str(headers)[:800]
         return {
-            "url": url,
+            "url": merged_url,
             "param": param,
             "payload": payload,
             "status": resp.get("status"),
-            "body": resp.get("body", ""),
-            "headers": resp.get("headers", {})
+            "body": body[:3000],
+            "body_length": len(body),
+            "headers": headers_s
         }
     except Exception as e:
         return {"error": str(e)}
 
-def export_scan_state(base_url, site_map, sast_findings):
+def export_scan_state(base_url, site_map, sast_findings, forms=None, headers=None, tech=None):
     """
     Sistemin mevcut durumunu AI ajanlarının anlayacağı 
     kompakt bir JSON formatına dönüştürür.
+
+    site_map: crawler sayfa listesi [{url, status, ...}]
+    forms:    crawler form listesi [{action_url, method, inputs:[{name,type}], page_url}]
+    headers:  hedefin HTTP yanıt başlıkları (dict)
+    tech:     teknoloji parmak izi listesi
     """
     pages = []
-    forms = []
+    found_forms = []
     for p in (site_map or []):
         if isinstance(p, dict):
-            if "url" in p: pages.append(p["url"])
-            forms.extend(p.get("forms", []))
+            if "url" in p:
+                pages.append(p["url"])
+            pf = p.get("forms", [])
+            if isinstance(pf, list):  # crawler sayfalarında "forms" sayaç (int) olabilir
+                found_forms.extend(pf)
         elif isinstance(p, str):
             pages.append(p)
+
+    # Crawler'ın gerçek form şemasını LLM için sadeleştir
+    compact_forms = []
+    for f in (forms or [])[:15]:
+        if not isinstance(f, dict):
+            continue
+        compact_forms.append({
+            "page": (f.get("page_url") or "")[:120],
+            "action": (f.get("action_url") or "")[:120],
+            "method": f.get("method", "GET"),
+            "fields": [i.get("name") for i in (f.get("inputs") or []) if isinstance(i, dict)][:10],
+            "csrf_token_field": bool(f.get("token_field_found"))
+        })
+    for cf in compact_forms:
+        if cf not in found_forms:
+            found_forms.append(cf)
 
     return {
         "target": base_url,
         "attack_surface": {
-            "pages": pages,
-            "forms": forms
+            "pages": pages[:30],
+            "forms": found_forms[:20]
         },
+        "response_headers": {k: str(v)[:120] for k, v in (headers or {}).items()} if isinstance(headers, dict) else {},
+        "technology_fingerprints": [t.get("value") if isinstance(t, dict) else str(t) for t in (tech or [])][:10],
         "static_findings": [
             {"test": f.get("test", "sast") if isinstance(f, dict) else str(f),
              "severity": f.get("severity", "info") if isinstance(f, dict) else "info",
              "title": f.get("title", "") if isinstance(f, dict) else ""}
-            for f in (sast_findings or [])
+            for f in (sast_findings or [])[:40]
         ]
     }
 
@@ -884,6 +934,7 @@ def run_active_scan(base_url, modules=None):
 
     # Faz 6E: Tarayıcı Simülasyonu (crawler + JS + form + clickjacking + oturum)
     browser_site_map = []
+    browser_forms = []
     if "browser" in active_modules:
         sim_holder = {}
         def _browser():
@@ -897,6 +948,7 @@ def run_active_scan(base_url, modules=None):
                 module_stats["browser"]["pages"] = crawl_stats.get("pages_visited", 0)
                 module_stats["browser"]["forms_found"] = crawl_stats.get("forms_found", 0)
             browser_site_map = sim.get("site_map", [])
+            browser_forms = sim.get("forms", [])
 
     # Faz 6F: İş Mantığı Testleri
     if "logic" in active_modules:
@@ -927,6 +979,7 @@ def run_active_scan(base_url, modules=None):
         "findings": findings,
         "chains": chains,
         "site_map": browser_site_map,
+        "forms": browser_forms,
         "requests_sent": client.request_count,
         "rate_limit_seconds": RATE_LIMIT_SECONDS,
         "duration_ms": int((time.time() - start) * 1000),
