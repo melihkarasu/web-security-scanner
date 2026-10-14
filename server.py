@@ -105,6 +105,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_sast(parsed)
             return
 
+        # 1c-2. API: /api/sast-dirs?q=... (Akıllı Dizin Arama & Otomatik Tamamlama)
+        if parsed.path == "/api/sast-dirs":
+            self.handle_api_sast_dirs(parsed)
+            return
+
         # 1d. API: /api/active-scan?url=... (Aktif Güvenlik Testi - Faz 3)
         if parsed.path == "/api/active-scan":
             self.handle_api_active_scan(parsed)
@@ -404,28 +409,154 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
     # FAZ 2: SAST — Kaynak Kod Analizi Uç Noktası (/api/sast)
     # Dizin taraması (42 kural) + bağımlılık CVE kontrolü (OSV)
     # =============================================================
-    def _resolve_sast_path(self, raw_path):
-        expanded = os.path.expanduser(raw_path)
-        if os.path.isdir(expanded):
-            return os.path.abspath(expanded), []
-        stripped = raw_path.strip("/").strip()
-        search_roots = ["/www/wwwroot", "/opt", "/root", os.getcwd(), os.path.expanduser("~")]
+    def _get_sast_search_roots(self):
+        home = os.path.expanduser("~")
+        cwd = os.getcwd()
+        candidates = [
+            cwd,
+            os.path.dirname(cwd),
+            os.path.dirname(os.path.dirname(cwd)),
+            "/www/wwwroot",
+            "/var/www",
+            "/opt",
+            "/srv",
+            home,
+            os.path.join(home, "Projects"),
+            os.path.join(home, "Developer"),
+            os.path.join(home, "Desktop"),
+            os.path.join(home, "Documents"),
+            os.path.join(home, "repos"),
+            os.path.join(home, "workspace"),
+            os.path.join(home, ".openclaw", "workspace"),
+            os.path.join(home, ".openclaw", "workspace", "standalone-apps"),
+            "/root",
+        ]
+        roots = []
+        seen = set()
+        for r in candidates:
+            if not r:
+                continue
+            ar = os.path.abspath(r)
+            if ar not in seen and os.path.isdir(ar):
+                seen.add(ar)
+                roots.append(ar)
+        return roots
+
+    def _search_matching_dirs(self, query="", max_results=20):
+        """Klasör adına (tam yol vermeden) göre 2 seviye derinlikte hızlı dizin araması yapar."""
+        q = (query or "").strip()
+        expanded = os.path.expanduser(q) if q else ""
+        exact_matches = []
+        prefix_matches = []
+        substr_matches = []
+        seen = set()
+
+        skip_names = {
+            ".git", "node_modules", "__pycache__", ".venv", "venv", "env",
+            "dist", "build", ".next", ".nuxt", "target", ".idea", ".vscode",
+            "coverage", ".cache", "Library", ".Trash", ".npm", ".cargo", ".rustup"
+        }
+
+        if expanded and os.path.isdir(expanded):
+            ap = os.path.abspath(expanded)
+            seen.add(ap)
+            exact_matches.append(ap)
+
+        stripped = q.strip("/").strip()
+        q_lower = stripped.lower()
+        base_q = os.path.basename(stripped).lower()
+
+        roots = self._get_sast_search_roots()
+
+        # 1) Doğrudan kök + stripped birleşimi
         if stripped:
-            for root in search_roots:
-                cand = os.path.join(root, stripped)
+            for r in roots:
+                cand = os.path.join(r, stripped)
                 if os.path.isdir(cand):
-                    return os.path.abspath(cand), []
-        available = []
-        for root in ("/www/wwwroot", "/opt"):
-            if os.path.isdir(root):
-                try:
-                    for name in sorted(os.listdir(root))[:15]:
-                        full = os.path.join(root, name)
-                        if os.path.isdir(full) and not name.startswith("."):
-                            available.append(full)
-                except OSError:
-                    pass
+                    ap = os.path.abspath(cand)
+                    if ap not in seen:
+                        seen.add(ap)
+                        exact_matches.append(ap)
+
+        # 2) Köklerin altındaki 1. ve 2. seviye klasörleri tara (büyük/küçük harf duyarsız + kısmi eşleşme)
+        for r in roots:
+            try:
+                lvl1 = sorted(os.listdir(r))[:120]
+            except OSError:
+                continue
+            for name1 in lvl1:
+                if name1.startswith(".") or name1 in skip_names:
+                    continue
+                full1 = os.path.join(r, name1)
+                if not os.path.isdir(full1):
+                    continue
+                ap1 = os.path.abspath(full1)
+                n1_low = name1.lower()
+                if not base_q:
+                    if ap1 not in seen:
+                        seen.add(ap1)
+                        prefix_matches.append(ap1)
+                else:
+                    if n1_low == base_q or n1_low == q_lower:
+                        if ap1 not in seen:
+                            seen.add(ap1)
+                            exact_matches.append(ap1)
+                    elif n1_low.startswith(base_q):
+                        if ap1 not in seen:
+                            seen.add(ap1)
+                            prefix_matches.append(ap1)
+                    elif base_q in n1_low:
+                        if ap1 not in seen:
+                            seen.add(ap1)
+                            substr_matches.append(ap1)
+
+                # 2. seviye (yalnızca sorgu varsa veya proje kökleriyse)
+                if base_q and len(exact_matches) < max_results:
+                    try:
+                        lvl2 = sorted(os.listdir(full1))[:80]
+                    except OSError:
+                        continue
+                    for name2 in lvl2:
+                        if name2.startswith(".") or name2 in skip_names:
+                            continue
+                        n2_low = name2.lower()
+                        if base_q not in n2_low:
+                            continue
+                        full2 = os.path.join(full1, name2)
+                        if not os.path.isdir(full2):
+                            continue
+                        ap2 = os.path.abspath(full2)
+                        if ap2 in seen:
+                            continue
+                        seen.add(ap2)
+                        if n2_low == base_q:
+                            exact_matches.append(ap2)
+                        elif n2_low.startswith(base_q):
+                            prefix_matches.append(ap2)
+                        else:
+                            substr_matches.append(ap2)
+
+        combined = exact_matches + prefix_matches + substr_matches
+        return combined[:max_results]
+
+    def _resolve_sast_path(self, raw_path):
+        matches = self._search_matching_dirs(raw_path, max_results=15)
+        if matches:
+            return matches[0], matches
+        available = self._search_matching_dirs("", max_results=15)
         return None, available
+
+    def handle_api_sast_dirs(self, parsed_path):
+        """Klasör adına göre tam dizin yolunu bulur ve otomatik tamamlama önerileri döndürür."""
+        qs = urllib.parse.parse_qs(parsed_path.query)
+        q = (qs.get("q") or [""])[0].strip()
+        matches = self._search_matching_dirs(q, max_results=20)
+        self.send_json({
+            "success": True,
+            "query": q,
+            "resolved": matches[0] if matches else None,
+            "matches": matches
+        })
 
     def handle_api_sast(self, parsed_path):
         qs = urllib.parse.parse_qs(parsed_path.query)

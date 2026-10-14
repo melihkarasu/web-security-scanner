@@ -229,12 +229,15 @@
             <input
               type="text"
               id="unified-dir-input"
-              placeholder="Yerel proje dizini ile kaynak kod (SAST) taraması (opsiyonel, örn: /var/www/app veya ~/proje)"
+              list="sast-dir-suggestions"
+              autocomplete="off"
+              placeholder="Yerel proje dizini veya sadece klasör adı (örn: sarjharitasi, kandemir veya /var/www/app)"
               class="w-full bg-stone-50 border border-stone-200 rounded-2xl text-xs font-mono text-mistral-ink placeholder-stone-400 focus:bg-white transition-all shadow-inner"
             />
+            <datalist id="sast-dir-suggestions"></datalist>
           </div>
           <span id="local-dir-hint" class="text-[11px] text-mistral-slate font-mono px-1">
-            Alan adı/dizin URL'si ile birlikte veya tek başına yerel kaynak kod dizini taranabilir.
+            Tam yol yazmasanız da klasör adından dizin konumu otomatik bulunur ve tamamlanır.
           </span>
         </div>
       </div>
@@ -771,6 +774,6 @@
   </footer>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261014j"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261014k"></script>
 </body>
 </html>

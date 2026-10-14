@@ -2920,6 +2920,9 @@ async function startUnifiedScan() {
           }
         } else {
           anyModuleSucceeded = true;
+          if (sData.resolved_path && dirInput) {
+            dirInput.value = sData.resolved_path;
+          }
           STATE.results.sast = sData;
           renderSastStats(sData);
           renderSastFindings();
@@ -3108,6 +3111,9 @@ document.addEventListener('DOMContentLoaded', () => {
     dInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') startUnifiedScan();
     });
+    dInput.addEventListener('focus', () => updateSastDirSuggestions(dInput.value));
+    dInput.addEventListener('input', () => updateSastDirSuggestions(dInput.value));
+    dInput.addEventListener('blur', () => autoResolveSastDirInput(dInput));
   }
 
   // Modül toggle durumunu başlat
@@ -3116,6 +3122,37 @@ document.addEventListener('DOMContentLoaded', () => {
   loadStrixCapabilities();
   loadStrixPastRuns();
 });
+
+let SAST_DIR_TIMER = null;
+function updateSastDirSuggestions(q) {
+  if (STATE.mode !== 'local_api') return;
+  if (SAST_DIR_TIMER) clearTimeout(SAST_DIR_TIMER);
+  SAST_DIR_TIMER = setTimeout(async () => {
+    try {
+      const res = await fetch('/api/sast-dirs?q=' + encodeURIComponent((q || '').trim()), { signal: AbortSignal.timeout(4000) });
+      const d = await res.json();
+      const dl = document.getElementById('sast-dir-suggestions');
+      if (dl && Array.isArray(d.matches)) {
+        dl.innerHTML = d.matches.map(m => `<option value="${escapeAttr(m)}"></option>`).join('');
+      }
+    } catch (e) {}
+  }, 180);
+}
+
+async function autoResolveSastDirInput(inputEl) {
+  if (!inputEl || STATE.mode !== 'local_api') return;
+  const raw = (inputEl.value || '').trim();
+  if (!raw || raw.startsWith('/www/') || raw.startsWith('/home/') || raw.startsWith('/opt/') || raw.startsWith('/var/')) return;
+  try {
+    const res = await fetch('/api/sast-dirs?q=' + encodeURIComponent(raw), { signal: AbortSignal.timeout(4000) });
+    const d = await res.json();
+    if (d.success && d.resolved) {
+      inputEl.value = d.resolved;
+      const hintEl = document.getElementById('local-dir-hint');
+      if (hintEl) hintEl.innerText = '✅ Dizin bulundu ve tamamlandı: ' + d.resolved;
+    }
+  } catch (e) {}
+}
 
 // =============================================================
 // AI RED TEAM — Nihai Rapor Kartı (v2: doğrulanmış bulgu şeması)
