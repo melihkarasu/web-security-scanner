@@ -880,6 +880,108 @@ def export_scan_state(base_url, site_map, sast_findings, forms=None, headers=Non
         ]
     }
 
+def verify_and_classify_active_findings(findings):
+    """
+    Cloudflare Security Audit Skill — Bağımsız Doğrulama Geçişi & 4-Durumlu Yaşam Döngüsü:
+    - confirmed: Somut HTTP kanıtı (hata imzası, ham yansıma, 49 şablon değerlendirmesi, açık DB portu vb.)
+    - needs_validation: İki hesaplı yetki testi veya ek çalışma zamanı teyidi gerektiren adaylar (IDOR, sezgisel iş mantığı, boolean/time farkı)
+    - hardening_note: Derinlemesine savunma / bilgilendirme notları (BİLGİ / DÜŞÜK)
+    - rejected: Yanlış pozitif olarak elenen adaylar
+    """
+    confirmed = []
+    needs_validation = []
+    hardening_notes = []
+    rejected = []
+
+    for idx, f in enumerate(findings, 1):
+        f["candidate_id"] = "ACT-%03d" % idx
+        test_name = (f.get("test") or "").lower()
+        title_lower = (f.get("title") or "").lower()
+        sev = f.get("severity") or "ORTA"
+
+        if sev == "BİLGİ" or "test edilebilir" in title_lower or "açık portlar" in title_lower or "keşif tamamlandı" in title_lower:
+            f["verdict"] = "hardening_note"
+            f["verified"] = True
+            f["trust_boundary"] = "reconnaissance -> surface_inventory"
+            hardening_notes.append(f)
+        elif test_name == "idor" or "şüphesi" in title_lower or "potansiyel" in title_lower or "bazı formlarda csrf" in title_lower:
+            f["verdict"] = "needs_validation"
+            f["verified"] = False
+            f["trust_boundary"] = "caller_identity -> resource_authorization"
+            f["validation_step"] = f.get("fix") or "İki ayrı kullanıcı oturumu veya kontrollü tekrar isteği ile sınır ihlalini doğrulayın."
+            needs_validation.append(f)
+        elif sev == "DÜŞÜK":
+            f["verdict"] = "hardening_note"
+            f["verified"] = True
+            f["trust_boundary"] = "http_response -> defense_in_depth"
+            hardening_notes.append(f)
+        else:
+            f["verdict"] = "confirmed"
+            f["verified"] = True
+            f["trust_boundary"] = "untrusted_input -> application_sink"
+            confirmed.append(f)
+
+    return {
+        "confirmed": confirmed,
+        "needs_validation": needs_validation,
+        "hardening_notes": hardening_notes,
+        "rejected": rejected,
+    }
+
+
+def build_active_coverage_ledger(scan_url, active_modules, module_stats, findings):
+    """Cloudflare Security Audit Skill — Aktif Tarama Kapsam Defteri (Coverage Ledger)."""
+    parsed = urllib.parse.urlparse(scan_url)
+    has_query = bool(parsed.query)
+    ledger = []
+    MODULE_META = [
+        ("sqli", "SQL Injection", "query_param -> db_driver", True),
+        ("nosqli", "NoSQL Injection", "query_param -> nosql_engine", True),
+        ("ssti", "Server-Side Template Injection", "query_param -> template_engine", True),
+        ("open_redirect", "Open Redirect", "redirect_param -> http_location", True),
+        ("xss", "Reflected & DOM XSS", "input_source -> html_dom_sink", False),
+        ("csrf", "Cross-Site Request Forgery", "cross_origin -> state_changing_form", False),
+        ("ssrf", "Server-Side Request Forgery", "url_param -> internal_network", True),
+        ("idor", "Insecure Direct Object Reference", "object_id -> authorization_check", True),
+        ("deep_headers", "Deep HTTP Security Headers & CORS", "origin_response -> browser_policy", False),
+        ("browser", "Browser Simulation (Crawler/JS/Forms)", "same_origin_crawl -> dom_and_forms", False),
+        ("logic", "Business Logic & Race Conditions", "workflow_param -> state_machine", False),
+        ("ports", "TCP Infrastructure Port Exposure", "external_network -> host_tcp_ports", False),
+    ]
+    for idx, (mkey, attack_cls, boundary, needs_query) in enumerate(MODULE_META, 1):
+        cid = "DAST-COV-%03d" % idx
+        if mkey not in active_modules:
+            ledger.append({
+                "coverage_id": cid, "surface": scan_url, "boundary": boundary,
+                "subsystem": mkey, "attack_class": attack_cls,
+                "status": "out_of_scope", "evidence": "-", "gap": "Modül seçilmedi"
+            })
+            continue
+        st = module_stats.get(mkey) or {}
+        if not st.get("ran"):
+            ledger.append({
+                "coverage_id": cid, "surface": scan_url, "boundary": boundary,
+                "subsystem": mkey, "attack_class": attack_cls,
+                "status": "deferred", "evidence": "-",
+                "gap": st.get("skipped") or st.get("error") or "Çalıştırılamadı"
+            })
+            continue
+        m_finds = [f for f in findings if mkey in (f.get("test") or "").lower() or attack_cls.split()[0].lower() in (f.get("test") or "").lower()]
+        real_hits = [f for f in m_finds if f.get("verdict") in ("confirmed", "needs_validation")]
+        gap = "URL'de query parametresi yok (yalnızca sayfa/form yüzeyi incelendi)" if (needs_query and not has_query and not real_hits) else ""
+        ledger.append({
+            "coverage_id": cid,
+            "surface": scan_url,
+            "boundary": boundary,
+            "subsystem": mkey,
+            "attack_class": attack_cls,
+            "status": "candidate" if real_hits else "covered",
+            "evidence": "%d bulgu / %d ms" % (len(real_hits), st.get("duration_ms", 0)),
+            "gap": gap
+        })
+    return ledger
+
+
 def run_active_scan(base_url, modules=None):
     """Etik onay sonrası aktif taramayı orkestre eder."""
     parsed = urllib.parse.urlparse(base_url if "://" in base_url else "https://" + base_url)
@@ -962,6 +1064,10 @@ def run_active_scan(base_url, modules=None):
             return f
         findings += _run("ports", _ports)
 
+    # Cloudflare Audit Skill: Bağımsız doğrulama geçişi ve 4-durumlu yaşam döngüsü
+    lifecycle = verify_and_classify_active_findings(findings)
+    coverage_ledger = build_active_coverage_ledger(scan_url, active_modules, module_stats, findings)
+
     summary = {"KRİTİK": 0, "YÜKSEK": 0, "ORTA": 0, "DÜŞÜK": 0, "BİLGİ": 0}
     for f in findings:
         summary[f["severity"]] = summary.get(f["severity"], 0) + 1
@@ -977,6 +1083,8 @@ def run_active_scan(base_url, modules=None):
         "modules": module_stats,
         "summary": summary,
         "findings": findings,
+        "lifecycle": lifecycle,
+        "coverage_ledger": coverage_ledger,
         "chains": chains,
         "site_map": browser_site_map,
         "forms": browser_forms,

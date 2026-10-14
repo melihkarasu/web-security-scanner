@@ -470,8 +470,27 @@
         <!-- Sekme İçerikleri -->
         <div class="p-5 sm:p-6">
           
-          <!-- SEKME 1: Tüm Zafiyetler & Bulgular -->
+          <!-- SEKME 1: Tüm Zafiyetler & Bulgular (Cloudflare Audit Methodology %100) -->
           <div id="tab-findings" class="detail-tab-content space-y-4">
+            <!-- Cloudflare Audit Skill: 4-Durumlu Bulgu Yaşam Döngüsü Filtresi -->
+            <div id="unified-verdict-bar" class="hidden flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl border border-stone-200 bg-stone-50">
+              <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
+                <button type="button" onclick="setUnifiedVerdictFilter('all')" id="vfilter-all" class="px-2.5 py-1 rounded-lg bg-mistral-orange text-white font-bold transition cursor-pointer">Tümü (<span id="vcount-all">0</span>)</button>
+                <button type="button" onclick="setUnifiedVerdictFilter('confirmed')" id="vfilter-confirmed" class="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-emerald-800 font-bold hover:bg-emerald-50 transition cursor-pointer">✅ Confirmed (<span id="vcount-confirmed">0</span>)</button>
+                <button type="button" onclick="setUnifiedVerdictFilter('needs_validation')" id="vfilter-needs_validation" class="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-amber-900 font-bold hover:bg-amber-50 transition cursor-pointer">⚠️ Needs Validation (<span id="vcount-needs">0</span>)</button>
+                <button type="button" onclick="setUnifiedVerdictFilter('hardening_note')" id="vfilter-hardening_note" class="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-sky-900 font-bold hover:bg-sky-50 transition cursor-pointer">🛡️ Hardening Notes (<span id="vcount-hardening">0</span>)</button>
+                <button type="button" onclick="setUnifiedVerdictFilter('rejected')" id="vfilter-rejected" class="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-stone-600 font-bold hover:bg-stone-100 transition cursor-pointer">🚫 Rejected / Disproved (<span id="vcount-rejected">0</span>)</button>
+              </div>
+              <span class="text-[10px] font-mono text-mistral-slate">Cloudflare Kanıt Yaşam Döngüsü</span>
+            </div>
+
+            <!-- Cloudflare Audit Skill: Birleşik Denetim Kapsam Defteri (Unified Coverage Ledger) -->
+            <details id="unified-coverage-panel" class="hidden p-4 rounded-2xl border border-stone-200 bg-white">
+              <summary class="text-xs font-bold text-mistral-ink cursor-pointer select-none">📋 Birleşik Denetim Kapsam Defteri (Unified Audit Coverage Ledger — Cloudflare Methodology)</summary>
+              <p class="text-[11px] text-mistral-slate mt-1 mb-2">Hangi saldırı yüzeylerinin, güven sınırlarının ve modüllerin denetlendiğini, kanıt durumunu ve kapsam boşluklarını (gaps) gösterir.</p>
+              <div id="unified-coverage-table" class="overflow-x-auto text-[11px]"></div>
+            </details>
+
             <div id="unified-findings-list" class="space-y-3">
               <p class="text-xs text-mistral-slate">Herhangi bir kritik zafiyet tespit edilmedi.</p>
             </div>
@@ -752,6 +771,6 @@
   </footer>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261014i"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261014j"></script>
 </body>
 </html>

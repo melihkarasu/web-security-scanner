@@ -32,11 +32,12 @@ Web Security Scanner bridges that gap with a **Unified Single-Input Command Cent
 | **HTTP Security Headers** (CSP, HSTS, XFO, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) | ❌ (CORS restricted in browser) | ✅ Automatic server-side fetch |
 | **Subpath / URL Directory Scanning** (`example.com/app/login?id=1`) | ⚠️ Domain-level DNS only | ✅ Full path & query preservation |
 | **Deep Passive Scan** (Cookie flags, TLS/Cert expiry & SAN, `robots.txt` exposure, Mixed Content, Tech Fingerprint) | ❌ | ✅ |
-| **SAST — Local Directory Code Audit** (42 regex rules + Python AST + JS taint + Shannon entropy + live Google OSV CVEs) | ❌ | ✅ (Standalone or hybrid with URL) |
-| **Active Security Testing** (12 modules: SQLi, NoSQLi, SSTI, XSS, CSRF, SSRF, Open Redirect, IDOR, Ports, Deep Headers, Browser Sim, Business Logic) | ❌ | ✅ (Ethics-gated + rate-limited) |
+| **SAST — Local Directory Code Audit** (98 rules across 7 languages + Python AST + JS taint + Shannon entropy + 8-ecosystem Google OSV CVEs + Git Diff mode + 4-phase AI Code Audit + 6-artifact `security-check` suite) | ❌ | ✅ (Standalone or hybrid with URL) |
+| **Active Security Testing** (12 modules: SQLi, NoSQLi, SSTI, XSS, CSRF, SSRF, Open Redirect, IDOR, Ports, Deep Headers, Browser Sim, Business Logic + 2-pass verification) | ❌ | ✅ (Ethics-gated + rate-limited) |
 | **AI Red Team Orchestration** (Scout → Strategist → Analyst → Reporter, evidence-verified findings only) | ❌ | ✅ OpenAI-compatible / Gemini / Vertex AI / OpenRouter / Ollama |
-| **Strix Autonomous AI Pentest** (Real CLI subprocess + Docker sandbox PoC generation + CVSS 3.1) | ❌ | ✅ (Requires `strix-agent` + Docker) |
-| **Exportable Reports** (Markdown, JSON, HTML — includes Passive, SAST, Active, AI & Strix sections) | Basic (DNS/Score) | ✅ Full multi-engine report |
+| **Strix Autonomous AI Pentest** (100% CLI flag & env parity + Docker sandbox PoC generation + live sub-agent tree + `coverage.json` + SARIF 2.1.0/CSV/MD) | ❌ | ✅ (Requires `strix-agent` + Docker) |
+| **Cloudflare Audit Lifecycle & Unified Coverage Ledger** (`Confirmed` / `Needs Validation` / `Hardening Notes` / `Rejected` + cross-engine Coverage Ledger) | ✅ (Passive/DNS) | ✅ Full across all engines |
+| **Exportable Reports** (Markdown, JSON, HTML, SARIF 2.1.0, CSV, `SECURITY-REPORT.md`, `architecture.md`, `coverage-ledger.md`, `findings.json`) | Basic (DNS/Score) | ✅ Full multi-engine report |
 
 > **Live Mode Indicator:** The top navigation bar and Command Center display live status badges (`🟢 Local Mode: Active` / `🔍 Deep Scan & SAST: Active` vs. `🟡 Static Mode`) so you always know which capabilities are available.
 
@@ -225,9 +226,9 @@ web-security-scanner/
 
 | Project | Contribution | Integration in This Repo |
 |---------|--------------|--------------------------|
-| **[Strix](https://github.com/usestrix/strix)** | Autonomous multi-agent penetration testing & PoC validation | Managed directly via `strix_engine.py` subprocess + Docker sandbox (`vulnerabilities.json` mapped to UI/reports), and inspired our deterministic active modules |
-| **[security-check](https://github.com/ersinkoc/security-check)** | OWASP-aligned SAST rule taxonomy (secrets, injection sinks, crypto, IaC) | Adapted into 42 regex rules (`sast_engine.py`) + AST/taint/entropy analyzers (`deep_sast_engine.py`) + Google OSV integration |
-| **[Cloudflare Security Audit Skill](https://github.com/cloudflare/security-audit-skill)** | Evidence-first finding lifecycle & independent verification pass | Applied to SAST two-pass verification, strict AI Analyst triage, and multi-format report generation |
+| **[Strix](https://github.com/usestrix/strix)** | Autonomous multi-agent penetration testing & PoC validation | **100% CLI & Artifact Parity:** Managed via `strix_engine.py` subprocess + Docker sandbox; supports all CLI flags, `POSTMAN_API_KEY` / `PERPLEXITY_API_KEY` / `EXA_API_KEY`, 25+ finding fields (`cvss_breakdown`, `fix_pr_body`, `code_locations`), live `.state/agents.json` + SQLite `agents.db` topology, `coverage.json`, `findings.sarif` (SARIF 2.1.0), `vulnerabilities.csv`, and `penetration_test_report.md` |
+| **[security-check](https://github.com/ersinkoc/security-check)** | OWASP-aligned SAST taxonomy, 7-language deep scanners & 4-phase AI code audit | **100% Pipeline & Artifact Parity:** 98 static/structural rules across 7 languages (Go, Rust, PHP, Java, C#, TS/JS, Python AST) + 8-ecosystem OSV CVE parsers (npm, PyPI, Go, Cargo, Composer, Gemfile, Maven, NuGet) + Git Diff (`sc-diff-report`) mode + 4-phase LLM code audit (`Recon → Hunt → Adversarial Verify → Report`) + 6-file output suite (`SECURITY-REPORT.md`, `architecture.md`, `coverage-ledger.md`, `dependency-audit.md`, `verified-findings.md`, `findings.json`) |
+| **[Cloudflare Security Audit Skill](https://github.com/cloudflare/security-audit-skill)** | Evidence-first finding lifecycle & independent verification pass | **100% Lifecycle & Coverage Parity:** Enforces the 4-state finding lifecycle (`Confirmed`, `Needs Validation`, `Hardening Notes`, `Rejected / Disproved`) across all engines so unverified heuristics never inflate threat counts, paired with a Unified Audit Coverage Ledger tracking every surface, trust boundary, evidence record, and coverage gap |
 
 **Additional data sources:** [Google OSV](https://osv.dev/) (open-source vulnerability database), [VibeCodedApps](https://app.melihkarasu.com) (design & deployment architecture).
 

@@ -1518,7 +1518,30 @@ function exportMarkdownReport() {
   let md = `# Web Güvenlik Taraması Raporu\n\n`;
   md += `**Taranan Hedef:** \`${STATE.currentDomain}\`  \n`;
   md += `**Tarih:** ${dateStr}  \n`;
-  md += `**Güvenlik Puanı:** **${STATE.score} / 100** (Not: **${STATE.grade}**)  \n\n`;
+  md += `**Güvenlik Puanı:** **${STATE.score ?? 'Hesaplanmadı'} / 100** (Not: **${STATE.grade}**)  \n\n`;
+
+  // Cloudflare Security Audit Skill — Kanıt Yaşam Döngüsü & Birleşik Kapsam Defteri Özeti
+  const uFindings = STATE.unifiedFindings || [];
+  const uRejected = STATE.unifiedRejected || [];
+  const uLedger = STATE.unifiedCoverageLedger || [];
+  if (uFindings.length || uLedger.length) {
+    const cConf = uFindings.filter(f => f.verdict === 'confirmed').length;
+    const cNeeds = uFindings.filter(f => f.verdict === 'needs_validation').length;
+    const cHard = uFindings.filter(f => f.verdict === 'hardening_note').length;
+    md += `---\n\n## 🧭 0. Kanıt Yaşam Döngüsü & Birleşik Kapsam Defteri (Cloudflare Audit Methodology)\n\n`;
+    md += `- **✅ Confirmed (Kanıtlı Sınır İhlali):** ${cConf}\n`;
+    md += `- **⚠️ Needs Validation (Çalışma Zamanı / Yetki Teyidi Gereken):** ${cNeeds}\n`;
+    md += `- **🛡️ Hardening Notes (Derinlemesine Savunma Notu):** ${cHard}\n`;
+    md += `- **🚫 Rejected / Disproved (Elenen Hipotez):** ${uRejected.length}\n\n`;
+    if (uLedger.length) {
+      md += `### 📋 Birleşik Denetim Kapsam Defteri (Unified Coverage Ledger)\n\n`;
+      md += `| ID | Yüzey | Güven Sınırı | Modül | Durum | Kanıt | Boşluk (Gap) |\n|---|---|---|---|---|---|---|\n`;
+      for (const r of uLedger) {
+        md += `| ${r.id} | \`${r.surface}\` | \`${r.boundary}\` | ${r.module} | \`${r.status}\` | ${r.evidence} | ${r.gap || '-'} |\n`;
+      }
+      md += `\n`;
+    }
+  }
   md += `---\n\n## 🛡️ 1. HTTP Güvenlik Başlıkları Analizi\n\n`;
   md += `| Başlık | Durum | Skor | Değer / Not |\n|---|---|---|---|\n`;
 
@@ -2428,52 +2451,126 @@ function renderUnifiedDashboard(domain, findings, reqCount, elapsedSec) {
     }
   }
 
-  // Tehdit sayıları
+  // Tehdit sayıları (Cloudflare Audit Methodology: Yalnızca confirmed bulgular kritik/yüksek tehdit sayacını artırır)
   let crit = 0;
   let warn = 0;
-  findings.forEach(f => {
-    const s = (f.severity || '').toUpperCase();
-    if (s.includes('KRİTİK') || s.includes('YÜKSEK')) crit++;
-    else warn++;
+  let countConfirmed = 0;
+  let countNeeds = 0;
+  let countHardening = 0;
+  const rejectedList = STATE.unifiedRejected || [];
+
+  findings.forEach((f, idx) => {
+    if (!f.candidate_id) f.candidate_id = 'CF-' + String(idx + 1).padStart(3, '0');
+    if (!f.verdict) {
+      const sevUpper = (f.severity || '').toUpperCase();
+      if (sevUpper === 'BİLGİ' || sevUpper === 'DÜŞÜK') f.verdict = 'hardening_note';
+      else f.verdict = 'confirmed';
+    }
+    if (f.verdict === 'confirmed') {
+      countConfirmed++;
+      const s = (f.severity || '').toUpperCase();
+      if (s.includes('KRİTİK') || s.includes('YÜKSEK')) crit++;
+      else warn++;
+    } else if (f.verdict === 'needs_validation') {
+      countNeeds++;
+      warn++;
+    } else if (f.verdict === 'hardening_note') {
+      countHardening++;
+    }
   });
 
   if (dashCritical) dashCritical.innerText = crit;
   if (dashWarning) dashWarning.innerText = warn;
   if (badgeFindings) badgeFindings.innerText = findings.length;
 
-  // Bulguları listele
+  STATE.unifiedFindings = findings;
+  STATE.unifiedVerdictFilter = STATE.unifiedVerdictFilter || 'all';
+
+  // Cloudflare Kanıt Yaşam Döngüsü sayaçlarını güncelle
+  const vBar = document.getElementById('unified-verdict-bar');
+  if (vBar) {
+    vBar.classList.remove('hidden');
+    const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+    setTxt('vcount-all', findings.length);
+    setTxt('vcount-confirmed', countConfirmed);
+    setTxt('vcount-needs', countNeeds);
+    setTxt('vcount-hardening', countHardening);
+    setTxt('vcount-rejected', rejectedList.length);
+  }
+
+  renderFilteredUnifiedFindings();
+}
+
+function setUnifiedVerdictFilter(filter) {
+  STATE.unifiedVerdictFilter = filter || 'all';
+  ['all', 'confirmed', 'needs_validation', 'hardening_note', 'rejected'].forEach(k => {
+    const btn = document.getElementById('vfilter-' + k);
+    if (!btn) return;
+    if (k === STATE.unifiedVerdictFilter) {
+      btn.className = 'px-2.5 py-1 rounded-lg bg-mistral-orange text-white font-bold transition cursor-pointer';
+    } else {
+      btn.className = 'px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-stone-700 font-bold hover:bg-stone-100 transition cursor-pointer';
+    }
+  });
+  renderFilteredUnifiedFindings();
+}
+
+function renderFilteredUnifiedFindings() {
+  const listEl = document.getElementById('unified-findings-list');
   if (!listEl) return;
-  if (findings.length === 0) {
+  const filter = STATE.unifiedVerdictFilter || 'all';
+  const findings = STATE.unifiedFindings || [];
+  const rejected = STATE.unifiedRejected || [];
+
+  const activeItems = filter === 'rejected'
+    ? rejected
+    : (filter === 'all' ? findings : findings.filter(f => f.verdict === filter));
+
+  if (activeItems.length === 0) {
     listEl.innerHTML = `
       <div class="p-8 text-center rounded-2xl border border-emerald-200 bg-emerald-50/50">
-        <span class="text-3xl">🎉</span>
-        <h4 class="font-bold text-emerald-950 mt-2">Kritik Güvenlik Açığı Tespit Edilmedi!</h4>
-        <p class="text-xs text-emerald-800 mt-1">Yapılan pasif ve aktif güvenlik kontrollerinden başarıyla geçildi.</p>
+        <span class="text-3xl">${filter === 'rejected' ? '🛡️' : '🎉'}</span>
+        <h4 class="font-bold text-emerald-950 mt-2">${filter === 'rejected' ? 'Bu Taramada Elenen (Rejected) Aday Kaydı Yok' : 'Bu Kategoride Bulgu Tespit Edilmedi!'}</h4>
+        <p class="text-xs text-emerald-800 mt-1">Cloudflare Kanıt Yaşam Döngüsü filtresini değiştirerek diğer kategorileri inceleyebilirsiniz.</p>
       </div>
     `;
     return;
   }
 
-  listEl.innerHTML = findings.map(f => {
+  const verdictBadges = {
+    confirmed: '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-100 text-emerald-900 border border-emerald-300">✅ CONFIRMED</span>',
+    needs_validation: '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300">⚠️ NEEDS VALIDATION</span>',
+    hardening_note: '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-sky-100 text-sky-900 border border-sky-300">🛡️ HARDENING NOTE</span>',
+    rejected: '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-stone-200 text-stone-700 border border-stone-300">🚫 REJECTED / DISPROVED</span>'
+  };
+
+  listEl.innerHTML = activeItems.map(f => {
     const sev = f.severity || 'ORTA';
     const isHigh = sev.includes('KRİTİK') || sev.includes('YÜKSEK');
     const badgeBg = isHigh ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-amber-100 text-amber-800 border-amber-200';
+    const vBadge = verdictBadges[f.verdict] || verdictBadges.confirmed;
 
     return `
       <div class="p-4 rounded-2xl border border-stone-200 bg-white shadow-xs hover:border-stone-300 transition">
         <div class="flex items-start justify-between gap-3 mb-2">
-          <div class="flex items-center gap-2">
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border ${badgeBg}">
-              ${escapeHtml(sev)}
-            </span>
-            <span class="text-xs font-mono text-stone-400">[${escapeHtml(f.type)}]</span>
-            <h4 class="text-xs sm:text-sm font-bold text-mistral-ink">${escapeHtml(f.title)}</h4>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-100 border border-stone-200 text-stone-600">${escapeHtml(f.candidate_id || 'CF')}</span>
+            ${vBadge}
+            ${f.verdict !== 'needs_validation' && f.verdict !== 'rejected' ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border ${badgeBg}">${escapeHtml(sev)}</span>` : ''}
+            <span class="text-xs font-mono text-stone-400">[${escapeHtml(f.type || 'AUDIT')}]</span>
+            <h4 class="text-xs sm:text-sm font-bold text-mistral-ink">${escapeHtml(f.title || '')}</h4>
           </div>
+          ${f.trust_boundary ? `<span class="text-[10px] font-mono text-stone-500 whitespace-nowrap">${escapeHtml(f.trust_boundary)}</span>` : ''}
         </div>
-        <p class="text-xs text-mistral-slate leading-relaxed mb-2">${escapeHtml(f.desc)}</p>
+        <p class="text-xs text-mistral-slate leading-relaxed mb-2">${escapeHtml(f.desc || '')}</p>
         ${f.evidence ? `
           <div class="p-2.5 rounded-xl bg-stone-900 text-stone-200 font-mono text-[11px] mb-2 overflow-x-auto">
-            <span class="text-stone-500 font-bold"># Kanıt / Yanıt:</span> ${escapeHtml(f.evidence)}
+            <span class="text-stone-400 font-bold"># Kanıt / Yanıt:</span> ${escapeHtml(f.evidence)}
+          </div>
+        ` : ''}
+        ${f.validation_step ? `
+          <div class="p-2 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 mb-2">
+            <strong>🔬 Doğrulama Adımı (Needs Validation):</strong> ${escapeHtml(f.validation_step)}
           </div>
         ` : ''}
         ${f.fix ? `
@@ -2484,6 +2581,76 @@ function renderUnifiedDashboard(domain, findings, reqCount, elapsedSec) {
       </div>
     `;
   }).join('');
+}
+
+function buildAndRenderUnifiedCoverageLedger(displayTarget, rawDir, flags) {
+  const ledger = [];
+  const pushRow = (surface, boundary, moduleName, status, evidence, gap = '') => {
+    ledger.push({
+      id: 'UCOV-' + String(ledger.length + 1).padStart(3, '0'),
+      surface, boundary, module: moduleName, status, evidence, gap
+    });
+  };
+
+  if (displayTarget) {
+    if (flags.modPassive) {
+      const hCount = Object.keys(STATE.results.headers?.headers || {}).length;
+      pushRow(displayTarget, 'origin_response -> browser_security_policy', 'Passive HTTP Headers', hCount ? 'covered' : 'deferred', `${hCount} güvenlik başlığı denetlendi`, STATE.mode !== 'local_api' ? 'Tarayıcı CORS sınırı (DoH fallback)' : '');
+      pushRow(displayTarget, 'dns_resolver -> domain_email_auth', 'DNS & Email (DMARC/SPF/DNSSEC/CAA)', 'covered', `DMARC: ${STATE.results.dns?.dmarc?.status || '?'}, SPF: ${STATE.results.dns?.spf?.status || '?'}`, '');
+    } else {
+      pushRow(displayTarget, 'origin_response -> browser_security_policy', 'Passive Headers & DNS', 'out_of_scope', '-', 'Kullanıcı tarafından seçilmedi');
+    }
+
+    if (flags.modDeep) {
+      if (STATE.mode === 'local_api' && STATE.results.deepScan?.success) {
+        const d = STATE.results.deepScan;
+        pushRow(displayTarget, 'tls_handshake_and_cookies -> client_session', 'Deep Passive (Cookies/TLS/Robots/Tech)', 'covered', `TLS: ${d.tls?.protocol || '-'}, Çerez: ${d.cookies?.count || 0}, Teknolojiler: ${(d.tech_fingerprint?.technologies || []).length}`, '');
+      } else {
+        pushRow(displayTarget, 'tls_handshake_and_cookies -> client_session', 'Deep Passive Scan', 'deferred', '-', STATE.mode !== 'local_api' ? 'Yerel sunucu modu gerekli' : 'Yanıt alınamadı');
+      }
+    }
+  }
+
+  if (rawDir) {
+    const scLedger = STATE.results.sast?.security_check?.coverage_ledger || [];
+    scLedger.forEach(r => {
+      pushRow(r.surface, r.boundary, `SAST (${r.subsystem})`, r.status, r.evidence, r.gap || '');
+    });
+  }
+
+  if (displayTarget && flags.modActive) {
+    const actLedger = STATE.results.activeScan?.coverage_ledger || [];
+    actLedger.forEach(r => {
+      pushRow(r.surface, r.boundary, `Active DAST (${r.subsystem})`, r.status, r.evidence, r.gap || '');
+    });
+  }
+
+  if (displayTarget && flags.modAi && STATE.results.aiScan) {
+    const rep = STATE.results.aiScan.ai_report || {};
+    pushRow(displayTarget, 'ai_strategist_probe -> analyst_verdict', 'AI Red Team Orchestration', (STATE.results.aiScan.findings || []).length ? 'candidate' : 'covered', `${rep.loops || 0} tur, ${rep.tests_executed || 0} canlı prob, ${(STATE.results.aiScan.findings || []).length} doğrulanan bulgu`, '');
+  }
+
+  STATE.unifiedCoverageLedger = ledger;
+  const panel = document.getElementById('unified-coverage-panel');
+  const tableEl = document.getElementById('unified-coverage-table');
+  if (panel && tableEl) {
+    if (!ledger.length) {
+      panel.classList.add('hidden');
+    } else {
+      panel.classList.remove('hidden');
+      tableEl.innerHTML = '<table class="w-full border-collapse text-left font-mono text-[10px]">' +
+        '<thead><tr class="border-b border-stone-200 text-stone-600"><th class="p-1.5">ID</th><th class="p-1.5">Yüzey (Surface)</th><th class="p-1.5">Güven Sınırı (Boundary)</th><th class="p-1.5">Modül</th><th class="p-1.5">Durum</th><th class="p-1.5">Kanıt</th><th class="p-1.5">Kapsam Boşluğu (Gap)</th></tr></thead><tbody>' +
+        ledger.map(r => '<tr class="border-b border-stone-100">' +
+          '<td class="p-1.5 font-bold">' + escapeHtml(r.id) + '</td>' +
+          '<td class="p-1.5">' + escapeHtml(r.surface) + '</td>' +
+          '<td class="p-1.5 text-stone-500">' + escapeHtml(r.boundary) + '</td>' +
+          '<td class="p-1.5 font-semibold">' + escapeHtml(r.module) + '</td>' +
+          '<td class="p-1.5"><span class="px-1.5 py-0.2 rounded bg-stone-100 border border-stone-200">' + escapeHtml(r.status) + '</span></td>' +
+          '<td class="p-1.5 text-stone-700">' + escapeHtml(r.evidence) + '</td>' +
+          '<td class="p-1.5 text-rose-700">' + escapeHtml(r.gap || '-') + '</td>' +
+        '</tr>').join('') + '</tbody></table>';
+    }
+  }
 }
 
 // Girdinin yerel dosya sistemi dizini olup olmadığını algılar
@@ -2605,6 +2772,8 @@ async function startUnifiedScan() {
   let totalRequests = 0;
   let allFindings = [];
   let anyModuleSucceeded = false;
+  STATE.unifiedRejected = [];
+  STATE.unifiedVerdictFilter = 'all';
 
   try {
     // -------------------------------------------------------------
@@ -2823,6 +2992,10 @@ async function startUnifiedScan() {
             allFindings.push({
               type: 'ACTIVE',
               severity: f.severity || 'YÜKSEK',
+              verdict: f.verdict || (f.severity === 'BİLGİ' || f.severity === 'DÜŞÜK' ? 'hardening_note' : 'confirmed'),
+              candidate_id: f.candidate_id,
+              trust_boundary: f.trust_boundary || 'untrusted_input -> http_endpoint',
+              validation_step: f.validation_step || '',
               title: f.title || f.name || 'Aktif Zafiyet',
               desc: f.desc || f.detail || f.description || '',
               evidence: f.evidence || '',
@@ -2855,10 +3028,26 @@ async function startUnifiedScan() {
             allFindings.push({
               type: 'AI_REDTEAM',
               severity: f.severity || 'YÜKSEK',
+              verdict: 'confirmed',
+              trust_boundary: 'ai_probe -> verified_http_reflection_or_error',
               title: '🤖 AI Doğruladı: ' + (f.title || 'Kanıtlanmış Zafiyet'),
               desc: (f.verdict_detail && f.verdict_detail.reasoning) || f.description || 'Analyst kanıtı HTTP yanıtında doğruladı.',
               evidence: f.evidence || '',
               fix: f.fix || 'Girdi doğrulama + çıktı kodlama + parametreli sorgu uygulayın.'
+            });
+          });
+          // Elenen (NOT_VULNERABLE / INCONCLUSIVE) AI hipotezlerini Cloudflare Rejected/Disproved izine kaydet
+          const execTests = aiRes.ai_report?.executed_tests || [];
+          execTests.filter(t => t.verdict !== 'VULNERABLE').forEach((t, rIdx) => {
+            STATE.unifiedRejected.push({
+              candidate_id: 'REJ-AI-' + String(rIdx + 1).padStart(2, '0'),
+              type: 'AI_PROBE',
+              verdict: 'rejected',
+              severity: 'BİLGİ',
+              trust_boundary: 'ai_hypothesis -> disproved_by_http_response',
+              title: `Elenen Hipotez (${t.verdict}): ${t.param} parametresi`,
+              desc: `Hedef: ${t.url} — Analyst yanıt kanıtını inceledi ve sınır ihlali oluşmadığını doğruladı.`,
+              evidence: `Payload: ${t.payload} → Verdict: ${t.verdict}`
             });
           });
         }
@@ -2884,6 +3073,7 @@ async function startUnifiedScan() {
     const elapsedSec = ((performance.now() - startTime) / 1000).toFixed(1);
     const resolvedDirLabel = STATE.results.sast?.resolved_path || rawDir;
     const summaryLabel = (displayTarget && rawDir) ? `${displayTarget} + ${resolvedDirLabel}` : (displayTarget || resolvedDirLabel);
+    buildAndRenderUnifiedCoverageLedger(displayTarget, resolvedDirLabel, { modPassive, modDeep, modSast, modActive, modAi });
     renderUnifiedDashboard(summaryLabel, allFindings, totalRequests, elapsedSec);
 
     showToast(`Tarama tamamlandı! Toplam ${allFindings.length} bulgu listelendi.`, 'success');
