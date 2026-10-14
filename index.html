@@ -242,74 +242,150 @@
         </div>
       </div>
 
-      <!-- Modül Seçimi (Test Checkbox Pills) -->
-      <div class="pt-4 border-t border-stone-100">
-        <div class="text-[11px] font-bold text-mistral-slate uppercase tracking-wider mb-2.5">
-          Uygulanacak Test Modülleri:
+      <!-- Modül Seçimi: 10 Maddelik Açıklamalı Analiz Listesi (Standart + API Key Gerektiren AI Grubu) -->
+      <div class="pt-4 border-t border-stone-100 space-y-4">
+        
+        <!-- GRUP 1: Standart & Deterministik Güvenlik Analizleri -->
+        <div>
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+            <div class="text-[11px] font-bold text-mistral-ink uppercase tracking-wider flex items-center gap-1.5">
+              <span>🛡️</span>
+              <span>1. Standart & Deterministik Güvenlik Analizleri (API Key Gerektirmez)</span>
+            </div>
+            <div class="flex items-center gap-2 text-[11px] font-mono">
+              <button type="button" onclick="toggleAnalysisGroup('standard', true)" class="px-2 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold transition cursor-pointer">Tümünü Seç</button>
+              <button type="button" onclick="toggleAnalysisGroup('standard', false)" class="px-2 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold transition cursor-pointer">Temizle</button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            <!-- Madde 1: HTTP Güvenlik Başlıkları & Sızıntı -->
+            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
+              <input type="checkbox" id="chk-headers" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
+              <div>
+                <div class="text-xs font-bold text-mistral-ink">1. HTTP Güvenlik Başlıkları & Bilgi Sızıntısı Analizi</div>
+                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy ve Server/X-Powered-By sürüm ifşası denetimi.</p>
+              </div>
+            </label>
+
+            <!-- Madde 2: DNS & E-posta Savunması -->
+            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
+              <input type="checkbox" id="chk-dns" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
+              <div>
+                <div class="text-xs font-bold text-mistral-ink">2. DNS & E-posta Savunma Kayıtları Denetimi</div>
+                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">DMARC politikası, SPF yetkilendirmesi, DNSSEC imzası, CAA sertifika kısıtları, IPv6 (AAAA) ve MX e-posta sahteciliği (spoofing) kontrolü.</p>
+              </div>
+            </label>
+
+            <!-- Madde 3: Derin Pasif Keşif -->
+            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
+              <input type="checkbox" id="chk-deep" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
+              <div>
+                <div class="text-xs font-bold text-mistral-ink flex items-center gap-1.5">
+                  <span>3. Derin Pasif Keşif, Çerez & TLS/SSL Sertifika Analizi</span>
+                  <span id="mod-deep-pill" class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-100 text-emerald-800">Aktif</span>
+                </div>
+                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">Çerez bayrakları (HttpOnly, Secure, SameSite), TLS sürümü ve sertifika bitiş süresi, <code class="font-mono">robots.txt</code> hassas yol ifşası, Mixed Content ve teknoloji parmak izi.</p>
+              </div>
+            </label>
+
+            <!-- Madde 4: Yerel Kaynak Kod (SAST) & CVE -->
+            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
+              <input type="checkbox" id="chk-sast" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
+              <div>
+                <div class="text-xs font-bold text-mistral-ink">4. Statik Kaynak Kod & Tedarik Zinciri CVE Analizi (SAST)</div>
+                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">7 dilde 98 statik/AST/taint/entropy kuralı, gömülü sır/anahtar tespiti ve 8 ekosistemde (npm, PyPI, Go, Cargo, Composer, Maven, NuGet, RubyGems) canlı Google OSV CVE taraması.</p>
+              </div>
+            </label>
+
+            <!-- Madde 5: Aktif Enjeksiyon Testleri -->
+            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
+              <input type="checkbox" id="chk-active-inj" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
+              <div>
+                <div class="text-xs font-bold text-mistral-ink">5. Aktif Enjeksiyon & Girdi Manipülasyonu Testleri</div>
+                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">SQL Injection (Error/Boolean/Time-based), NoSQL Injection (<code class="font-mono">$ne</code>), SSTI şablon motoru enjeksiyonu ve Reflected/DOM XSS testleri (zararsız okuma probları).</p>
+              </div>
+            </label>
+
+            <!-- Madde 6: Aktif Erişim, Yönlendirme & Oturum -->
+            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
+              <input type="checkbox" id="chk-active-access" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
+              <div>
+                <div class="text-xs font-bold text-mistral-ink">6. Aktif Oturum, CSRF, SSRF & Erişim Kontrolü Testleri</div>
+                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">CSRF form token/SameSite denetimi, SSRF iç ağ erişim probları, Open Redirect açık yönlendirme, IDOR nesne referansı ve derin CORS/CSP politika analizi.</p>
+              </div>
+            </label>
+
+            <!-- Madde 7: Tarayıcı Simülasyonu, İş Mantığı & Port -->
+            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none md:col-span-2">
+              <input type="checkbox" id="chk-active-crawl" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
+              <div>
+                <div class="text-xs font-bold text-mistral-ink">7. Tarayıcı Simülasyonu (Crawler/JS), İş Mantığı & Altyapı Port Taraması</div>
+                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">Otomatik sayfa gezgini (link/form keşfi), harici <code class="font-mono">.js</code> DOM-XSS kaynak→sink analizi, otomatik form enjeksiyonu, Clickjacking, iş mantığı (negatif/taşma/yetki bypass/yarış durumu) ve 24 yaygın TCP veritabanı/altyapı port taraması.</p>
+              </div>
+            </label>
+          </div>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-          
-          <!-- Modül 1: Pasif Başlık & DNS -->
-          <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
-            <input type="checkbox" id="mod-passive" checked class="mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-            <div>
-              <div class="text-xs font-bold text-mistral-ink flex items-center gap-1.5">
-                <span>🛡️</span>
-                <span>Pasif Başlık & DNS</span>
-              </div>
-              <p class="text-[10px] text-mistral-slate mt-0.5">CSP, HSTS, DMARC, SPF, TLS & Güvenlik Başlıkları</p>
-            </div>
-          </label>
 
-          <!-- Modül 2: Derin Pasif Keşif -->
-          <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
-            <input type="checkbox" id="mod-deep" checked class="mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-            <div>
-              <div class="text-xs font-bold text-mistral-ink flex items-center gap-1.5">
-                <span>🔍</span>
-                <span>Derin Pasif Keşif</span>
-                <span id="mod-deep-pill" class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-100 text-emerald-800">Aktif</span>
-              </div>
-              <p class="text-[10px] text-mistral-slate mt-0.5">Çerez Güvenliği, robots.txt, Teknoloji Parmak İzi</p>
+        <!-- GRUP 2: API Key / Service Account Gerektiren Yapay Zeka (LLM) Destekli Analizler -->
+        <div class="p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/40 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="text-[11px] font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🤖</span>
+              <span>2. Yapay Zeka (LLM) & Otonom Ajan Analizleri (API Key / Service Account Gerektirir)</span>
             </div>
-          </label>
-
-          <!-- Modül 3: Yerel Kaynak Kod (SAST) -->
-          <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
-            <input type="checkbox" id="mod-sast" checked class="mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-            <div>
-              <div class="text-xs font-bold text-mistral-ink flex items-center gap-1.5">
-                <span>📂</span>
-                <span>Kaynak Kod (SAST)</span>
-              </div>
-              <p class="text-[10px] text-mistral-slate mt-0.5">42 Kural, AST/Taint & OSV Bağımlılık CVE Taraması</p>
+            <div class="flex items-center gap-2 text-[11px] font-mono">
+              <button type="button" onclick="toggleAIConfig()" class="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold border border-amber-300 transition cursor-pointer">⚙️ AI / API Anahtarı Yapılandır</button>
+              <button type="button" onclick="toggleAnalysisGroup('ai', true)" class="px-2 py-0.5 rounded bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 font-semibold transition cursor-pointer">Tümünü Seç</button>
+              <button type="button" onclick="toggleAnalysisGroup('ai', false)" class="px-2 py-0.5 rounded bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 font-semibold transition cursor-pointer">Temizle</button>
             </div>
-          </label>
+          </div>
 
-          <!-- Modül 4: Aktif Zafiyet Testi -->
-          <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
-            <input type="checkbox" id="mod-active" checked onchange="onActiveModuleToggle()" class="mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-            <div>
-              <div class="text-xs font-bold text-mistral-ink flex items-center gap-1.5">
-                <span>⚡</span>
-                <span>Aktif Zafiyet Testi</span>
-              </div>
-              <p class="text-[10px] text-mistral-slate mt-0.5">SQLi, XSS, CSRF, SSRF & Port Taraması (Etik Onaylı)</p>
+          <!-- Bilgilendirme Notu -->
+          <div class="p-2.5 rounded-xl bg-white/90 border border-amber-200 text-[11px] text-amber-950 flex items-start gap-2">
+            <span class="text-sm shrink-0">ℹ️</span>
+            <div class="leading-relaxed">
+              <strong>Yapılandırma Bilgilendirmesi:</strong> Bu gruptaki analizlerin çalışması için üstteki <strong>🤖 AI Ayarları</strong> panelinden bir LLM sağlayıcısı (<strong>OpenAI Compatible, Google Gemini API, Google Cloud Vertex AI Service Account JSON / API Key, OpenRouter</strong> veya yerel <strong>Ollama</strong>) tanımlanmalıdır. Seçilmeyen veya anahtarı girilmemiş analizler sonuç raporunda açıkça <em>"Seçilmedi / Yapılandırma Eksik nedeniyle atlandı"</em> olarak raporlanır.
             </div>
-          </label>
+          </div>
 
-          <!-- Modül 5: AI Red Team -->
-          <label class="relative flex items-start gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50/40 hover:bg-amber-50 transition cursor-pointer select-none">
-            <input type="checkbox" id="mod-ai" onchange="onAIModuleToggle()" class="mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-            <div>
-              <div class="text-xs font-bold text-amber-950 flex items-center gap-1.5">
-                <span>🤖</span>
-                <span>AI Red Team Ajanları</span>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+            <!-- Madde 8: AI Red Team Dinamik Saldırı Orkestrasyonu -->
+            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-amber-200 bg-white hover:bg-amber-50/40 transition cursor-pointer select-none">
+              <input type="checkbox" id="chk-ai-redteam" onchange="syncLegacyModuleFlags()" class="analysis-item-check group-ai mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
+              <div>
+                <div class="text-xs font-bold text-amber-950">8. AI Red Team Dinamik Saldırı Orkestrasyonu</div>
+                <p class="text-[11px] text-stone-600 mt-0.5 leading-relaxed">Scout, Strategist, Analyst ve Reporter ajanlarıyla keşif verisini analiz eder, hedefe özel canlı HTTP probları göndererek kanıt doğrulaması yapar ve saldırı zinciri raporu üretir.</p>
               </div>
-              <p class="text-[10px] text-amber-800 mt-0.5">Scout, Strategist, Analyst ile Akıllı Tehdit Taraması</p>
-            </div>
-          </label>
+            </label>
 
+            <!-- Madde 9: 4-Aşamalı AI Semantik Kaynak Kod & Mimari Denetimi -->
+            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-amber-200 bg-white hover:bg-amber-50/40 transition cursor-pointer select-none">
+              <input type="checkbox" id="chk-ai-sast" onchange="syncLegacyModuleFlags()" class="analysis-item-check group-ai mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
+              <div>
+                <div class="text-xs font-bold text-amber-950">9. 4-Aşamalı AI Semantik Kaynak Kod & Mimari Denetimi</div>
+                <p class="text-[11px] text-stone-600 mt-0.5 leading-relaxed">Yerel proje dizinindeki kaynak kodları <strong>Recon → Hunt → Adversarial Verify → Report</strong> aşamalarıyla inceleyerek iş mantığı, yetkilendirme (AuthZ) ve mimari sınır hatalarını doğrular.</p>
+              </div>
+            </label>
+
+            <!-- Madde 10: Derin Otonom Sızma Testi & Konteyner Sandbox PoC Doğrulaması -->
+            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-amber-200 bg-white hover:bg-amber-50/40 transition cursor-pointer select-none">
+              <input type="checkbox" id="chk-ai-pentest" onchange="syncLegacyModuleFlags()" class="analysis-item-check group-ai mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
+              <div>
+                <div class="text-xs font-bold text-amber-950">10. Derin Otonom Sızma Testi & Sandbox PoC Doğrulaması</div>
+                <p class="text-[11px] text-stone-600 mt-0.5 leading-relaxed">İzole Docker sandbox ortamında çoklu otonom ajanlarla derinlemesine sızma testi yürütür; çalıştırılabilir istismar kanıtı (PoC scripti), CVSS 3.1 kırılımı, SARIF 2.1.0 ve hazır yama önerisi üretir.</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Geriye dönük uyumluluk için gizli ana bayraklar (chk-* seçimlerine göre otomatik güncellenir) -->
+        <div class="hidden">
+          <input type="checkbox" id="mod-passive" checked>
+          <input type="checkbox" id="mod-deep" checked>
+          <input type="checkbox" id="mod-sast" checked>
+          <input type="checkbox" id="mod-active" checked>
+          <input type="checkbox" id="mod-ai">
         </div>
       </div>
 
@@ -466,7 +542,7 @@
 
           <button type="button" onclick="switchDetailTab('tab-strix')" id="btn-tab-strix" class="detail-tab-btn px-4 py-2.5 rounded-t-xl text-mistral-slate hover:text-mistral-ink font-semibold flex items-center gap-1.5 transition">
             <span>⚔️</span>
-            <span>Strix Pentest</span>
+            <span>Otonom Sızma Testi (Sandbox)</span>
           </button>
         </div>
 
@@ -475,6 +551,18 @@
           
           <!-- SEKME 1: Tüm Zafiyetler & Bulgular (Cloudflare Audit Methodology %100) -->
           <div id="tab-findings" class="detail-tab-content space-y-4">
+            <!-- 10 Analiz Maddesi Sonuç, Durum, Yapılması Gerekenler ve Atlanan Testler Raporu -->
+            <div id="analysis-items-report-card" class="p-4 sm:p-5 rounded-2xl border border-stone-200 bg-stone-50/70 space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 class="text-sm font-bold font-editorial text-mistral-ink">📋 Analiz Maddeleri Sonuç, Durum ve Aksiyon Raporu (10/10 Analiz)</h4>
+                  <p class="text-[11px] text-mistral-slate">Çalıştırılan her analizin bulgu özeti, yapılması gerekenler ve seçilmeyen/atlanan/gerçekleştirilemeyen testlerin nedeni aşağıda açıkça listelenir.</p>
+                </div>
+                <span id="analysis-items-summary-pill" class="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-mono font-bold text-stone-700"></span>
+              </div>
+              <div id="analysis-items-report-list" class="space-y-2.5"></div>
+            </div>
+
             <!-- Cloudflare Audit Skill: 4-Durumlu Bulgu Yaşam Döngüsü Filtresi -->
             <div id="unified-verdict-bar" class="hidden flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl border border-stone-200 bg-stone-50">
               <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
@@ -774,6 +862,6 @@
   </footer>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261014k"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261014l"></script>
 </body>
 </html>

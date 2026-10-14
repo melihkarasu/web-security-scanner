@@ -1520,6 +1520,18 @@ function exportMarkdownReport() {
   md += `**Tarih:** ${dateStr}  \n`;
   md += `**Güvenlik Puanı:** **${STATE.score ?? 'Hesaplanmadı'} / 100** (Not: **${STATE.grade}**)  \n\n`;
 
+  // 10 Analiz Maddesi Sonuç, Durum, Yapılması Gerekenler ve Atlanan Testler Raporu
+  const itemsRep = STATE.analysisItemsReport || [];
+  if (itemsRep.length) {
+    md += `---\n\n## 📋 0A. Analiz Maddeleri Sonuç, Durum ve Aksiyon Raporu (10/10 Madde)\n\n`;
+    for (const r of itemsRep) {
+      md += `### ${r.num}. ${r.title} — ${r.statusBadge}\n`;
+      md += `- **Grup:** ${r.group}\n`;
+      md += `- **Tespit Edilen Durum:** ${r.detected}\n`;
+      md += `- **Yapılması Gerekenler:** ${r.action}\n\n`;
+    }
+  }
+
   // Cloudflare Security Audit Skill — Kanıt Yaşam Döngüsü & Birleşik Kapsam Defteri Özeti
   const uFindings = STATE.unifiedFindings || [];
   const uRejected = STATE.unifiedRejected || [];
@@ -2337,6 +2349,45 @@ async function startAIOrchestrationScan(targetUrl, modules) {
 // UNIFIED SCANNER CONTROLLER (TEK MERKEZLİ TARAMA YÖNETİCİSİ)
 // =============================================================
 
+function toggleAnalysisGroup(group, checked) {
+  const cls = group === 'ai' ? '.group-ai' : '.group-standard';
+  document.querySelectorAll(cls).forEach(el => { el.checked = Boolean(checked); });
+  syncLegacyModuleFlags();
+}
+
+function syncLegacyModuleFlags() {
+  const cHeaders = document.getElementById('chk-headers')?.checked ?? true;
+  const cDns = document.getElementById('chk-dns')?.checked ?? true;
+  const cDeep = document.getElementById('chk-deep')?.checked ?? true;
+  const cSast = document.getElementById('chk-sast')?.checked ?? true;
+  const cActInj = document.getElementById('chk-active-inj')?.checked ?? true;
+  const cActAcc = document.getElementById('chk-active-access')?.checked ?? true;
+  const cActCrawl = document.getElementById('chk-active-crawl')?.checked ?? true;
+  const cAiRed = document.getElementById('chk-ai-redteam')?.checked ?? false;
+  const cAiSast = document.getElementById('chk-ai-sast')?.checked ?? false;
+  const cAiPen = document.getElementById('chk-ai-pentest')?.checked ?? false;
+
+  const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = v; };
+  setChk('mod-passive', cHeaders || cDns);
+  setChk('mod-deep', cDeep);
+  setChk('mod-sast', cSast);
+  setChk('mod-active', cActInj || cActAcc || cActCrawl);
+  setChk('mod-ai', cAiRed || cAiSast || cAiPen);
+
+  onActiveModuleToggle();
+}
+
+function isAICredentialsConfigured() {
+  const provider = document.getElementById('ai-provider')?.value || 'openai';
+  const model = (document.getElementById('ai-model')?.value || '').trim();
+  const auth = (document.getElementById('ai-auth')?.value || '').trim();
+  const projectId = (document.getElementById('ai-project-id')?.value || '').trim();
+  if (!model) return false;
+  if (provider === 'ollama') return true;
+  if (provider === 'vertex') return Boolean(projectId && auth);
+  return Boolean(auth);
+}
+
 function onActiveModuleToggle() {
   const modActive = document.getElementById('mod-active')?.checked;
   const modAi = document.getElementById('mod-ai')?.checked;
@@ -2583,6 +2634,145 @@ function renderFilteredUnifiedFindings() {
   }).join('');
 }
 
+function buildAndRenderAnalysisItemsReport(itemTracker, ctx) {
+  const { cleanUrl, rawDir, aiCredsOk } = ctx || {};
+  const defaultRemediation = {
+    1: 'Eksik güvenlik başlıklarını (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) web sunucusu yapılandırmanıza ekleyin ve Server/X-Powered-By başlıklarını gizleyin.',
+    2: 'Alan adınız için katı DMARC (p=reject), SPF (-all), DNSSEC ve CAA kayıtlarını DNS yönetim panelinizden tanımlayın.',
+    3: 'Oturum çerezlerine Secure, HttpOnly ve SameSite=Lax/Strict bayraklarını ekleyin; TLS 1.2/1.3 zorunluluğu getirin ve hassas yolları robots.txt yerine kimlik doğrulama ile koruyun.',
+    4: 'Kaynak koddaki güvensiz çağrıları parametrik alternatiflerle değiştirin, gömülü sırları ortam değişkenlerine taşıyın ve CVE barındıran bağımlılık paketlerini güncelleyin.',
+    5: 'Tüm kullanıcı girdilerini parametreli sorgularla (Prepared Statements) işleyin, şablon motorlarında kullanıcı verisini kod olarak değerlendirmeyin ve çıktıları bağlama uygun encode edin.',
+    6: 'Durum değiştiren tüm formlara anti-CSRF token ekleyin, dış URL parametrelerinde özel IP aralıklarını (SSRF guard) ve harici yönlendirme alan adlarını allow-list ile kısıtlayın.',
+    7: 'Harici JS dosyalarında DOM sink (innerHTML/eval) kullanımını sterilize edin, iş mantığı sınır değerlerini (negatif/taşma) sunucu tarafında doğrulayın ve veritabanı portlarını dış ağa kapatın.',
+    8: 'AI Red Team tarafından kanıtlanan uç nokta ve parametrelerde girdi doğrulaması, çıktı kodlaması ve sıkı WAF kuralları uygulayın.',
+    9: '4-Aşamalı AI Semantik Kod Denetiminde tespit edilen yetkilendirme (AuthZ), iş mantığı ve güven sınırı ihlallerini kaynak kodda onarın.',
+    10: 'Otonom Sandbox Sızma Testinde üretilen PoC scriptlerini inceleyerek ilgili uç noktalardaki açıkları önerilen yama (fix_pr_body) doğrultusunda kapatın.'
+  };
+
+  const reportItems = [];
+  for (let i = 1; i <= 10; i++) {
+    const it = itemTracker[i];
+    const needsUrl = [1, 2, 3, 5, 6, 7, 8].includes(i);
+    const needsDir = [4, 9].includes(i);
+    const needsLocalServer = [3, 4, 5, 6, 7, 8, 9, 10].includes(i);
+    const needsAiKey = [8, 9, 10].includes(i);
+
+    let statusKey = 'completed_clean';
+    let statusBadge = '✅ Tamamlandı (Sorun Bulunmadı)';
+    let detected = '';
+    let action = '';
+
+    if (!it.selected) {
+      statusKey = 'not_selected';
+      statusBadge = '⚪ Seçilmedi (Kullanıcı Tarafından Atlandı)';
+      detected = 'Bu analiz maddesi tarama başlatılırken seçilmediği için çalıştırılmadı.';
+      action = 'Bu analizi dahil etmek için üstteki listeden "' + it.title + '" kutucuğunu işaretleyip taramayı yeniden başlatın.';
+    } else if (needsLocalServer && STATE.mode !== 'local_api') {
+      statusKey = 'skipped_prereq';
+      statusBadge = '⏭️ Atlandı (Yerel Sunucu Modu Gerekli)';
+      detected = 'Tarayıcı (statik önizleme) modunda CORS ve soket kısıtları nedeniyle bu analiz gerçekleştirilemez.';
+      action = 'Bu testi çalıştırmak için uygulamayı yerel sunucu modunda (python3 server.py veya Docker) başlatın.';
+    } else if (needsUrl && !cleanUrl) {
+      statusKey = 'skipped_prereq';
+      statusBadge = '⏭️ Atlandı (Hedef Alan Adı / URL Girilmedi)';
+      detected = 'Yalnızca yerel proje dizini girildiği için web/ağ tabanlı bu analiz atlandı.';
+      action = 'Web/ağ analizlerini çalıştırmak için üstteki hedef kutusuna bir alan adı veya URL girin.';
+    } else if (needsDir && !rawDir) {
+      statusKey = 'skipped_prereq';
+      statusBadge = '⏭️ Atlandı (Yerel Proje Dizini Girilmedi)';
+      detected = 'Herhangi bir yerel proje dizini (klasör adı/yolu) belirtilmediği için kaynak kod analizi atlandı.';
+      action = 'Kaynak kod analizini çalıştırmak için 📂 Yerel proje dizini kutusuna bir klasör adı veya yolu girin.';
+    } else if (needsAiKey && !aiCredsOk) {
+      statusKey = 'skipped_prereq';
+      statusBadge = '⏭️ Atlandı (API Anahtarı / Service Account Eksik)';
+      detected = it.note || 'Seçili analiz LLM bağlantısı gerektiriyor ancak AI Ayarları panelinde geçerli bir API anahtarı / Service Account tanımlanmamış.';
+      action = 'Üstteki "🤖 AI Ayarları" (veya "⚙️ AI / API Anahtarı Yapılandır") butonuna tıklayarak sağlayıcı ve API anahtarınızı kaydedin.';
+    } else if (it.error) {
+      statusKey = 'failed';
+      statusBadge = '❌ Gerçekleştirilemedi (Hata Oluştu)';
+      detected = 'Test yürütülürken hata oluştu: ' + it.error;
+      action = 'Hedef erişilebilirliğini, dizin yolunu veya LLM API anahtarı/kota durumunu kontrol edip tekrar deneyin.';
+    } else if (it.asyncRunning) {
+      statusKey = 'running_async';
+      statusBadge = '🔄 Başlatıldı (Sandbox Arka Planda Çalışıyor)';
+      detected = it.note || 'Derin otonom sızma testi konteyner sandbox içinde yürütülüyor.';
+      action = '"⚔️ Otonom Sızma Testi (Sandbox)" sekmesinden canlı logları, alt ajanları ve üretilen PoC bulgularını takip edin.';
+    } else if (it.ran) {
+      const fCount = it.findings.length;
+      if (fCount > 0) {
+        statusKey = 'completed_findings';
+        statusBadge = `⚠️ Tamamlandı (${fCount} Bulgu Tespit Edildi)`;
+        const sampleTitles = it.findings.slice(0, 4).map(x => x.title).join('; ');
+        detected = (it.note ? it.note + ' — ' : '') + `Tespit edilen bulgular (${fCount}): ${sampleTitles}${fCount > 4 ? ' …' : ''}`;
+        const uniqueFixes = Array.from(new Set(it.findings.map(x => x.fix).filter(Boolean))).slice(0, 2);
+        action = uniqueFixes.length ? uniqueFixes.join(' | ') : defaultRemediation[i];
+      } else {
+        statusKey = 'completed_clean';
+        statusBadge = '✅ Tamamlandı (Güvenlik Açığı Bulunmadı)';
+        detected = (it.note ? it.note + ' ' : '') + 'Yapılan kontrollerde bu analiz maddesi kapsamında herhangi bir güvenlik açığı tespit edilmedi.';
+        action = 'Mevcut güvenli yapılandırmayı koruyun; periyodik denetimlere devam edin.';
+      }
+    } else {
+      statusKey = 'skipped_prereq';
+      statusBadge = '⏭️ Atlandı';
+      detected = it.note || 'Önkoşullar sağlanmadığı için bu analiz çalıştırılmadı.';
+      action = defaultRemediation[i];
+    }
+
+    reportItems.push({
+      num: i,
+      title: it.title,
+      group: it.group,
+      statusKey,
+      statusBadge,
+      findingCount: it.findings.length,
+      detected,
+      action
+    });
+  }
+
+  STATE.analysisItemsReport = reportItems;
+
+  const listEl = document.getElementById('analysis-items-report-list');
+  const pillEl = document.getElementById('analysis-items-summary-pill');
+  if (pillEl) {
+    const ranCount = reportItems.filter(r => r.statusKey === 'completed_clean' || r.statusKey === 'completed_findings' || r.statusKey === 'running_async').length;
+    const skipCount = reportItems.length - ranCount;
+    pillEl.innerText = `Çalıştırılan: ${ranCount}/10 · Atlanan/Seçilmeyen: ${skipCount}`;
+  }
+  if (!listEl) return;
+
+  const styleMap = {
+    completed_clean: { card: 'border-emerald-200 bg-white', badge: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
+    completed_findings: { card: 'border-amber-300 bg-amber-50/40', badge: 'bg-rose-100 text-rose-900 border-rose-300' },
+    running_async: { card: 'border-sky-300 bg-sky-50/40', badge: 'bg-sky-100 text-sky-900 border-sky-300' },
+    not_selected: { card: 'border-stone-200 bg-stone-50/70', badge: 'bg-stone-200 text-stone-700 border-stone-300' },
+    skipped_prereq: { card: 'border-amber-200 bg-stone-50', badge: 'bg-amber-100 text-amber-900 border-amber-300' },
+    failed: { card: 'border-rose-300 bg-rose-50/50', badge: 'bg-rose-600 text-white border-rose-700' }
+  };
+
+  listEl.innerHTML = reportItems.map(r => {
+    const st = styleMap[r.statusKey] || styleMap.completed_clean;
+    return `
+      <div class="p-3.5 rounded-xl border ${st.card} space-y-1.5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-stone-100 border border-stone-200 text-stone-700">#${r.num} (${escapeHtml(r.group)})</span>
+            <h5 class="text-xs font-bold text-mistral-ink">${escapeHtml(r.title)}</h5>
+          </div>
+          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border ${st.badge}">${escapeHtml(r.statusBadge)}</span>
+        </div>
+        <div class="text-[11px] text-stone-700 leading-relaxed">
+          <strong class="text-mistral-ink">🔍 Tespit Edilen Durum:</strong> ${escapeHtml(r.detected)}
+        </div>
+        <div class="text-[11px] text-emerald-900 bg-emerald-50/70 border border-emerald-200/80 rounded-lg px-2.5 py-1.5 leading-relaxed">
+          <strong>🛠️ Yapılması Gerekenler:</strong> ${escapeHtml(r.action)}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 function buildAndRenderUnifiedCoverageLedger(displayTarget, rawDir, flags) {
   const ledger = [];
   const pushRow = (surface, boundary, moduleName, status, evidence, gap = '') => {
@@ -2737,25 +2927,37 @@ async function startUnifiedScan() {
     }
   }
 
-  const modPassive = document.getElementById('mod-passive')?.checked ?? true;
-  const modDeep = document.getElementById('mod-deep')?.checked ?? true;
-  const modSast = document.getElementById('mod-sast')?.checked ?? true;
-  const modActive = document.getElementById('mod-active')?.checked ?? false;
-  const modAi = document.getElementById('mod-ai')?.checked ?? false;
+  syncLegacyModuleFlags();
+  const chkHeaders = document.getElementById('chk-headers')?.checked ?? true;
+  const chkDns = document.getElementById('chk-dns')?.checked ?? true;
+  const chkDeep = document.getElementById('chk-deep')?.checked ?? true;
+  const chkSast = document.getElementById('chk-sast')?.checked ?? true;
+  const chkActInj = document.getElementById('chk-active-inj')?.checked ?? true;
+  const chkActAcc = document.getElementById('chk-active-access')?.checked ?? true;
+  const chkActCrawl = document.getElementById('chk-active-crawl')?.checked ?? true;
+  const chkAiRed = document.getElementById('chk-ai-redteam')?.checked ?? false;
+  const chkAiSast = document.getElementById('chk-ai-sast')?.checked ?? false;
+  const chkAiPen = document.getElementById('chk-ai-pentest')?.checked ?? false;
 
-  const hasWebScan = Boolean(cleanUrl) && (modPassive || modDeep || modActive || modAi);
-  const hasDirScan = Boolean(rawDir) && (modSast || !cleanUrl);
+  const modPassive = chkHeaders || chkDns;
+  const modDeep = chkDeep;
+  const modSast = chkSast;
+  const modActive = chkActInj || chkActAcc || chkActCrawl;
+  const modAi = chkAiRed || chkAiSast || chkAiPen;
+
+  const hasWebScan = Boolean(cleanUrl) && (modPassive || modDeep || modActive || chkAiRed || chkAiPen);
+  const hasDirScan = Boolean(rawDir) && (modSast || chkAiSast || !cleanUrl);
 
   if (!hasWebScan && !hasDirScan) {
-    showToast('En az bir uygun test modülü seçmelisiniz.', 'warning');
+    showToast('En az bir uygun analiz maddesi seçmelisiniz.', 'warning');
     return;
   }
 
   // Etik onay kontrolü (aktif veya AI web taraması varsa)
-  if (cleanUrl && (modActive || modAi)) {
+  if ((cleanUrl && (modActive || chkAiRed || chkAiPen)) || (rawDir && chkAiPen)) {
     const ethical = document.getElementById('unified-ethical-check');
     if (!ethical || !ethical.checked) {
-      showScanError('Etik Onay Gerekli', 'Aktif güvenlik testi veya AI Red Team analizi için etik sorumluluk beyanını onaylamanız zorunludur.', [
+      showScanError('Etik Onay Gerekli', 'Aktif güvenlik testi veya otonom AI analizi için etik sorumluluk beyanını onaylamanız zorunludur.', [
         'Aşağıdaki sarı kutudaki "Yasal & Etik Kullanım Beyanı" kutucuğunu işaretleyin.',
         'Sistemin sahibi olduğunuzdan veya yazılı test iznine sahip olduğunuzdan emin olun.'
       ]);
@@ -2775,124 +2977,177 @@ async function startUnifiedScan() {
   STATE.unifiedRejected = [];
   STATE.unifiedVerdictFilter = 'all';
 
+  // 10 Analiz Maddesi Durum İzleyici
+  const itemTracker = {
+    1: { num: 1, title: 'HTTP Güvenlik Başlıkları & Bilgi Sızıntısı Analizi', group: 'Standart', selected: chkHeaders, ran: false, findings: [], error: null, note: '' },
+    2: { num: 2, title: 'DNS & E-posta Savunma Kayıtları Denetimi', group: 'Standart', selected: chkDns, ran: false, findings: [], error: null, note: '' },
+    3: { num: 3, title: 'Derin Pasif Keşif, Çerez & TLS/SSL Sertifika Analizi', group: 'Standart', selected: chkDeep, ran: false, findings: [], error: null, note: '' },
+    4: { num: 4, title: 'Statik Kaynak Kod & Tedarik Zinciri CVE Analizi (SAST)', group: 'Standart', selected: chkSast, ran: false, findings: [], error: null, note: '' },
+    5: { num: 5, title: 'Aktif Enjeksiyon & Girdi Manipülasyonu Testleri (SQLi/NoSQLi/SSTI/XSS)', group: 'Standart', selected: chkActInj, ran: false, findings: [], error: null, note: '' },
+    6: { num: 6, title: 'Aktif Oturum, CSRF, SSRF & Erişim Kontrolü Testleri', group: 'Standart', selected: chkActAcc, ran: false, findings: [], error: null, note: '' },
+    7: { num: 7, title: 'Tarayıcı Simülasyonu (Crawler/JS), İş Mantığı & Altyapı Port Taraması', group: 'Standart', selected: chkActCrawl, ran: false, findings: [], error: null, note: '' },
+    8: { num: 8, title: 'AI Red Team Dinamik Saldırı Orkestrasyonu', group: 'AI (API Key / Service Account)', selected: chkAiRed, ran: false, findings: [], error: null, note: '' },
+    9: { num: 9, title: '4-Aşamalı AI Semantik Kaynak Kod & Mimari Denetimi', group: 'AI (API Key / Service Account)', selected: chkAiSast, ran: false, findings: [], error: null, note: '' },
+    10: { num: 10, title: 'Derin Otonom Sızma Testi & Sandbox PoC Doğrulaması', group: 'AI (API Key / Service Account)', selected: chkAiPen, ran: false, findings: [], error: null, note: '', asyncRunning: false }
+  };
+
   try {
     // -------------------------------------------------------------
-    // 1. PASİF BAŞLIK & DNS TARAMASI (Alan adı + alt dizin URL'si)
+    // 1. PASİF BAŞLIK & DNS TARAMASI (Madde 1 & Madde 2)
     // -------------------------------------------------------------
-    if (cleanUrl && modPassive) {
-      updateProgressBar(15, `[1/5] ${displayTarget} için HTTP başlıkları ve DNS kayıtları sorgulanıyor...`);
+    if (cleanUrl && (chkHeaders || chkDns)) {
+      updateProgressBar(15, `[1/6] ${displayTarget} için pasif başlık ve DNS kayıtları sorgulanıyor...`);
       
-      let headerMap = {};
-      try {
-        const hRes = await fetchLocalApiHeaders(cleanUrl);
-        totalRequests++;
-        if (hRes.success) {
-          headerMap = hRes.headers;
-          STATE.results.headersSource = 'local_live';
+      let headerEval = { headers: {}, score: 0, maxScore: 100 };
+      if (chkHeaders) {
+        let headerMap = {};
+        try {
+          const hRes = await fetchLocalApiHeaders(cleanUrl);
+          totalRequests++;
+          if (hRes.success) {
+            headerMap = hRes.headers;
+            STATE.results.headersSource = 'local_live';
+          }
+          headerEval = evaluateHeaders(headerMap);
+          STATE.results.headers = headerEval;
+          renderHeaderResults(headerEval);
+          itemTracker[1].ran = true;
+          Object.entries(headerEval.headers || {}).forEach(([k, item]) => {
+            if (!item.pass) {
+              const fObj = {
+                type: 'HEADER',
+                severity: item.critical ? 'YÜKSEK' : 'ORTA',
+                title: `Eksik veya Zayıf Başlık: ${item.name}`,
+                desc: item.note,
+                fix: item.fix?.nginx || item.fix?.apache || 'Başlığı sunucunuza ekleyin.'
+              };
+              allFindings.push(fObj);
+              itemTracker[1].findings.push(fObj);
+            }
+          });
+          itemTracker[1].note = `6 güvenlik başlığı denetlendi (${headerEval.score || 0}/${headerEval.maxScore || 100} puan).`;
+          anyModuleSucceeded = true;
+        } catch (e) {
+          itemTracker[1].error = 'HTTP başlıkları alınamadı: ' + e.message;
         }
-      } catch (e) {
-        console.warn('Local header proxy hatası:', e);
       }
 
-      const headerEval = evaluateHeaders(headerMap);
-      STATE.results.headers = headerEval;
+      let dnsReport = { domain: cleanDomain, spf: { status: 'missing' }, dmarc: { status: 'missing' }, dnssec: false, caa: { status: 'missing', records: [] }, ipv6: false, mx: [] };
+      if (chkDns) {
+        try {
+          updateProgressBar(25, `[1/6] Cloudflare & Google DoH üzerinden DNSSEC, DMARC, SPF sorgulanıyor...`);
+          dnsReport = await performDnsSecurityAudit(cleanDomain);
+          totalRequests += 5;
+          STATE.results.dns = dnsReport;
+          renderDnsResults(dnsReport);
+          itemTracker[2].ran = true;
+          anyModuleSucceeded = true;
 
-      updateProgressBar(25, `[1/5] Cloudflare & Google DoH üzerinden DNSSEC, DMARC, SPF sorgulanıyor...`);
-      const dnsReport = await performDnsSecurityAudit(cleanDomain);
-      totalRequests += 5;
-      STATE.results.dns = dnsReport;
+          if (dnsReport?.dmarc?.status && dnsReport.dmarc.status !== 'strong') {
+            const fObj = {
+              type: 'DNS',
+              severity: dnsReport.dmarc.status === 'missing' ? 'YÜKSEK' : 'ORTA',
+              title: 'DMARC E-posta Koruması Yetersiz',
+              desc: dnsReport.dmarc.note || 'DMARC kaydı bulunamadı; phishing ve spoofing riski mevcut.',
+              fix: 'TXT kaydı ekleyin: v=DMARC1; p=reject; rua=mailto:dmarc@' + cleanDomain
+            };
+            allFindings.push(fObj);
+            itemTracker[2].findings.push(fObj);
+          }
+          if (dnsReport?.spf?.status && dnsReport.spf.status !== 'strong') {
+            const fObj = {
+              type: 'DNS',
+              severity: 'ORTA',
+              title: 'SPF Kaydı Zayıf veya Eksik',
+              desc: dnsReport.spf.note || 'SPF kaydında katı kural (-all) kullanılmalıdır.',
+              fix: 'TXT kaydı: v=spf1 mx ~all veya -all'
+            };
+            allFindings.push(fObj);
+            itemTracker[2].findings.push(fObj);
+          }
+          itemTracker[2].note = `DMARC: ${dnsReport?.dmarc?.status || 'yok'}, SPF: ${dnsReport?.spf?.status || 'yok'}, DNSSEC: ${dnsReport?.dnssec ? 'Aktif' : 'Pasif'}.`;
+        } catch (e) {
+          itemTracker[2].error = 'DNS sorgusu başarısız: ' + e.message;
+        }
+      }
 
       const finalGrade = calculateFinalGrade(headerEval.score || 0, headerEval.maxScore || 100, dnsReport);
       STATE.score = finalGrade.finalScore ?? 0;
       STATE.grade = finalGrade.letter || 'B';
-      anyModuleSucceeded = true;
-
-      renderHeaderResults(headerEval);
-      renderDnsResults(dnsReport);
-
-      // Başlık bulgularını ekle
-      Object.entries(headerEval.headers || {}).forEach(([k, item]) => {
-        if (!item.pass) {
-          allFindings.push({
-            type: 'HEADER',
-            severity: item.critical ? 'YÜKSEK' : 'ORTA',
-            title: `Eksik veya Zayıf Başlık: ${item.name}`,
-            desc: item.note,
-            fix: item.fix?.nginx || item.fix?.apache || 'Başlığı sunucunuza ekleyin.'
-          });
-        }
-      });
-      if (dnsReport?.dmarc?.status && dnsReport.dmarc.status !== 'strong') {
-        allFindings.push({
-          type: 'DNS',
-          severity: dnsReport.dmarc.status === 'missing' ? 'YÜKSEK' : 'ORTA',
-          title: 'DMARC E-posta Koruması Yetersiz',
-          desc: dnsReport.dmarc.note || 'DMARC kaydı bulunamadı; phishing ve spoofing riski mevcut.',
-          fix: 'TXT kaydı ekleyin: v=DMARC1; p=reject; rua=mailto:dmarc@' + cleanDomain
-        });
-      }
-      if (dnsReport?.spf?.status && dnsReport.spf.status !== 'strong') {
-        allFindings.push({
-          type: 'DNS',
-          severity: 'ORTA',
-          title: 'SPF Kaydı Zayıf veya Eksik',
-          desc: dnsReport.spf.note || 'SPF kaydında katı kural (-all) kullanılmalıdır.',
-          fix: 'TXT kaydı: v=spf1 mx ~all veya -all'
-        });
-      }
     }
 
     // -------------------------------------------------------------
-    // 2. DERİN PASİF KEŞİF (Cookies, TLS, Robots, Tech — alt dizin dahil)
+    // 2. DERİN PASİF KEŞİF (Madde 3: Cookies, TLS, Robots, Tech)
     // -------------------------------------------------------------
-    if (cleanUrl && modDeep && STATE.mode === 'local_api') {
-      updateProgressBar(40, `[2/5] Derin pasif analiz (${displayTarget}): Çerez güvenliği, TLS, robots.txt ve teknoloji parmak izi...`);
+    if (cleanUrl && chkDeep && STATE.mode === 'local_api') {
+      updateProgressBar(40, `[2/6] Derin pasif analiz (${displayTarget}): Çerez güvenliği, TLS, robots.txt ve teknoloji parmak izi...`);
       try {
         const dRes = await fetch('/api/deep-scan?url=' + encodeURIComponent(cleanUrl));
         totalRequests += 4;
         const dData = await dRes.json();
         if (dData.success) {
           anyModuleSucceeded = true;
+          itemTracker[3].ran = true;
           STATE.results.deepScan = dData;
           renderDeepScanResults(dData);
 
           const cookieFindings = dData.cookies?.findings || (Array.isArray(dData.cookies) ? dData.cookies : []);
           cookieFindings.forEach(c => {
             if (c.issues && c.issues.length > 0) {
-              allFindings.push({
+              const fObj = {
                 type: 'COOKIE',
                 severity: 'ORTA',
                 title: `Güvensiz Çerez Yapılandırması: ${c.name}`,
                 desc: `${c.name} çerezinde güvenlik eksikleri: ${c.issues.join(', ')}`,
                 fix: 'Set-Cookie başlığına "Secure; HttpOnly; SameSite=Lax" bayraklarını ekleyin.'
-              });
+              };
+              allFindings.push(fObj);
+              itemTracker[3].findings.push(fObj);
             }
           });
           const robotsFindings = dData.robots?.findings || [];
           if (robotsFindings.length > 0) {
-            allFindings.push({
+            const fObj = {
               type: 'ROBOTS',
               severity: 'DÜŞÜK',
               title: 'robots.txt İçinde Hassas Dizin İfşası',
               desc: robotsFindings.map(r => r.issue).join('; '),
               evidence: robotsFindings.map(r => r.evidence).join(', '),
               fix: 'Hassas yönetim yollarını robots.txt dosyasına yazmak yerine kimlik doğrulama ile koruyun.'
-            });
+            };
+            allFindings.push(fObj);
+            itemTracker[3].findings.push(fObj);
           }
+          const tlsFindings = dData.tls?.findings || [];
+          tlsFindings.forEach(tf => {
+            const fObj = {
+              type: 'TLS',
+              severity: tf.level || 'ORTA',
+              title: `TLS / Sertifika Bulgusu: ${tf.issue}`,
+              desc: tf.evidence || '',
+              fix: 'TLS 1.2/1.3 kullanın ve sertifikayı süresi dolmadan yenileyin.'
+            };
+            allFindings.push(fObj);
+            itemTracker[3].findings.push(fObj);
+          });
+          itemTracker[3].note = `TLS: ${dData.tls?.protocol || '-'}, Çerez: ${dData.cookies?.count || 0}, Teknolojiler: ${(dData.tech_fingerprint?.technologies || []).length}.`;
+        } else {
+          itemTracker[3].error = dData.error || 'Derin pasif tarama yanıt döndürmedi.';
         }
       } catch (e) {
+        itemTracker[3].error = 'Derin pasif tarama hatası: ' + e.message;
         console.warn('Derin tarama hatası:', e);
       }
     }
 
     // -------------------------------------------------------------
-    // 2B. YEREL DİZİN / KAYNAK KOD ANALİZİ (SAST + OSV CVE)
+    // 2B. YEREL DİZİN / KAYNAK KOD ANALİZİ (Madde 4: SAST + OSV CVE)
     // -------------------------------------------------------------
-    if (hasDirScan && STATE.mode === 'local_api') {
+    if (rawDir && chkSast && STATE.mode === 'local_api') {
       const sastProfile = document.getElementById('sast-profile')?.value || 'standard';
       const sastScope = document.getElementById('sast-scope-mode')?.value || 'full';
       const sastDiffBase = (document.getElementById('sast-diff-base')?.value || 'HEAD').trim();
-      updateProgressBar(55, `[3/5] Yerel dizin kaynak kod taraması (SAST + 8 Ekosistem OSV CVE, profil: ${sastProfile}, kapsam: ${sastScope}): ${rawDir}...`);
+      updateProgressBar(55, `[3/6] Yerel dizin kaynak kod taraması (SAST + 8 Ekosistem OSV CVE, profil: ${sastProfile}, kapsam: ${sastScope}): ${rawDir}...`);
       try {
         const sUrl = `/api/sast?path=${encodeURIComponent(rawDir)}&profile=${encodeURIComponent(sastProfile)}&scope_mode=${encodeURIComponent(sastScope)}&diff_base=${encodeURIComponent(sastDiffBase)}`;
         const sRes = await fetch(sUrl, { signal: AbortSignal.timeout(120000) });
@@ -2903,23 +3158,25 @@ async function startUnifiedScan() {
             ? ['Sunucuda taranabilir mevcut proje dizinleri: ' + sData.available_dirs.join(', ')]
             : [];
           const errMsg = sData.error || ('Dizin bulunamadı veya okunamadı: ' + rawDir);
+          itemTracker[4].error = errMsg;
           showToast('SAST dizin hatası: ' + errMsg, 'error');
           showScanError(
             'Yerel Dizin Bulunamadı (SAST Hatası)',
             `"${rawDir}" dizini sunucuda bulunamadı veya erişilemedi (${errMsg}).`,
             [
-              'Sunucu üzerindeki tam yolu (örn: /www/wwwroot/sarjharitasi.tr) veya klasör adını (örn: /sarjharitasi.tr) kontrol edin.',
+              'Sunucu üzerindeki tam yolu (örn: /www/wwwroot/sarjharitasi.tr) veya klasör adını (örn: sarjharitasi) kontrol edin.',
               ...avail,
               'Eğer bir web sitesini URL üzerinden taramak istiyorsanız üstteki kutuya alan adını (örn: sarjharitasi.tr) başında "/" olmadan yazın.'
             ]
           );
-          if (!cleanUrl) {
+          if (!cleanUrl && !chkAiSast) {
             document.getElementById('scan-progress-container')?.classList.add('hidden');
             document.getElementById('scan-results-dashboard')?.classList.add('hidden');
             return;
           }
         } else {
           anyModuleSucceeded = true;
+          itemTracker[4].ran = true;
           if (sData.resolved_path && dirInput) {
             dirInput.value = sData.resolved_path;
           }
@@ -2929,48 +3186,56 @@ async function startUnifiedScan() {
           renderSastDeps(sData.dependencies);
 
           (sData.findings || []).forEach(f => {
-            allFindings.push({
+            const fObj = {
               type: 'SAST',
               severity: f.severity || 'ORTA',
               title: `[${f.rule_id}] ${f.title} (${f.file}:${f.line})`,
               desc: f.description || '',
               evidence: f.match || '',
               fix: f.fix || 'Kaynak koddaki güvensiz çağrıyı parametrik/güvenli alternatifle değiştirin.'
-            });
+            };
+            allFindings.push(fObj);
+            itemTracker[4].findings.push(fObj);
           });
           const vulnDeps = sData.dependencies?.vulnerable || [];
           vulnDeps.forEach(v => {
-            allFindings.push({
+            const fObj = {
               type: 'CVE',
               severity: 'YÜKSEK',
               title: `Bağımlılık Zafiyeti: ${v.name}@${v.version} (${v.vuln_count} CVE)`,
               desc: (v.vulns || []).map(x => `${x.id}: ${x.summary}`).join(' | '),
               fix: `${v.name} paketini güvenli sürüme yükseltin.`
-            });
+            };
+            allFindings.push(fObj);
+            itemTracker[4].findings.push(fObj);
           });
+          itemTracker[4].note = `${sData.stats?.files_scanned || 0} dosya (${sData.stats?.total_lines || 0} satır) 98 kuralla tarandı; ${vulnDeps.length} CVE'li paket tespit edildi.`;
 
-          // Sadece yerel dizin tarandıysa skor hesapla ve SAST sekmesini öne çıkar
           if (!cleanUrl) {
             const s = sData.summary || {};
             const penalty = (s['KRİTİK'] || 0) * 18 + (s['YÜKSEK'] || 0) * 10 + (s['ORTA'] || 0) * 4 + (s['DÜŞÜK'] || 0) * 1;
             STATE.score = Math.max(0, 100 - penalty);
             STATE.grade = STATE.score >= 90 ? 'A' : STATE.score >= 75 ? 'B' : STATE.score >= 60 ? 'C' : STATE.score >= 40 ? 'D' : 'F';
-            switchDetailTab('tab-sast');
           }
         }
       } catch (e) {
+        itemTracker[4].error = e.message;
         console.error('SAST tarama hatası:', e);
         showToast('Yerel dizin taraması başarısız: ' + e.message, 'error');
       }
     }
 
     // -------------------------------------------------------------
-    // 3. AKTİF ZAFİYET TARAMASI (Alt dizin URL'si dahil)
+    // 3. AKTİF ZAFİYET TARAMASI (Madde 5, 6, 7)
     // -------------------------------------------------------------
     if (cleanUrl && modActive && STATE.mode === 'local_api') {
-      updateProgressBar(75, `[4/5] Aktif güvenlik testleri (${displayTarget}): SQLi, XSS, CSRF, SSRF & Portlar taranıyor...`);
+      const selectedActiveMods = [];
+      if (chkActInj) selectedActiveMods.push('sqli', 'nosqli', 'ssti', 'xss');
+      if (chkActAcc) selectedActiveMods.push('csrf', 'ssrf', 'open_redirect', 'idor', 'deep_headers');
+      if (chkActCrawl) selectedActiveMods.push('browser', 'logic', 'ports');
+
+      updateProgressBar(72, `[4/6] Aktif güvenlik testleri (${displayTarget}): ${selectedActiveMods.join(', ')} taranıyor...`);
       try {
-        // Etik onayı sunucuya kaydet
         const confirmRes = await fetch('/api/active-confirm', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2981,18 +3246,22 @@ async function startUnifiedScan() {
           throw new Error(confirmData.error || 'Etik onay sunucu tarafından reddedildi.');
         }
 
-        const activeUrl = '/api/active-scan?url=' + encodeURIComponent(cleanUrl);
+        const activeUrl = '/api/active-scan?url=' + encodeURIComponent(cleanUrl) + '&modules=' + encodeURIComponent(selectedActiveMods.join(','));
         const aRes = await fetch(activeUrl);
         const aData = await aRes.json();
         
         if (aData.success && aData.findings) {
           anyModuleSucceeded = true;
+          if (chkActInj) itemTracker[5].ran = true;
+          if (chkActAcc) itemTracker[6].ran = true;
+          if (chkActCrawl) itemTracker[7].ran = true;
+
           STATE.results.activeScan = aData;
           totalRequests += (aData.requests_sent || 15);
           renderActiveResults(aData);
 
           aData.findings.forEach(f => {
-            allFindings.push({
+            const fObj = {
               type: 'ACTIVE',
               severity: f.severity || 'YÜKSEK',
               verdict: f.verdict || (f.severity === 'BİLGİ' || f.severity === 'DÜŞÜK' ? 'hardening_note' : 'confirmed'),
@@ -3003,66 +3272,165 @@ async function startUnifiedScan() {
               desc: f.desc || f.detail || f.description || '',
               evidence: f.evidence || '',
               fix: f.remediation || f.fix || 'Girdi doğrulama ve çıktı sanitizasyonu uygulayın.'
-            });
+            };
+            allFindings.push(fObj);
+            const tName = (f.test || '').toLowerCase();
+            if (tName.includes('sql') || tName.includes('ssti') || tName.includes('xss')) {
+              if (fObj.verdict !== 'hardening_note') itemTracker[5].findings.push(fObj);
+            } else if (tName.includes('csrf') || tName.includes('ssrf') || tName.includes('redirect') || tName.includes('idor') || tName.includes('başlık')) {
+              if (fObj.verdict !== 'hardening_note') itemTracker[6].findings.push(fObj);
+            } else {
+              if (fObj.verdict !== 'hardening_note') itemTracker[7].findings.push(fObj);
+            }
           });
+          if (chkActInj) itemTracker[5].note = 'SQLi, NoSQLi, SSTI ve Reflected/DOM XSS probları tamamlandı.';
+          if (chkActAcc) itemTracker[6].note = 'CSRF, SSRF, Open Redirect, IDOR ve derin CSP/CORS kontrolleri tamamlandı.';
+          if (chkActCrawl) itemTracker[7].note = `Tarayıcı simülasyonu (${(aData.site_map || []).length} sayfa), iş mantığı ve 24 TCP port taraması tamamlandı.`;
         } else if (!aData.success) {
-          console.warn('Aktif tarama uyarısı:', aData.error || aData.message);
+          const errStr = aData.error || aData.message || 'Aktif tarama başarısız';
+          if (chkActInj) itemTracker[5].error = errStr;
+          if (chkActAcc) itemTracker[6].error = errStr;
+          if (chkActCrawl) itemTracker[7].error = errStr;
         }
       } catch (e) {
+        if (chkActInj) itemTracker[5].error = e.message;
+        if (chkActAcc) itemTracker[6].error = e.message;
+        if (chkActCrawl) itemTracker[7].error = e.message;
         console.error('Aktif tarama hatası:', e);
         showToast('Aktif test uyarısı: ' + e.message, 'warning');
       }
     }
 
     // -------------------------------------------------------------
-    // 4. AI RED TEAM ORKESTRASYONU
+    // 4. AI RED TEAM & AI SAST & OTONOM SANDBOX PENTEST (Madde 8, 9, 10)
     // -------------------------------------------------------------
-    if (cleanUrl && modAi && STATE.mode === 'local_api') {
-      updateProgressBar(90, `[5/5] AI Red Team ajanları (Scout, Strategist, Analyst) çalıştırılıyor...`);
-      try {
-        const aiRes = await startAIOrchestrationScan(cleanUrl, ['sqli', 'xss', 'csrf', 'ssrf']);
-        if (aiRes) {
-          anyModuleSucceeded = true;
-          STATE.results.aiScan = aiRes;
-        }
-        if (aiRes && aiRes.findings) {
-          totalRequests += aiRes.requests_sent || 0;
-          aiRes.findings.forEach(f => {
-            allFindings.push({
-              type: 'AI_REDTEAM',
-              severity: f.severity || 'YÜKSEK',
-              verdict: 'confirmed',
-              trust_boundary: 'ai_probe -> verified_http_reflection_or_error',
-              title: '🤖 AI Doğruladı: ' + (f.title || 'Kanıtlanmış Zafiyet'),
-              desc: (f.verdict_detail && f.verdict_detail.reasoning) || f.description || 'Analyst kanıtı HTTP yanıtında doğruladı.',
-              evidence: f.evidence || '',
-              fix: f.fix || 'Girdi doğrulama + çıktı kodlama + parametreli sorgu uygulayın.'
+    const aiCredsOk = isAICredentialsConfigured();
+
+    // Madde 8: AI Red Team Dinamik Saldırı Orkestrasyonu
+    if (chkAiRed && cleanUrl && STATE.mode === 'local_api') {
+      if (!aiCredsOk) {
+        itemTracker[8].note = 'LLM API anahtarı / Service Account yapılandırılmadığı için atlandı.';
+      } else {
+        updateProgressBar(85, `[5/6] Madde 8: AI Red Team ajanları (Scout, Strategist, Analyst, Reporter) çalıştırılıyor...`);
+        try {
+          const aiRes = await startAIOrchestrationScan(cleanUrl, ['sqli', 'xss', 'csrf', 'ssrf']);
+          if (aiRes && aiRes.success) {
+            anyModuleSucceeded = true;
+            itemTracker[8].ran = true;
+            STATE.results.aiScan = aiRes;
+            totalRequests += aiRes.requests_sent || 0;
+            (aiRes.findings || []).forEach(f => {
+              const fObj = {
+                type: 'AI_REDTEAM',
+                severity: f.severity || 'YÜKSEK',
+                verdict: 'confirmed',
+                trust_boundary: 'ai_probe -> verified_http_reflection_or_error',
+                title: '🤖 AI Doğruladı: ' + (f.title || 'Kanıtlanmış Zafiyet'),
+                desc: (f.verdict_detail && f.verdict_detail.reasoning) || f.description || 'Analyst kanıtı HTTP yanıtında doğruladı.',
+                evidence: f.evidence || '',
+                fix: f.fix || 'Girdi doğrulama + çıktı kodlama + parametreli sorgu uygulayın.'
+              };
+              allFindings.push(fObj);
+              itemTracker[8].findings.push(fObj);
             });
-          });
-          // Elenen (NOT_VULNERABLE / INCONCLUSIVE) AI hipotezlerini Cloudflare Rejected/Disproved izine kaydet
-          const execTests = aiRes.ai_report?.executed_tests || [];
-          execTests.filter(t => t.verdict !== 'VULNERABLE').forEach((t, rIdx) => {
-            STATE.unifiedRejected.push({
-              candidate_id: 'REJ-AI-' + String(rIdx + 1).padStart(2, '0'),
-              type: 'AI_PROBE',
-              verdict: 'rejected',
-              severity: 'BİLGİ',
-              trust_boundary: 'ai_hypothesis -> disproved_by_http_response',
-              title: `Elenen Hipotez (${t.verdict}): ${t.param} parametresi`,
-              desc: `Hedef: ${t.url} — Analyst yanıt kanıtını inceledi ve sınır ihlali oluşmadığını doğruladı.`,
-              evidence: `Payload: ${t.payload} → Verdict: ${t.verdict}`
+            const execTests = aiRes.ai_report?.executed_tests || [];
+            execTests.filter(t => t.verdict !== 'VULNERABLE').forEach((t, rIdx) => {
+              STATE.unifiedRejected.push({
+                candidate_id: 'REJ-AI-' + String(rIdx + 1).padStart(2, '0'),
+                type: 'AI_PROBE',
+                verdict: 'rejected',
+                severity: 'BİLGİ',
+                trust_boundary: 'ai_hypothesis -> disproved_by_http_response',
+                title: `Elenen Hipotez (${t.verdict}): ${t.param} parametresi`,
+                desc: `Hedef: ${t.url} — Analyst yanıt kanıtını inceledi ve sınır ihlali oluşmadığını doğruladı.`,
+                evidence: `Payload: ${t.payload} → Verdict: ${t.verdict}`
+              });
             });
-          });
+            itemTracker[8].note = `${aiRes.ai_report?.loops || 0} turda ${aiRes.ai_report?.tests_executed || 0} canlı prob yürütüldü; ${(aiRes.findings || []).length} bulgu doğrulandı.`;
+          } else {
+            itemTracker[8].error = 'AI Red Team orkestrasyonu yanıt üretemedi (API anahtarınızı kontrol edin).';
+          }
+        } catch (e) {
+          itemTracker[8].error = e.message;
         }
-      } catch (e) {
-        console.error('AI tarama hatası:', e);
+      }
+    }
+
+    // Madde 9: 4-Aşamalı AI Semantik Kaynak Kod Denetimi
+    if (chkAiSast && rawDir && STATE.mode === 'local_api') {
+      if (!aiCredsOk) {
+        itemTracker[9].note = 'LLM API anahtarı / Service Account yapılandırılmadığı için atlandı.';
+      } else {
+        updateProgressBar(92, `[5/6] Madde 9: 4-Aşamalı AI Kaynak Kod Denetimi (Recon → Hunt → Verify → Report) çalıştırılıyor...`);
+        try {
+          const sastProfile = document.getElementById('sast-profile')?.value || 'standard';
+          const sastScope = document.getElementById('sast-scope-mode')?.value || 'full';
+          const sastDiffBase = (document.getElementById('sast-diff-base')?.value || 'HEAD').trim();
+          const aiSastRes = await fetch('/api/sast-ai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              path: STATE.results.sast?.resolved_path || rawDir,
+              profile: sastProfile,
+              scope_mode: sastScope,
+              diff_base: sastDiffBase,
+              ai_config: strixAIConfig()
+            }),
+            signal: AbortSignal.timeout(600000)
+          });
+          const aiSastData = await aiSastRes.json();
+          if (aiSastData.success) {
+            anyModuleSucceeded = true;
+            itemTracker[9].ran = true;
+            (aiSastData.ai_confirmed || []).forEach(c => {
+              const fObj = {
+                type: 'AI_SAST',
+                severity: c.severity || 'YÜKSEK',
+                verdict: 'confirmed',
+                trust_boundary: 'source_entry -> semantic_sink',
+                title: `🤖 AI Kod Denetimi: ${c.title || 'Semantik Bulgu'} (${c.file || ''}:${c.line || ''})`,
+                desc: c.rationale || '',
+                evidence: c.evidence || '',
+                fix: c.fix || 'Yetki ve girdi doğrulama sınırını güçlendirin.'
+              };
+              allFindings.push(fObj);
+              itemTracker[9].findings.push(fObj);
+            });
+            itemTracker[9].note = `4 aşama (Recon/Hunt/Verify/Report) tamamlandı; ${(aiSastData.ai_confirmed || []).length} semantik bulgu doğrulandı.`;
+          } else {
+            itemTracker[9].error = aiSastData.error || '4-Aşamalı AI SAST tamamlanamadı.';
+          }
+        } catch (e) {
+          itemTracker[9].error = e.message;
+        }
+      }
+    }
+
+    // Madde 10: Derin Otonom Sızma Testi & Konteyner Sandbox PoC Doğrulaması
+    if (chkAiPen && (cleanUrl || rawDir) && STATE.mode === 'local_api') {
+      if (!aiCredsOk) {
+        itemTracker[10].note = 'LLM API anahtarı / Service Account yapılandırılmadığı için atlandı.';
+      } else {
+        updateProgressBar(96, `[6/6] Madde 10: Derin Otonom Sızma Testi (Sandbox PoC) başlatılıyor...`);
+        try {
+          await startStrixScan();
+          if (STRIX_ACTIVE_ID) {
+            anyModuleSucceeded = true;
+            itemTracker[10].ran = true;
+            itemTracker[10].asyncRunning = true;
+            itemTracker[10].note = `Otonom sandbox sızma testi arka planda başlatıldı (ID: ${STRIX_ACTIVE_ID}). Canlı ilerleme ve PoC bulguları "⚔️ Otonom Sızma Testi (Sandbox)" sekmesinden takip edilebilir.`;
+          } else {
+            itemTracker[10].error = 'Otonom sandbox sızma testi başlatılamadı.';
+          }
+        } catch (e) {
+          itemTracker[10].error = e.message;
+        }
       }
     }
 
     // -------------------------------------------------------------
     // SONUÇLARI GÜNCELLE VE DASHBOARD'U DOLDUR
     // -------------------------------------------------------------
-    // Hiçbir modül başarıyla tamamlanmadıysa sahte skor / boş başarı ekranı gösterme!
     if (!anyModuleSucceeded) {
       document.getElementById('scan-progress-container')?.classList.add('hidden');
       document.getElementById('scan-results-dashboard')?.classList.add('hidden');
@@ -3076,6 +3444,7 @@ async function startUnifiedScan() {
     const elapsedSec = ((performance.now() - startTime) / 1000).toFixed(1);
     const resolvedDirLabel = STATE.results.sast?.resolved_path || rawDir;
     const summaryLabel = (displayTarget && rawDir) ? `${displayTarget} + ${resolvedDirLabel}` : (displayTarget || resolvedDirLabel);
+    buildAndRenderAnalysisItemsReport(itemTracker, { cleanUrl, rawDir: resolvedDirLabel, aiCredsOk });
     buildAndRenderUnifiedCoverageLedger(displayTarget, resolvedDirLabel, { modPassive, modDeep, modSast, modActive, modAi });
     renderUnifiedDashboard(summaryLabel, allFindings, totalRequests, elapsedSec);
 
