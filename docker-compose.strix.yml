@@ -17,6 +17,7 @@ services:
     user: root
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /www/wwwroot:/www/wwwroot:ro
       - strix_scans:/app/strix_scans
     environment:
       - HOST=0.0.0.0

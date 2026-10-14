@@ -2236,13 +2236,16 @@ function renderUnifiedDashboard(domain, findings, reqCount, elapsedSec) {
   if (dashRequests) dashRequests.innerText = reqCount;
   if (dashTime) dashTime.innerText = `Süre: ${elapsedSec}s`;
 
-  // Skor
-  const score = STATE.score || 85;
-  const grade = STATE.grade || 'B';
-  if (dashScorePoints) dashScorePoints.innerText = `${score} / 100 Puan`;
+  // Skor (Yalnızca en az bir modül gerçek skor ürettiyse göster; sahte 85 puan üretme!)
+  const hasValidScore = typeof STATE.score === 'number' && !isNaN(STATE.score);
+  const score = hasValidScore ? STATE.score : null;
+  const grade = (hasValidScore && STATE.grade && STATE.grade !== '?') ? STATE.grade : '—';
+  if (dashScorePoints) dashScorePoints.innerText = hasValidScore ? `${score} / 100 Puan` : 'Hesaplanmadı';
   if (dashScoreBadge) {
     dashScoreBadge.innerText = grade;
-    if (grade.startsWith('A')) {
+    if (!hasValidScore) {
+      dashScoreBadge.className = 'w-14 h-14 rounded-2xl bg-stone-100 text-stone-500 flex items-center justify-center text-2xl font-black font-editorial border border-stone-300';
+    } else if (grade.startsWith('A')) {
       dashScoreBadge.className = 'w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-2xl font-black font-editorial border border-emerald-300';
     } else if (grade.startsWith('B')) {
       dashScoreBadge.className = 'w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-2xl font-black font-editorial border border-amber-300';
@@ -2382,6 +2385,8 @@ async function startUnifiedScan() {
   STATE.currentDomain = displayTarget || rawDir;
   STATE.targetUrl = cleanUrl;
   STATE.targetDir = rawDir;
+  STATE.score = null;
+  STATE.grade = '—';
 
   // Eğer hem URL hem yerel dizin girildiyse Strix ek hedeflerine otomatik bağla (beyaz-kutu)
   if (rawDir) {
@@ -2417,17 +2422,15 @@ async function startUnifiedScan() {
     }
   }
 
-  // UI durumunu güncelle
+  // UI durumunu güncelle (Dashboard yalnızca başarılı tarama varsa açılır)
   if (btn) btn.disabled = true;
   if (spinner) spinner.classList.remove('hidden');
   if (btnText) btnText.innerText = 'Taranıyor...';
 
-  document.getElementById('scan-empty-state')?.classList.add('hidden');
-  document.getElementById('scan-results-dashboard')?.classList.remove('hidden');
-
   const startTime = performance.now();
   let totalRequests = 0;
   let allFindings = [];
+  let anyModuleSucceeded = false;
 
   try {
     // -------------------------------------------------------------
@@ -2457,8 +2460,9 @@ async function startUnifiedScan() {
       STATE.results.dns = dnsReport;
 
       const finalGrade = calculateFinalGrade(headerEval.score || 0, headerEval.maxScore || 100, dnsReport);
-      STATE.score = finalGrade.finalScore || 0;
+      STATE.score = finalGrade.finalScore ?? 0;
       STATE.grade = finalGrade.letter || 'B';
+      anyModuleSucceeded = true;
 
       renderHeaderResults(headerEval);
       renderDnsResults(dnsReport);
@@ -2505,6 +2509,7 @@ async function startUnifiedScan() {
         totalRequests += 4;
         const dData = await dRes.json();
         if (dData.success) {
+          anyModuleSucceeded = true;
           STATE.results.deepScan = dData;
           renderDeepScanResults(dData);
 
@@ -2547,8 +2552,27 @@ async function startUnifiedScan() {
         totalRequests++;
         const sData = await sRes.json();
         if (!sData.success) {
-          showToast('SAST dizin hatası: ' + (sData.error || 'Dizin taranamadı'), 'error');
+          const avail = Array.isArray(sData.available_dirs) && sData.available_dirs.length
+            ? ['Sunucuda taranabilir mevcut proje dizinleri: ' + sData.available_dirs.join(', ')]
+            : [];
+          const errMsg = sData.error || ('Dizin bulunamadı veya okunamadı: ' + rawDir);
+          showToast('SAST dizin hatası: ' + errMsg, 'error');
+          showScanError(
+            'Yerel Dizin Bulunamadı (SAST Hatası)',
+            `"${rawDir}" dizini sunucuda bulunamadı veya erişilemedi (${errMsg}).`,
+            [
+              'Sunucu üzerindeki tam yolu (örn: /www/wwwroot/sarjharitasi.tr) veya klasör adını (örn: /sarjharitasi.tr) kontrol edin.',
+              ...avail,
+              'Eğer bir web sitesini URL üzerinden taramak istiyorsanız üstteki kutuya alan adını (örn: sarjharitasi.tr) başında "/" olmadan yazın.'
+            ]
+          );
+          if (!cleanUrl) {
+            document.getElementById('scan-progress-container')?.classList.add('hidden');
+            document.getElementById('scan-results-dashboard')?.classList.add('hidden');
+            return;
+          }
         } else {
+          anyModuleSucceeded = true;
           STATE.results.sast = sData;
           renderSastStats(sData);
           renderSastFindings();
@@ -2612,6 +2636,7 @@ async function startUnifiedScan() {
         const aData = await aRes.json();
         
         if (aData.success && aData.findings) {
+          anyModuleSucceeded = true;
           STATE.results.activeScan = aData;
           totalRequests += (aData.requests_sent || 15);
           renderActiveResults(aData);
@@ -2642,7 +2667,10 @@ async function startUnifiedScan() {
       updateProgressBar(90, `[5/5] AI Red Team ajanları (Scout, Strategist, Analyst) çalıştırılıyor...`);
       try {
         const aiRes = await startAIOrchestrationScan(cleanUrl, ['sqli', 'xss', 'csrf', 'ssrf']);
-        if (aiRes) STATE.results.aiScan = aiRes;
+        if (aiRes) {
+          anyModuleSucceeded = true;
+          STATE.results.aiScan = aiRes;
+        }
         if (aiRes && aiRes.findings) {
           totalRequests += aiRes.requests_sent || 0;
           aiRes.findings.forEach(f => {
@@ -2664,10 +2692,20 @@ async function startUnifiedScan() {
     // -------------------------------------------------------------
     // SONUÇLARI GÜNCELLE VE DASHBOARD'U DOLDUR
     // -------------------------------------------------------------
+    // Hiçbir modül başarıyla tamamlanmadıysa sahte skor / boş başarı ekranı gösterme!
+    if (!anyModuleSucceeded) {
+      document.getElementById('scan-progress-container')?.classList.add('hidden');
+      document.getElementById('scan-results-dashboard')?.classList.add('hidden');
+      return;
+    }
+
+    document.getElementById('scan-empty-state')?.classList.add('hidden');
+    document.getElementById('scan-results-dashboard')?.classList.remove('hidden');
     completeProgressBar();
 
     const elapsedSec = ((performance.now() - startTime) / 1000).toFixed(1);
-    const summaryLabel = (displayTarget && rawDir) ? `${displayTarget} + ${rawDir}` : (displayTarget || rawDir);
+    const resolvedDirLabel = STATE.results.sast?.resolved_path || rawDir;
+    const summaryLabel = (displayTarget && rawDir) ? `${displayTarget} + ${resolvedDirLabel}` : (displayTarget || resolvedDirLabel);
     renderUnifiedDashboard(summaryLabel, allFindings, totalRequests, elapsedSec);
 
     showToast(`Tarama tamamlandı! Toplam ${allFindings.length} bulgu listelendi.`, 'success');

@@ -407,11 +407,37 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.send_json({"success": False, "error": "path parametresi gereklidir (?path=/proje/dizini)"}, status=400)
             return
 
-        # Yol normalizasyonu (~/ genişletmesi)
-        raw_path = os.path.expanduser(raw_path)
+        # Yol normalizasyonu (~/ genişletmesi) ve akıllı proje kökü çözümleme
+        expanded = os.path.expanduser(raw_path)
+        resolved_path = None
+        if os.path.isdir(expanded):
+            resolved_path = os.path.abspath(expanded)
+        else:
+            stripped = raw_path.strip("/").strip()
+            search_roots = ["/www/wwwroot", "/opt", "/root", os.getcwd(), os.path.expanduser("~")]
+            if stripped:
+                for root in search_roots:
+                    cand = os.path.join(root, stripped)
+                    if os.path.isdir(cand):
+                        resolved_path = os.path.abspath(cand)
+                        break
 
-        if not os.path.isdir(raw_path):
-            self.send_json({"success": False, "error": f"Dizin bulunamadı: {raw_path}"}, status=404)
+        if not resolved_path:
+            available = []
+            for root in ("/www/wwwroot", "/opt"):
+                if os.path.isdir(root):
+                    try:
+                        for name in sorted(os.listdir(root))[:15]:
+                            full = os.path.join(root, name)
+                            if os.path.isdir(full) and not name.startswith("."):
+                                available.append(full)
+                    except OSError:
+                        pass
+            self.send_json({
+                "success": False,
+                "error": f"Dizin bulunamadı: {raw_path}",
+                "available_dirs": available
+            }, status=404)
             return
 
         try:
@@ -419,13 +445,14 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             from sast_engine import sast_scan_directory, check_dependencies_osv
 
             # 2.1-2.6, 2.8: Kaynak kod taraması
-            scan_result = sast_scan_directory(raw_path)
+            scan_result = sast_scan_directory(resolved_path)
+            scan_result["resolved_path"] = resolved_path
 
             # 2.7: Bağımlılık CVE kontrolü (OSV) — ayrı çalışır, hatada taramayı bloklamaz
             deps_result = None
             if (qs.get("deps") or ["1"])[0] in ("1", "true", "yes"):
                 try:
-                    deps_result = check_dependencies_osv(raw_path)
+                    deps_result = check_dependencies_osv(resolved_path)
                 except Exception as e:
                     deps_result = {"analyzed": False, "error": str(e)[:200]}
 
