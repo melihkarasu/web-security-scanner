@@ -13,16 +13,20 @@ from abc import ABC, abstractmethod
 LLM_TIMEOUT = 180
 
 
-def _urlopen_with_retry(req, timeout=LLM_TIMEOUT, retries=1):
+def _urlopen_with_retry(req, timeout=LLM_TIMEOUT, retries=3):
     last_err = None
-    for _ in range(retries + 1):
+    for attempt in range(retries + 1):
         try:
             return urllib.request.urlopen(req, timeout=timeout)
-        except urllib.error.HTTPError:
-            raise  # sağlayıcı hata kodu döndü: tekrar denemenin anlamı yok
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 502, 503, 504) and attempt < retries:
+                time.sleep(3 * (attempt + 1))
+                last_err = e
+                continue
+            raise
         except (urllib.error.URLError, socket.timeout, TimeoutError) as e:
             last_err = e
-            time.sleep(2)
+            time.sleep(2 * (attempt + 1))
     raise last_err
 
 # =============================================================
