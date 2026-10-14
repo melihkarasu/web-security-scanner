@@ -80,6 +80,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_strix_update()
             return
 
+        # Faz 2B: ersinkoc/security-check 4-Aşamalı AI Kaynak Kod Denetimi (POST /api/sast-ai)
+        if parsed.path == "/api/sast-ai":
+            self.handle_api_sast_ai()
+            return
+
         self.send_json({"success": False, "error": "Bilinmeyen POST ucu"}, status=404)
 
     def do_GET(self):
@@ -399,40 +404,42 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
     # FAZ 2: SAST — Kaynak Kod Analizi Uç Noktası (/api/sast)
     # Dizin taraması (42 kural) + bağımlılık CVE kontrolü (OSV)
     # =============================================================
+    def _resolve_sast_path(self, raw_path):
+        expanded = os.path.expanduser(raw_path)
+        if os.path.isdir(expanded):
+            return os.path.abspath(expanded), []
+        stripped = raw_path.strip("/").strip()
+        search_roots = ["/www/wwwroot", "/opt", "/root", os.getcwd(), os.path.expanduser("~")]
+        if stripped:
+            for root in search_roots:
+                cand = os.path.join(root, stripped)
+                if os.path.isdir(cand):
+                    return os.path.abspath(cand), []
+        available = []
+        for root in ("/www/wwwroot", "/opt"):
+            if os.path.isdir(root):
+                try:
+                    for name in sorted(os.listdir(root))[:15]:
+                        full = os.path.join(root, name)
+                        if os.path.isdir(full) and not name.startswith("."):
+                            available.append(full)
+                except OSError:
+                    pass
+        return None, available
+
     def handle_api_sast(self, parsed_path):
         qs = urllib.parse.parse_qs(parsed_path.query)
         raw_path = (qs.get("path") or [""])[0].strip()
+        profile = (qs.get("profile") or ["standard"])[0].strip()
+        scope_mode = (qs.get("scope_mode") or ["full"])[0].strip()
+        diff_base = (qs.get("diff_base") or ["HEAD"])[0].strip()
 
         if not raw_path:
             self.send_json({"success": False, "error": "path parametresi gereklidir (?path=/proje/dizini)"}, status=400)
             return
 
-        # Yol normalizasyonu (~/ genişletmesi) ve akıllı proje kökü çözümleme
-        expanded = os.path.expanduser(raw_path)
-        resolved_path = None
-        if os.path.isdir(expanded):
-            resolved_path = os.path.abspath(expanded)
-        else:
-            stripped = raw_path.strip("/").strip()
-            search_roots = ["/www/wwwroot", "/opt", "/root", os.getcwd(), os.path.expanduser("~")]
-            if stripped:
-                for root in search_roots:
-                    cand = os.path.join(root, stripped)
-                    if os.path.isdir(cand):
-                        resolved_path = os.path.abspath(cand)
-                        break
-
+        resolved_path, available = self._resolve_sast_path(raw_path)
         if not resolved_path:
-            available = []
-            for root in ("/www/wwwroot", "/opt"):
-                if os.path.isdir(root):
-                    try:
-                        for name in sorted(os.listdir(root))[:15]:
-                            full = os.path.join(root, name)
-                            if os.path.isdir(full) and not name.startswith("."):
-                                available.append(full)
-                    except OSError:
-                        pass
             self.send_json({
                 "success": False,
                 "error": f"Dizin bulunamadı: {raw_path}",
@@ -441,14 +448,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             return
 
         try:
-            # SAST motoru ayrı modülden import edilir (gecikmeli import — döngüsüz)
-            from sast_engine import sast_scan_directory, check_dependencies_osv
+            from sast_engine import sast_scan_directory, check_dependencies_osv, _build_security_check_artifacts
 
-            # 2.1-2.6, 2.8: Kaynak kod taraması
-            scan_result = sast_scan_directory(resolved_path)
+            scan_result = sast_scan_directory(resolved_path, profile=profile, scope_mode=scope_mode, diff_base=diff_base)
             scan_result["resolved_path"] = resolved_path
 
-            # 2.7: Bağımlılık CVE kontrolü (OSV) — ayrı çalışır, hatada taramayı bloklamaz
             deps_result = None
             if (qs.get("deps") or ["1"])[0] in ("1", "true", "yes"):
                 try:
@@ -457,10 +461,56 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
                     deps_result = {"analyzed": False, "error": str(e)[:200]}
 
             scan_result["dependencies"] = deps_result
+            if deps_result and scan_result.get("security_check"):
+                sc = scan_result["security_check"]
+                files_list = [f.get("file") for f in (scan_result.get("findings") or []) if f.get("file")]
+                updated_sc = _build_security_check_artifacts(
+                    resolved_path, scan_result.get("findings") or [], deps_result,
+                    files_list, [], profile, scope_mode, diff_base
+                )
+                sc["dependency_audit_md"] = updated_sc["dependency_audit_md"]
+                sc["security_report_md"] = updated_sc["security_report_md"]
             self.send_json(scan_result)
 
         except Exception as e:
             self.send_json({"success": False, "error": f"SAST taraması başarısız: {str(e)}"}, status=500)
+
+    def handle_api_sast_ai(self):
+        """ersinkoc/security-check 4-Aşamalı AI Kaynak Kod Denetimi (Recon -> Hunt -> Verify -> Report)."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length > 0 else b"{}"
+            data = json.loads(body.decode("utf-8") or "{}")
+        except (ValueError, json.JSONDecodeError):
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+
+        raw_path = (data.get("path") or "").strip()
+        profile = (data.get("profile") or "standard").strip()
+        scope_mode = (data.get("scope_mode") or "full").strip()
+        diff_base = (data.get("diff_base") or "HEAD").strip()
+        ai_config = data.get("ai_config") or {}
+
+        if not raw_path:
+            self.send_json({"success": False, "error": "path alanı gereklidir"}, status=400)
+            return
+
+        resolved_path, available = self._resolve_sast_path(raw_path)
+        if not resolved_path:
+            self.send_json({
+                "success": False,
+                "error": f"Dizin bulunamadı: {raw_path}",
+                "available_dirs": available
+            }, status=404)
+            return
+
+        try:
+            from sast_engine import run_ai_sast_audit
+            res = run_ai_sast_audit(resolved_path, ai_config, profile=profile, scope_mode=scope_mode, diff_base=diff_base)
+            res["resolved_path"] = resolved_path
+            self.send_json(res, status=200 if res.get("success") else 400)
+        except Exception as e:
+            self.send_json({"success": False, "error": f"AI SAST hatası: {str(e)}"}, status=500)
 
     # =============================================================
     # FAZ 3: Aktif Güvenlik Testi Uçları

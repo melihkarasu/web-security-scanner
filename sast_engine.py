@@ -10,6 +10,7 @@ import os
 import re
 import json
 import time
+import subprocess
 import urllib.request
 
 # Faz 6B: Derin analiz motoru (Python AST + JS taint + entropy + genişletilmiş kurallar)
@@ -294,16 +295,209 @@ def _should_scan_file(filename):
         return True
     return ext in SAST_CODE_EXTS
 
+def _get_git_diff_files(root_path, diff_base="HEAD"):
+    """Git diff / PR artımlı tarama modu (sc-diff-report) için değişen dosyaları döndürür."""
+    changed = set()
+    base = (diff_base or "HEAD").strip()
+    try:
+        out = subprocess.run(
+            ["git", "-C", root_path, "diff", "--name-only", base],
+            capture_output=True, text=True, timeout=10
+        )
+        if out.returncode == 0:
+            for line in out.stdout.splitlines():
+                if line.strip():
+                    changed.add(os.path.normpath(line.strip()))
+        st = subprocess.run(
+            ["git", "-C", root_path, "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10
+        )
+        if st.returncode == 0:
+            for line in st.stdout.splitlines():
+                if len(line) > 3:
+                    p = line[3:].strip().split(" -> ")[-1]
+                    if p:
+                        changed.add(os.path.normpath(p))
+    except Exception:
+        pass
+    return changed
+
+
+def _build_security_check_artifacts(root_path, findings, deps_result, files_list, skipped_files, profile, scope_mode, diff_base):
+    """ersinkoc/security-check 5'li rapor paketi + 3 durumlu (confirmed/needs_validation/rejected) kanıt modeli."""
+    lang_map = {
+        ".py": "Python", ".js": "JavaScript", ".ts": "TypeScript", ".jsx": "React JSX",
+        ".tsx": "React TSX", ".go": "Go", ".rs": "Rust", ".php": "PHP",
+        ".java": "Java", ".cs": "C#", ".rb": "Ruby", ".sh": "Shell",
+        ".yml": "YAML/CI", ".yaml": "YAML/CI", ".tf": "Terraform", ".json": "JSON"
+    }
+    lang_counts = {}
+    entry_points = []
+    subsystems = {}
+    for rel in files_list:
+        ext = os.path.splitext(rel)[1].lower()
+        lname = lang_map.get(ext, ext or "Other")
+        lang_counts[lname] = lang_counts.get(lname, 0) + 1
+        parts = rel.replace("\\", "/").split("/")
+        sub = parts[0] if len(parts) > 1 else "root"
+        subsystems.setdefault(sub, []).append(rel)
+        if any(k in rel.lower() for k in ("server", "route", "api", "controller", "handler", "main", "app", "index", "auth", "view")):
+            entry_points.append(rel)
+
+    # 3 Durumlu Kanıt Modeli (confirmed / needs_validation / rejected)
+    confirmed = []
+    needs_validation = []
+    rejected = []
+    for idx, f in enumerate(findings, 1):
+        cid = f"CAND-{idx:03d}"
+        f_copy = dict(f)
+        f_copy["candidate_id"] = cid
+        if f.get("rejected_reason"):
+            f_copy["verdict"] = "rejected"
+            rejected.append(f_copy)
+        elif f.get("verified") is True and f.get("severity") in ("KRİTİK", "YÜKSEK", "ORTA"):
+            f_copy["verdict"] = "confirmed"
+            confirmed.append(f_copy)
+        else:
+            f_copy["verdict"] = "needs_validation"
+            f_copy["validation_step"] = "Çalışma zamanı girdisi ve yetki sınırı (trust boundary) akışını doğrulayın."
+            needs_validation.append(f_copy)
+
+    # Coverage Ledger (Kapsam Defteri)
+    ledger = []
+    findings_by_sub = {}
+    for f in findings:
+        parts = (f.get("file") or "").replace("\\", "/").split("/")
+        sub = parts[0] if len(parts) > 1 else "root"
+        findings_by_sub.setdefault(sub, []).append(f)
+
+    for idx, (sub, flist) in enumerate(sorted(subsystems.items()), 1):
+        sub_finds = findings_by_sub.get(sub, [])
+        cats = sorted({x.get("category", "Genel") for x in sub_finds}) or ["Genel Denetim"]
+        cids = [f"CAND-{i:03d}" for i, x in enumerate(findings, 1) if x in sub_finds][:5]
+        status = "candidate" if sub_finds else "covered"
+        ledger.append({
+            "coverage_id": f"COV-{idx:03d}",
+            "surface": f"{sub}/* ({len(flist)} dosya)",
+            "boundary": "caller -> application subsystem",
+            "subsystem": sub,
+            "attack_class": ", ".join(cats[:3]),
+            "starting_paths": ", ".join(flist[:3]),
+            "status": status,
+            "evidence": f"{len(flist)} kaynak dosya tarandı" + (f" ({', '.join(cids)})" if cids else " (temiz)"),
+            "gap": "" if profile != "quick" else "Quick profil (kısmi kapsam)"
+        })
+
+    for idx, (sfile, reason) in enumerate(skipped_files[:20], len(ledger) + 1):
+        ledger.append({
+            "coverage_id": f"COV-{idx:03d}",
+            "surface": sfile,
+            "boundary": "unscanned surface",
+            "subsystem": os.path.dirname(sfile) or "root",
+            "attack_class": "all",
+            "starting_paths": sfile,
+            "status": "deferred",
+            "evidence": "-",
+            "gap": reason
+        })
+
+    # 1) architecture.md
+    arch_md = f"# Codebase Architecture & Attack Surface Map\n\n"
+    arch_md += f"- **Root:** `{root_path}`\n- **Profile:** `{profile}` • **Scope:** `{scope_mode}`" + (f" (`{diff_base}`)" if scope_mode == "diff" else "") + "\n\n"
+    arch_md += "## 1. Language & Technology Breakdown\n\n| Language | Files |\n|---|---|\n"
+    for k, v in sorted(lang_counts.items(), key=lambda x: -x[1]):
+        arch_md += f"| {k} | {v} |\n"
+    arch_md += "\n## 2. Entry Surfaces & Trust Boundaries\n\n"
+    for ep in entry_points[:25]:
+        arch_md += f"- `{ep}`\n"
+    if not entry_points:
+        arch_md += "- *(Standart giriş dosyası adı tespit edilmedi; tüm modüller incelendi)*\n"
+    arch_md += "\n## 3. Subsystems\n\n"
+    for sub, flist in sorted(subsystems.items()):
+        arch_md += f"- **`{sub}/`** ({len(flist)} files): {', '.join(f'`{x}`' for x in flist[:4])}\n"
+
+    # 2) coverage-ledger.md
+    cov_md = "# Audit Coverage Ledger (`coverage-ledger.md`)\n\n"
+    cov_md += "| Coverage ID | Surface | Boundary | Subsystem | Attack class | Starting paths | Status | Evidence | Gap |\n"
+    cov_md += "|---|---|---|---|---|---|---|---|---|\n"
+    for row in ledger:
+        cov_md += f"| {row['coverage_id']} | {row['surface']} | {row['boundary']} | {row['subsystem']} | {row['attack_class']} | `{row['starting_paths']}` | `{row['status']}` | {row['evidence']} | {row['gap'] or '-'} |\n"
+
+    # 3) dependency-audit.md
+    dep_md = "# Supply Chain & Dependency Audit (`dependency-audit.md`)\n\n"
+    if deps_result and deps_result.get("analyzed"):
+        ecos = deps_result.get("ecosystems") or []
+        dep_md += f"- **Checked Packages:** {deps_result.get('checked', 0)}\n"
+        dep_md += f"- **Vulnerable Packages:** {len(deps_result.get('vulnerable') or [])}\n\n"
+        if ecos:
+            dep_md += "| Ecosystem | Total | Checked | Vulnerable |\n|---|---|---|---|\n"
+            for e in ecos:
+                dep_md += f"| {e['ecosystem']} | {e['total']} | {e['checked']} | {e['vulnerable_count']} |\n"
+        for v in (deps_result.get("vulnerable") or []):
+            dep_md += f"\n### 📦 {v['name']}@{v['version']} ({v['ecosystem']})\n"
+            for vn in (v.get("vulns") or []):
+                dep_md += f"- **{vn['id']}**: {vn['summary']} {vn.get('url') or ''}\n"
+    else:
+        dep_md += "- Dependency audit not executed or no manifest found.\n"
+
+    # 4) verified-findings.md
+    ver_md = "# Verified Findings & Evidence Triage (`verified-findings.md`)\n\n"
+    ver_md += f"- **Confirmed Boundary Failures (`confirmed`):** {len(confirmed)}\n"
+    ver_md += f"- **Needs Runtime/Config Validation (`needs_validation`):** {len(needs_validation)}\n"
+    ver_md += f"- **Rejected / Disproved Candidates (`rejected`):** {len(rejected)}\n\n"
+    ver_md += "## Confirmed Findings\n\n"
+    for f in confirmed:
+        ver_md += f"### [{f['candidate_id']}] {f['severity']} — {f['title']} ({f['rule_id']} / {f['cwe']})\n"
+        ver_md += f"- **Location:** `{f['file']}:{f['line']}` • **CVSS:** {f.get('cvss', '-')}\n"
+        ver_md += f"- **Evidence:** `{f.get('match', '')}`\n"
+        ver_md += f"- **Remediation:** {f.get('fix', '')}\n\n"
+    ver_md += "## Needs Validation (No Severity Assigned Until Runtime Proof)\n\n"
+    for f in needs_validation:
+        ver_md += f"- **[{f['candidate_id']}]** `{f['file']}:{f['line']}` — {f['title']} ({f['rule_id']}): {f.get('validation_step', '')}\n"
+
+    # 5) SECURITY-REPORT.md
+    sec_md = f"# Consolidated Security Audit Report (`SECURITY-REPORT.md`)\n\n"
+    sec_md += f"- **Target Directory:** `{root_path}`\n- **Profile:** `{profile}` • **Scope:** `{scope_mode}`\n"
+    sec_md += f"- **Confirmed Findings:** {len(confirmed)} • **Needs Validation:** {len(needs_validation)} • **Rejected:** {len(rejected)}\n\n"
+    sec_md += ver_md + "\n---\n\n" + dep_md + "\n---\n\n" + cov_md
+
+    return {
+        "architecture_md": arch_md,
+        "coverage_ledger_md": cov_md,
+        "dependency_audit_md": dep_md,
+        "verified_findings_md": ver_md,
+        "security_report_md": sec_md,
+        "coverage_ledger": ledger,
+        "languages": lang_counts,
+        "entry_points": entry_points[:30],
+        "findings_record": {
+            "confirmed": confirmed,
+            "needs_validation": needs_validation,
+            "rejected": rejected,
+        },
+    }
+
+
 # =============================================================
 # Ana Tarama Motoru
 # =============================================================
-def sast_scan_directory(root_path):
+def sast_scan_directory(root_path, profile="standard", scope_mode="full", diff_base="HEAD"):
     start = time.time()
     findings = []
     files_scanned = 0
     dirs_scanned = 0
     skipped = 0
     total_lines = 0
+    scanned_files_list = []
+    skipped_files_ledger = []
+
+    profile = (profile or "standard").lower().strip()
+    if profile not in ("quick", "standard", "deep"):
+        profile = "standard"
+    max_files = 200 if profile == "quick" else (1500 if profile == "deep" else SAST_MAX_FILES)
+
+    scope_mode = (scope_mode or "full").lower().strip()
+    diff_files = _get_git_diff_files(root_path, diff_base) if scope_mode == "diff" else None
 
     for dirpath, dirnames, filenames in os.walk(root_path):
         pruned = [d for d in dirnames if d in SAST_SKIP_DIRS]
@@ -312,13 +506,19 @@ def sast_scan_directory(root_path):
         dirs_scanned += 1
 
         for fn in filenames:
-            if files_scanned >= SAST_MAX_FILES:
+            if files_scanned >= max_files:
+                rel_s = os.path.relpath(os.path.join(dirpath, fn), root_path)
+                skipped_files_ledger.append((rel_s, f"Max file cap ({max_files}) reached"))
                 break
             if not _should_scan_file(fn):
                 continue
             fpath = os.path.join(dirpath, fn)
+            rel_path = os.path.normpath(os.path.relpath(fpath, root_path))
+            if diff_files is not None and rel_path not in diff_files:
+                continue
             try:
                 if os.path.getsize(fpath) > SAST_MAX_FILE_SIZE:
+                    skipped_files_ledger.append((rel_path, "File size > 1 MB"))
                     continue
                 with open(fpath, "r", encoding="utf-8", errors="replace") as f:
                     lines = f.readlines()
@@ -327,7 +527,7 @@ def sast_scan_directory(root_path):
 
             files_scanned += 1
             total_lines += len(lines)
-            rel_path = os.path.relpath(fpath, root_path)
+            scanned_files_list.append(rel_path)
 
             # Faz 6B: Derin analiz (Python AST + JS taint + entropy + genişletilmiş regex)
             try:
@@ -416,9 +616,18 @@ def sast_scan_directory(root_path):
     for f in findings:
         summary[f["severity"]] = summary.get(f["severity"], 0) + 1
 
+    sc_artifacts = _build_security_check_artifacts(
+        root_path, findings, None, scanned_files_list, skipped_files_ledger,
+        profile, scope_mode, diff_base
+    )
+
     return {
         "success": True,
         "root": root_path,
+        "profile": profile,
+        "scope_mode": scope_mode,
+        "diff_base": diff_base if scope_mode == "diff" else None,
+        "diff_files_matched": len(diff_files) if diff_files is not None else None,
         "stats": {
             "files_scanned": files_scanned,
             "dirs_scanned": dirs_scanned,
@@ -426,7 +635,7 @@ def sast_scan_directory(root_path):
             "skipped_dirs": skipped,
             "rules_active": len(SAST_RULES),
             "duration_ms": duration_ms,
-            "truncated": files_scanned >= SAST_MAX_FILES,
+            "truncated": files_scanned >= max_files,
             "verified_count": verified_count,
             "verification_pass": True,
             "deep_rules_active": len(SAST_RULES) + len(EXTRA_RULES),
@@ -438,11 +647,12 @@ def sast_scan_directory(root_path):
             "files_with_findings": sorted({f["file"] for f in findings}),
             "rules_triggered": sorted({f["rule_id"] for f in findings}),
             "rules_total": len(SAST_RULES) + len(EXTRA_RULES),
-            "rule_coverage_pct": round(len({f["rule_id"] for f in findings}) * 100.0 / len(SAST_RULES), 1),
+            "rule_coverage_pct": round(len({f["rule_id"] for f in findings}) * 100.0 / (len(SAST_RULES) + len(EXTRA_RULES)), 1),
             "file_coverage_pct": round(len({f["file"] for f in findings}) * 100.0 / max(1, files_scanned), 1),
             "verified_pct": round(verified_count * 100.0 / max(1, len(findings)), 1)
         },
-        "findings": findings
+        "findings": findings,
+        "security_check": sc_artifacts
     }
 
 # =============================================================
@@ -543,8 +753,143 @@ def _parse_go_deps(root_path):
             pass
     return deps
 
+def _parse_cargo_deps(root_path):
+    """Cargo.lock (veya Cargo.toml) içinden Rust (crates.io) bağımlılıklarını çıkarır."""
+    deps = []
+    lock_path = os.path.join(root_path, "Cargo.lock")
+    if os.path.isfile(lock_path):
+        try:
+            with open(lock_path, "r", encoding="utf-8") as f:
+                text = f.read()
+            for block in text.split("[[package]]")[1:]:
+                nm = re.search(r'name\s*=\s*"([^"]+)"', block)
+                vr = re.search(r'version\s*=\s*"([^"]+)"', block)
+                if nm and vr:
+                    deps.append((nm.group(1), vr.group(1)))
+            if deps:
+                return deps[:SAST_DEPS_MAX_PACKAGES]
+        except OSError:
+            pass
+    toml_path = os.path.join(root_path, "Cargo.toml")
+    if os.path.isfile(toml_path):
+        try:
+            with open(toml_path, "r", encoding="utf-8") as f:
+                in_deps = False
+                for line in f:
+                    s = line.strip()
+                    if s.startswith("[") and "dependencies" in s:
+                        in_deps = True
+                        continue
+                    elif s.startswith("["):
+                        in_deps = False
+                    elif in_deps and "=" in s and not s.startswith("#"):
+                        m = re.match(r'^([A-Za-z0-9_\-]+)\s*=\s*"([^"]+)"', s)
+                        if m:
+                            deps.append((m.group(1), m.group(2).lstrip("^~=")))
+        except OSError:
+            pass
+    return deps[:SAST_DEPS_MAX_PACKAGES]
+
+
+def _parse_composer_deps(root_path):
+    """composer.lock (veya composer.json) içinden PHP (Packagist) bağımlılıklarını çıkarır."""
+    deps = []
+    lock_path = os.path.join(root_path, "composer.lock")
+    if os.path.isfile(lock_path):
+        try:
+            with open(lock_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for sec in ("packages", "packages-dev"):
+                for pkg in (data.get(sec) or []):
+                    name = pkg.get("name")
+                    ver = (pkg.get("version") or "").lstrip("v")
+                    if name and ver:
+                        deps.append((name, ver))
+            if deps:
+                return deps[:SAST_DEPS_MAX_PACKAGES]
+        except (OSError, ValueError):
+            pass
+    json_path = os.path.join(root_path, "composer.json")
+    if os.path.isfile(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for sec in ("require", "require-dev"):
+                for name, ver in (data.get(sec) or {}).items():
+                    if "/" in name and isinstance(ver, str):
+                        deps.append((name, ver.lstrip("^~v>=< ")))
+        except (OSError, ValueError):
+            pass
+    return deps[:SAST_DEPS_MAX_PACKAGES]
+
+
+def _parse_gem_deps(root_path):
+    """Gemfile.lock içinden Ruby (RubyGems) bağımlılıklarını çıkarır."""
+    deps = []
+    lock_path = os.path.join(root_path, "Gemfile.lock")
+    if os.path.isfile(lock_path):
+        try:
+            with open(lock_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    m = re.match(r"^\s{4}([A-Za-z0-9_\-.]+)\s+\(([0-9][0-9A-Za-z.\-]*)\)\s*$", line)
+                    if m:
+                        deps.append((m.group(1), m.group(2)))
+        except OSError:
+            pass
+    return deps[:SAST_DEPS_MAX_PACKAGES]
+
+
+def _parse_maven_deps(root_path):
+    """pom.xml içinden Java (Maven) bağımlılıklarını çıkarır."""
+    deps = []
+    pom_path = os.path.join(root_path, "pom.xml")
+    if os.path.isfile(pom_path):
+        try:
+            with open(pom_path, "r", encoding="utf-8") as f:
+                text = f.read()
+            for blk in re.findall(r"<dependency>([\s\S]*?)</dependency>", text):
+                g = re.search(r"<groupId>\s*([^<\s]+)\s*</groupId>", blk)
+                a = re.search(r"<artifactId>\s*([^<\s]+)\s*</artifactId>", blk)
+                v = re.search(r"<version>\s*([^<$\s]+)\s*</version>", blk)
+                if g and a and v:
+                    deps.append((f"{g.group(1)}:{a.group(1)}", v.group(1)))
+        except OSError:
+            pass
+    return deps[:SAST_DEPS_MAX_PACKAGES]
+
+
+def _parse_nuget_deps(root_path):
+    """packages.lock.json veya *.csproj içinden .NET (NuGet) bağımlılıklarını çıkarır."""
+    deps = []
+    lock_path = os.path.join(root_path, "packages.lock.json")
+    if os.path.isfile(lock_path):
+        try:
+            with open(lock_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for _fw, pkgs in (data.get("dependencies") or {}).items():
+                if isinstance(pkgs, dict):
+                    for name, meta in pkgs.items():
+                        ver = (meta or {}).get("resolved")
+                        if name and ver:
+                            deps.append((name, ver))
+            if deps:
+                return deps[:SAST_DEPS_MAX_PACKAGES]
+        except (OSError, ValueError):
+            pass
+    try:
+        for fn in os.listdir(root_path):
+            if fn.endswith(".csproj"):
+                with open(os.path.join(root_path, fn), "r", encoding="utf-8") as f:
+                    text = f.read()
+                for m in re.finditer(r'<PackageReference\s+Include="([^"]+)"\s+Version="([^"]+)"', text):
+                    deps.append((m.group(1), m.group(2)))
+    except OSError:
+        pass
+    return deps[:SAST_DEPS_MAX_PACKAGES]
+
+
 def check_dependencies_osv(root_path):
-    """Proje bağımlılıklarını OSV veritabanında sorgular."""
+    """Proje bağımlılıklarını 8 ekosistemde (npm, PyPI, Go, crates.io, Packagist, RubyGems, Maven, NuGet) OSV veritabanında sorgular."""
     result = {
         "analyzed": False,
         "ecosystems": [],
@@ -554,28 +899,39 @@ def check_dependencies_osv(root_path):
     }
 
     try:
-        npm_deps, from_lock = _parse_npm_deps(root_path)
+        npm_deps, _from_lock = _parse_npm_deps(root_path)
         pip_deps = _parse_pip_deps(root_path)
         go_deps = _parse_go_deps(root_path)
+        cargo_deps = _parse_cargo_deps(root_path)
+        composer_deps = _parse_composer_deps(root_path)
+        gem_deps = _parse_gem_deps(root_path)
+        maven_deps = _parse_maven_deps(root_path)
+        nuget_deps = _parse_nuget_deps(root_path)
 
         tasks = []
-        if npm_deps:
-            tasks.append(("npm", npm_deps))
-        if pip_deps:
-            tasks.append(("PyPI", pip_deps))
-        if go_deps:
-            tasks.append(("Go", go_deps))
+        for eco_name, dlist in (
+            ("npm", npm_deps),
+            ("PyPI", pip_deps),
+            ("Go", go_deps),
+            ("crates.io", cargo_deps),
+            ("Packagist", composer_deps),
+            ("RubyGems", gem_deps),
+            ("Maven", maven_deps),
+            ("NuGet", nuget_deps),
+        ):
+            if dlist:
+                tasks.append((eco_name, dlist))
 
         if not tasks:
             result["analyzed"] = True
-            result["note"] = "package.json / requirements.txt / go.mod bulunamadı"
+            result["note"] = "Desteklenen bağımlılık manifestosu (package.json, requirements.txt, go.mod, Cargo.lock, composer.lock, Gemfile.lock, pom.xml, *.csproj) bulunamadı"
             return result
 
         for ecosystem, dep_list in tasks:
             eco_info = {"ecosystem": ecosystem, "total": len(dep_list), "checked": 0, "vulnerable_count": 0}
             for name, version in dep_list:
                 try:
-                    data = _osv_query(name, ecosystem, version if from_lock else version)
+                    data = _osv_query(name, ecosystem, version)
                     eco_info["checked"] += 1
                     result["checked"] += 1
                     vulns = data.get("vulns") or []
@@ -619,3 +975,161 @@ def check_dependencies_osv(root_path):
         result["errors"].append(str(e)[:200])
 
     return result
+
+
+# =============================================================
+# ersinkoc/security-check 4-Aşamalı AI Kaynak Kod Denetimi
+# (Phase 1: RECON → Phase 2: HUNT → Phase 3: VERIFY → Phase 4: REPORT)
+# =============================================================
+def run_ai_sast_audit(root_path, ai_config, profile="standard", scope_mode="full", diff_base="HEAD"):
+    """
+    Yerel proje dizini üzerinde ersinkoc/security-check metodolojisiyle
+    4 aşamalı (Recon -> Hunt -> Adversarial Verify -> Report) LLM destekli
+    derin semantik kaynak kod denetimi yürütür.
+    """
+    from ai_connector import AIProviderFactory
+    from ai_orchestrator import _extract_json, _is_llm_error
+
+    sast_res = sast_scan_directory(root_path, profile=profile, scope_mode=scope_mode, diff_base=diff_base)
+    try:
+        deps_res = check_dependencies_osv(root_path)
+    except Exception as e:
+        deps_res = {"analyzed": False, "error": str(e)[:200]}
+
+    # Öncelikli kaynak dosyalarından (entry points + bulgu içeren dosyalar) kod kesitleri topla
+    sc = sast_res.get("security_check") or {}
+    candidate_files = []
+    for f in (sast_res.get("findings") or []):
+        fp = f.get("file")
+        if fp and fp not in candidate_files:
+            candidate_files.append(fp)
+    for ep in (sc.get("entry_points") or []):
+        if ep not in candidate_files:
+            candidate_files.append(ep)
+
+    code_excerpts = []
+    for rel in candidate_files[:8]:
+        full = os.path.join(root_path, rel)
+        if not os.path.isfile(full):
+            continue
+        try:
+            with open(full, "r", encoding="utf-8", errors="replace") as fh:
+                content = fh.read(3500)
+            code_excerpts.append({"file": rel, "excerpt": content})
+        except OSError:
+            pass
+
+    connector = AIProviderFactory.create_connector(ai_config or {})
+    phases_log = []
+
+    # PHASE 1: RECON
+    recon_prompt = (
+        "You are Phase 1 (RECON) of the security-check 51-skill code audit pipeline. "
+        "Analyze the architecture map, language distribution, and entry points below. "
+        "Summarize the trust boundaries, authentication/authorization surfaces, and highest-risk sinks in 150 words.\n\n"
+        f"Architecture Map:\n{sc.get('architecture_md', '')[:3500]}\n"
+        f"Excerpts:\n{json.dumps(code_excerpts[:4], ensure_ascii=False)[:4000]}"
+    )
+    recon_out = connector.chat(recon_prompt)
+    if _is_llm_error(recon_out):
+        return {"success": False, "error": f"Phase 1 (RECON) LLM hatası: {recon_out[:200]}", "sast": sast_res}
+    phases_log.append({"phase": "RECON", "summary": recon_out[:600]})
+
+    # PHASE 2: HUNT (Semantic business logic, AuthZ, IDOR, race conditions, injection)
+    hunt_prompt = (
+        "You are Phase 2 (HUNT) of the security-check pipeline. "
+        "Inspect the code excerpts and static findings below for semantic vulnerabilities "
+        "(broken access control/AuthZ, IDOR, business logic flaws, race conditions, injection, SSRF, secrets, AI/prompt injection). "
+        "Reply ONLY with a JSON array of candidates (max 6):\n"
+        '[{"id": "AI-CAND-1", "file": "...", "line": 1, "category": "AuthZ|Logic|SQLi|XSS|SSRF|Crypto|AI", '
+        '"severity": "KRİTİK|YÜKSEK|ORTA|DÜŞÜK", "cwe": "CWE-...", "title": "...", '
+        '"entry_point": "...", "sink": "...", "evidence": "...", "fix": "..."}]\n\n'
+        f"Recon:\n{recon_out[:1500]}\nStatic Findings:\n{json.dumps((sast_res.get('findings') or [])[:15], ensure_ascii=False)[:2500]}\n"
+        f"Code Excerpts:\n{json.dumps(code_excerpts, ensure_ascii=False)[:5000]}"
+    )
+    hunt_raw = connector.chat(hunt_prompt)
+    candidates = _extract_json(hunt_raw, "list") if not _is_llm_error(hunt_raw) else []
+    if not isinstance(candidates, list):
+        candidates = []
+    candidates = [c for c in candidates if isinstance(c, dict)][:6]
+    phases_log.append({"phase": "HUNT", "summary": f"{len(candidates)} semantik aday tespit edildi."})
+
+    # PHASE 3: VERIFY (Adversarial verifier — confirmed / needs_validation / rejected)
+    verify_prompt = (
+        "You are Phase 3 (ADVERSARIAL VERIFIER) of the security-check pipeline. "
+        "Try to disprove each candidate below using the code excerpts. Classify each into EXACTLY one verdict:\n"
+        "- 'confirmed': complete source trace and boundary failure proven in code.\n"
+        "- 'needs_validation': concrete lead, but depends on unseen runtime/deployment config.\n"
+        "- 'rejected': disproved by existing guard, unreachable path, or false positive.\n"
+        "Reply ONLY with a JSON array:\n"
+        '[{"id": "AI-CAND-1", "verdict": "confirmed|needs_validation|rejected", "rationale": "...", "validation_step": "..."}]\n\n'
+        f"Candidates:\n{json.dumps(candidates, ensure_ascii=False)}\n"
+        f"Code Excerpts:\n{json.dumps(code_excerpts[:5], ensure_ascii=False)[:4000]}"
+    )
+    ver_raw = connector.chat(verify_prompt)
+    verdicts = _extract_json(ver_raw, "list") if not _is_llm_error(ver_raw) else []
+    verdict_map = {v.get("id"): v for v in (verdicts or []) if isinstance(v, dict) and v.get("id")}
+
+    ai_confirmed = []
+    ai_needs_val = []
+    ai_rejected = []
+    for c in candidates:
+        v = verdict_map.get(c.get("id"), {})
+        verdict = (v.get("verdict") or "needs_validation").lower().strip()
+        if verdict not in ("confirmed", "needs_validation", "rejected"):
+            verdict = "needs_validation"
+        c["verdict"] = verdict
+        c["rationale"] = v.get("rationale") or ""
+        c["validation_step"] = v.get("validation_step") or ""
+        if verdict == "confirmed":
+            ai_confirmed.append(c)
+        elif verdict == "rejected":
+            ai_rejected.append(c)
+        else:
+            ai_needs_val.append(c)
+
+    phases_log.append({
+        "phase": "VERIFY",
+        "summary": f"Doğrulama tamamlandı: {len(ai_confirmed)} confirmed, {len(ai_needs_val)} needs_validation, {len(ai_rejected)} rejected."
+    })
+
+    # PHASE 4: REPORT
+    report_prompt = (
+        "You are Phase 4 (REPORT) of security-check. Write a concise Turkish Markdown executive summary "
+        "('### Mimari & Güvenlik Sınırları', '### Doğrulanan Semantik Bulgular', '### Öncelikli Yol Haritası') "
+        "combining the confirmed AI findings, static findings, and dependency CVEs.\n\n"
+        f"Recon:\n{recon_out[:1200]}\nAI Confirmed:\n{json.dumps(ai_confirmed, ensure_ascii=False)}\n"
+        f"AI Needs Validation:\n{json.dumps(ai_needs_val, ensure_ascii=False)}"
+    )
+    report_md = connector.chat(report_prompt)
+    if _is_llm_error(report_md):
+        report_md = ""
+    phases_log.append({"phase": "REPORT", "summary": f"Nihai rapor üretildi ({len(report_md)} karakter)."})
+
+    # Artefaktları güncelle (bağımlılık + AI bulguları dahil)
+    sc_full = _build_security_check_artifacts(
+        root_path, sast_res.get("findings") or [], deps_res,
+        [r["Starting paths"] if isinstance(r, dict) and "Starting paths" in r else "" for r in []] or candidate_files,
+        [], profile, scope_mode, diff_base
+    )
+    sc_full["findings_record"]["confirmed"].extend(ai_confirmed)
+    sc_full["findings_record"]["needs_validation"].extend(ai_needs_val)
+    sc_full["findings_record"]["rejected"].extend(ai_rejected)
+    if report_md:
+        sc_full["security_report_md"] = report_md + "\n\n---\n\n" + sc_full["security_report_md"]
+
+    return {
+        "success": True,
+        "root": root_path,
+        "profile": profile,
+        "scope_mode": scope_mode,
+        "phases": phases_log,
+        "recon_summary": recon_out,
+        "ai_confirmed": ai_confirmed,
+        "ai_needs_validation": ai_needs_val,
+        "ai_rejected": ai_rejected,
+        "executive_report_md": report_md,
+        "security_check": sc_full,
+        "sast": sast_res,
+        "dependencies": deps_res,
+    }

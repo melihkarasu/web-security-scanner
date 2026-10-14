@@ -496,14 +496,75 @@
             </div>
           </div>
 
-          <!-- SEKME 4B: Yerel Dizin / Kaynak Kod Analizi (SAST) -->
+          <!-- SEKME 4B: Yerel Dizin / Kaynak Kod Analizi (SAST — ersinkoc/security-check %100) -->
           <div id="tab-sast" class="detail-tab-content hidden space-y-4">
+            <!-- security-check Denetim Kontrolleri (Profil, Kapsam/Diff, 4-Aşamalı AI Kod Denetimi & Artefakt İndirme) -->
+            <div class="p-4 rounded-2xl border border-stone-200 bg-stone-50 space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 class="text-sm font-bold font-editorial text-mistral-ink">📂 Kaynak Kod & Mimari Denetim Merkezi (<code class="font-mono text-xs">security-check</code> %100)</h4>
+                  <p class="text-[11px] text-mistral-slate">7-Dil Derin Tarayıcı • 8 Ekosistem OSV CVE • Git Diff Modu • 4-Aşamalı AI Semantik Denetim (Recon → Hunt → Verify → Report)</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <select id="sast-profile" class="p-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-mono outline-none" title="Denetim Profili">
+                    <option value="quick">Profil: quick (hızlı)</option>
+                    <option value="standard" selected>Profil: standard (önerilen)</option>
+                    <option value="deep">Profil: deep (derin)</option>
+                  </select>
+                  <select id="sast-scope-mode" class="p-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-mono outline-none" title="Kapsam Modu">
+                    <option value="full" selected>Kapsam: Tüm Depo (full)</option>
+                    <option value="diff">Kapsam: PR / Git Diff (sc-diff-report)</option>
+                  </select>
+                  <input type="text" id="sast-diff-base" value="HEAD" placeholder="HEAD / origin/main" class="w-28 p-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-mono outline-none" title="Git Diff Base" />
+                  <button type="button" id="sast-ai-btn" onclick="startAISastAudit()" class="px-3 py-1.5 rounded-xl bg-mistral-orange hover:bg-[#e04406] text-white text-[11px] font-bold transition shadow-xs cursor-pointer">
+                    🤖 4-Aşamalı AI Kod Denetimi
+                  </button>
+                </div>
+              </div>
+              <!-- security-check 6'lı Çıktı Paketi İndirme Çubuğu -->
+              <div id="sast-sc-dl-bar" class="hidden pt-2 border-t border-stone-200 flex flex-wrap items-center gap-1.5">
+                <span class="text-[10px] font-bold text-mistral-slate uppercase mr-1">📦 security-check Çıktı Paketi:</span>
+                <button type="button" onclick="downloadSecurityCheckArtifact('security_report_md', 'SECURITY-REPORT.md')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-[10px] font-mono font-bold text-stone-700">⬇ SECURITY-REPORT.md</button>
+                <button type="button" onclick="downloadSecurityCheckArtifact('architecture_md', 'architecture.md')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-[10px] font-mono font-bold text-stone-700">⬇ architecture.md</button>
+                <button type="button" onclick="downloadSecurityCheckArtifact('coverage_ledger_md', 'coverage-ledger.md')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-[10px] font-mono font-bold text-stone-700">⬇ coverage-ledger.md</button>
+                <button type="button" onclick="downloadSecurityCheckArtifact('dependency_audit_md', 'dependency-audit.md')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-[10px] font-mono font-bold text-stone-700">⬇ dependency-audit.md</button>
+                <button type="button" onclick="downloadSecurityCheckArtifact('verified_findings_md', 'verified-findings.md')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-[10px] font-mono font-bold text-stone-700">⬇ verified-findings.md</button>
+                <button type="button" onclick="downloadSecurityCheckArtifact('findings_json', 'findings.json')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-[10px] font-mono font-bold text-stone-700">⬇ findings.json</button>
+              </div>
+            </div>
+
+            <!-- 4-Aşamalı AI SAST Sonuç Kartı (Recon → Hunt → Verify → Report) -->
+            <div id="sast-ai-card" class="hidden p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/50 space-y-2.5">
+              <div class="flex items-center justify-between gap-2">
+                <h4 class="text-sm font-bold font-editorial text-mistral-ink">🤖 4-Aşamalı AI Kaynak Kod Denetimi (Recon → Hunt → Verify → Report)</h4>
+                <span id="sast-ai-meta" class="text-[10px] font-mono text-stone-500"></span>
+              </div>
+              <div id="sast-ai-phases" class="grid grid-cols-1 sm:grid-cols-4 gap-2"></div>
+              <div id="sast-ai-report" class="text-xs text-stone-700 bg-white p-3 rounded-xl border border-amber-200 leading-relaxed space-y-1.5"></div>
+            </div>
+
             <div id="sast-stats-card" class="p-4 rounded-2xl border border-stone-200 bg-white">
               <div id="sast-stats-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
             </div>
             <div id="sast-severity-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+
+            <!-- 3 Durumlu Kanıt Modeli Özeti (Confirmed / Needs Validation / Rejected) -->
+            <div id="sast-verdict-summary" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3"></div>
+
+            <!-- Mimari Harita (architecture.md) ve Kapsam Defteri (coverage-ledger.md) -->
+            <div id="sast-sc-panels" class="hidden space-y-3">
+              <details class="p-4 rounded-2xl border border-stone-200 bg-white">
+                <summary class="text-xs font-bold text-mistral-ink cursor-pointer">🏗️ Mimari Harita & Giriş Yüzeyleri (architecture.md)</summary>
+                <pre id="sast-arch-body" class="mt-2 p-3 rounded-xl bg-stone-50 border border-stone-200 text-[11px] font-mono text-stone-800 whitespace-pre-wrap max-h-[280px] overflow-y-auto"></pre>
+              </details>
+              <details class="p-4 rounded-2xl border border-stone-200 bg-white">
+                <summary class="text-xs font-bold text-mistral-ink cursor-pointer">📋 Denetim Kapsam Defteri (coverage-ledger.md)</summary>
+                <div id="sast-ledger-table" class="mt-2 overflow-x-auto text-[11px]"></div>
+              </details>
+            </div>
+
             <div id="sast-deps-card" class="hidden space-y-2">
-              <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">📦 Bağımlılık CVE Denetimi (Google OSV)</h4>
+              <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">📦 8 Ekosistem Tedarik Zinciri CVE Denetimi (Google OSV)</h4>
               <div id="sast-deps-container" class="space-y-2"></div>
             </div>
             <div id="sast-findings-list" class="space-y-2.5">
@@ -691,6 +752,6 @@
   </footer>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261014h"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261014i"></script>
 </body>
 </html>

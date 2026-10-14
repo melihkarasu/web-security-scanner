@@ -930,8 +930,10 @@ function renderSastStats(data) {
       entropy: 'Entropy Analizi'
     };
     const entries = Object.entries(analyzers);
+    const oldBreak = statsCard.querySelector('.sast-analyzer-breakdown');
+    if (oldBreak) oldBreak.remove();
     if (entries.length > 0) {
-      let badgeHtml = '<div class="mt-3 pt-3 border-t border-stone-100"><div class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider mb-1.5">Analizci Kırılımı</div><div class="flex flex-wrap gap-1.5">';
+      let badgeHtml = '<div class="sast-analyzer-breakdown mt-3 pt-3 border-t border-stone-100"><div class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider mb-1.5">Analizci Kırılımı</div><div class="flex flex-wrap gap-1.5">';
       for (const [aKey, aCount] of entries) {
         badgeHtml += '<span class="px-2 py-0.5 rounded-full bg-stone-100 border border-stone-200 text-[10px] font-mono text-stone-700">' + (ANALYZER_NAMES[aKey] || aKey) + ': <strong>' + aCount + '</strong></span>';
       }
@@ -956,6 +958,178 @@ function renderSastStats(data) {
         <div class="text-[10px] font-bold tracking-wider">${sv.key}</div>
       </div>
     `).join('');
+  }
+
+  // ersinkoc/security-check %100: 3 Durumlu Kanıt Modeli + Mimari Harita + Kapsam Defteri + 6'lı İndirme Çubuğu
+  renderSecurityCheckPanels(data.security_check);
+}
+
+function renderSecurityCheckPanels(sc) {
+  const dlBar = document.getElementById('sast-sc-dl-bar');
+  const verdictGrid = document.getElementById('sast-verdict-summary');
+  const scPanels = document.getElementById('sast-sc-panels');
+  const archBody = document.getElementById('sast-arch-body');
+  const ledgerTable = document.getElementById('sast-ledger-table');
+
+  if (!sc) {
+    dlBar?.classList.add('hidden');
+    verdictGrid?.classList.add('hidden');
+    scPanels?.classList.add('hidden');
+    return;
+  }
+
+  dlBar?.classList.remove('hidden');
+  const rec = sc.findings_record || {};
+  const confCount = (rec.confirmed || []).length;
+  const needsCount = (rec.needs_validation || []).length;
+  const rejCount = (rec.rejected || []).length;
+
+  if (verdictGrid) {
+    verdictGrid.classList.remove('hidden');
+    verdictGrid.innerHTML = `
+      <div class="p-3 rounded-xl border border-emerald-200 bg-emerald-50/50 flex items-center justify-between">
+        <div>
+          <div class="text-[10px] font-bold uppercase text-emerald-900">✅ Confirmed (Sınır İhlali Kanıtlı)</div>
+          <div class="text-[11px] text-emerald-800">Tam kaynak izi ile doğrulandı</div>
+        </div>
+        <span class="text-xl font-bold font-mono text-emerald-900">${confCount}</span>
+      </div>
+      <div class="p-3 rounded-xl border border-amber-200 bg-amber-50/50 flex items-center justify-between">
+        <div>
+          <div class="text-[10px] font-bold uppercase text-amber-900">⚠️ Needs Validation (Çalışma Zamanı)</div>
+          <div class="text-[11px] text-amber-800">Ortam/yapılandırma teyidi bekliyor</div>
+        </div>
+        <span class="text-xl font-bold font-mono text-amber-900">${needsCount}</span>
+      </div>
+      <div class="p-3 rounded-xl border border-stone-200 bg-stone-50 flex items-center justify-between">
+        <div>
+          <div class="text-[10px] font-bold uppercase text-stone-700">🛡️ Rejected (Elenen / Yanlış Pozitif)</div>
+          <div class="text-[11px] text-stone-500">Bağımsız doğrulamada elendi</div>
+        </div>
+        <span class="text-xl font-bold font-mono text-stone-700">${rejCount}</span>
+      </div>
+    `;
+  }
+
+  if (scPanels) {
+    scPanels.classList.remove('hidden');
+    if (archBody) archBody.textContent = sc.architecture_md || '';
+    if (ledgerTable) {
+      const rows = sc.coverage_ledger || [];
+      if (!rows.length) {
+        ledgerTable.innerHTML = '<p class="text-stone-500">Kapsam kaydı yok.</p>';
+      } else {
+        ledgerTable.innerHTML = '<table class="w-full border-collapse text-left font-mono text-[10px]">' +
+          '<thead><tr class="border-b border-stone-200 text-stone-600"><th class="p-1.5">ID</th><th class="p-1.5">Yüzey</th><th class="p-1.5">Alt Sistem</th><th class="p-1.5">Saldırı Sınıfı</th><th class="p-1.5">Durum</th><th class="p-1.5">Kanıt / Boşluk</th></tr></thead><tbody>' +
+          rows.map(r => '<tr class="border-b border-stone-100">' +
+            '<td class="p-1.5 font-bold">' + escapeHtml(r.coverage_id) + '</td>' +
+            '<td class="p-1.5">' + escapeHtml(r.surface) + '</td>' +
+            '<td class="p-1.5">' + escapeHtml(r.subsystem) + '</td>' +
+            '<td class="p-1.5">' + escapeHtml(r.attack_class) + '</td>' +
+            '<td class="p-1.5"><span class="px-1.5 py-0.2 rounded bg-stone-100 border border-stone-200">' + escapeHtml(r.status) + '</span></td>' +
+            '<td class="p-1.5 text-stone-600">' + escapeHtml((r.evidence || '') + (r.gap ? ' (' + r.gap + ')' : '')) + '</td>' +
+          '</tr>').join('') + '</tbody></table>';
+      }
+    }
+  }
+}
+
+function downloadSecurityCheckArtifact(field, filename) {
+  const sc = STATE.results.sast?.security_check;
+  if (!sc) {
+    showToast('Önce bir yerel proje dizini (SAST) taraması çalıştırın.', 'warning');
+    return;
+  }
+  if (field === 'findings_json') {
+    downloadFile(filename, JSON.stringify(sc.findings_record || {}, null, 2), 'application/json');
+    showToast(filename + ' indirildi!', 'success');
+    return;
+  }
+  const content = sc[field] || '';
+  if (!content) {
+    showToast(filename + ' içeriği bulunamadı.', 'warning');
+    return;
+  }
+  downloadFile(filename, content, 'text/markdown');
+  showToast(filename + ' indirildi!', 'success');
+}
+
+async function startAISastAudit() {
+  if (STATE.mode !== 'local_api') {
+    showToast('4-Aşamalı AI Kod Denetimi yalnızca yerel sunucu modunda çalışır.', 'warning');
+    return;
+  }
+  const dirInput = document.getElementById('unified-dir-input');
+  const mainInput = document.getElementById('unified-target-input');
+  let targetDir = (dirInput?.value || '').trim() || STATE.targetDir || '';
+  if (!targetDir && mainInput && isLocalDirectoryInput(mainInput.value)) {
+    targetDir = mainInput.value.trim();
+  }
+  if (!targetDir) {
+    showToast('Önce 📂 Yerel proje dizini kutusuna taranacak klasör yolunu (örn: /sarjharitasi.tr) girin.', 'warning');
+    dirInput?.focus();
+    return;
+  }
+
+  const profile = document.getElementById('sast-profile')?.value || 'standard';
+  const scopeMode = document.getElementById('sast-scope-mode')?.value || 'full';
+  const diffBase = (document.getElementById('sast-diff-base')?.value || 'HEAD').trim();
+  const btn = document.getElementById('sast-ai-btn');
+  if (btn) { btn.disabled = true; btn.innerText = '⏳ 4-Aşama Çalışıyor…'; }
+
+  try {
+    const res = await fetch('/api/sast-ai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path: targetDir,
+        profile: profile,
+        scope_mode: scopeMode,
+        diff_base: diffBase,
+        ai_config: strixAIConfig()
+      }),
+      signal: AbortSignal.timeout(600000)
+    });
+    const d = await res.json();
+    if (!d.success) {
+      showToast('AI Kod Denetimi hatası: ' + (d.error || 'Bilinmeyen hata'), 'error');
+      return;
+    }
+
+    if (d.sast) {
+      d.sast.security_check = d.security_check || d.sast.security_check;
+      d.sast.dependencies = d.dependencies || d.sast.dependencies;
+      STATE.results.sast = d.sast;
+      renderSastStats(d.sast);
+      renderSastFindings();
+      renderSastDeps(d.sast.dependencies);
+    }
+
+    const aiCard = document.getElementById('sast-ai-card');
+    const aiMeta = document.getElementById('sast-ai-meta');
+    const aiPhases = document.getElementById('sast-ai-phases');
+    const aiReport = document.getElementById('sast-ai-report');
+    if (aiCard) aiCard.classList.remove('hidden');
+    if (aiMeta) aiMeta.innerText = `Profil: ${d.profile} · Kapsam: ${d.scope_mode} · Doğrulanan Semantik Bulgu: ${(d.ai_confirmed || []).length}`;
+    if (aiPhases) {
+      aiPhases.innerHTML = (d.phases || []).map(p =>
+        '<div class="p-2.5 rounded-xl bg-white border border-amber-200 text-[11px]">' +
+        '<div class="font-bold font-mono text-amber-900">⚡ ' + escapeHtml(p.phase) + '</div>' +
+        '<div class="text-[10px] text-stone-600 mt-0.5">' + escapeHtml(p.summary || '') + '</div>' +
+        '</div>'
+      ).join('');
+    }
+    if (aiReport) {
+      aiReport.innerHTML = '<div class="font-mono text-[11px] whitespace-pre-wrap">' + escapeHtml(d.executive_report_md || d.recon_summary || 'Tamamlandı.') + '</div>';
+    }
+    document.getElementById('scan-empty-state')?.classList.add('hidden');
+    document.getElementById('scan-results-dashboard')?.classList.remove('hidden');
+    switchDetailTab('tab-sast');
+    showToast('4-Aşamalı AI Kaynak Kod Denetimi tamamlandı!', 'success');
+  } catch (e) {
+    showToast('AI Kod Denetimi başarısız: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerText = '🤖 4-Aşamalı AI Kod Denetimi'; }
   }
 }
 
@@ -2546,9 +2720,13 @@ async function startUnifiedScan() {
     // 2B. YEREL DİZİN / KAYNAK KOD ANALİZİ (SAST + OSV CVE)
     // -------------------------------------------------------------
     if (hasDirScan && STATE.mode === 'local_api') {
-      updateProgressBar(55, `[3/5] Yerel dizin kaynak kod taraması (SAST + OSV CVE): ${rawDir}...`);
+      const sastProfile = document.getElementById('sast-profile')?.value || 'standard';
+      const sastScope = document.getElementById('sast-scope-mode')?.value || 'full';
+      const sastDiffBase = (document.getElementById('sast-diff-base')?.value || 'HEAD').trim();
+      updateProgressBar(55, `[3/5] Yerel dizin kaynak kod taraması (SAST + 8 Ekosistem OSV CVE, profil: ${sastProfile}, kapsam: ${sastScope}): ${rawDir}...`);
       try {
-        const sRes = await fetch('/api/sast?path=' + encodeURIComponent(rawDir), { signal: AbortSignal.timeout(120000) });
+        const sUrl = `/api/sast?path=${encodeURIComponent(rawDir)}&profile=${encodeURIComponent(sastProfile)}&scope_mode=${encodeURIComponent(sastScope)}&diff_base=${encodeURIComponent(sastDiffBase)}`;
+        const sRes = await fetch(sUrl, { signal: AbortSignal.timeout(120000) });
         totalRequests++;
         const sData = await sRes.json();
         if (!sData.success) {

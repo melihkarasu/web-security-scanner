@@ -511,6 +511,55 @@ EXTRA_RULES = [
     ("LOG-002", "Log Hijyeni", "DÜŞÜK", "CWE-209", "Stack Trace Kullanıcıya Döndürülüyor",
      re.compile(r"(?:catch[^{]*\{[^}]*)(?:res\.send|res\.json|response\.write)[^;]*err(?:or)?\s*(?:\.\s*(?:stack|message))?"),
      "Hata detayları istemciye sızdırılıyor; genel hata mesajı döndürün."),
+
+    # --- 7-Dil Derin Tarayıcı Kuralları (Go, Rust, PHP, Java, C#, TS, Python) ---
+    ("LANG-GO-001", "Go Güvenliği", "YÜKSEK", "CWE-295", "Go TLS InsecureSkipVerify Aktif",
+     re.compile(r"InsecureSkipVerify\s*:\s*true"),
+     "Go tls.Config içinde InsecureSkipVerify: true sertifika doğrulamasını devre dışı bırakır (MITM riski)."),
+    ("LANG-GO-002", "Go Güvenliği", "KRİTİK", "CWE-78", "Go exec.Command Kullanıcı Girdisi",
+     re.compile(r"exec\.Command(?:Context)?\s*\(\s*(?:[\"'](?:sh|bash|cmd)[\"']\s*,\s*[\"']-(?:c|C)[\"']|r\.URL|r\.Form|req\.)"),
+     "Go exec.Command kabuk üzerinden veya doğrudan HTTP isteğiyle çağrılıyor."),
+    ("LANG-RUST-001", "Rust Güvenliği", "ORTA", "CWE-119", "Rust unsafe Bloğu Kullanımı",
+     re.compile(r"\bunsafe\s*\{"),
+     "Rust bellek güvenliği garantilerini devre dışı bırakan unsafe bloğu; sınır ve FFI kontrollerini doğrulayın."),
+    ("LANG-RUST-002", "Rust Güvenliği", "KRİTİK", "CWE-78", "Rust std::process::Command Kabuk Çağrısı",
+     re.compile(r"Command::new\s*\(\s*[\"'](?:sh|bash|cmd)[\"']\s*\)"),
+     "Rust Command::new ile kabuk çalıştırılıyor; argümanları doğrudan dizi olarak geçin."),
+    ("LANG-PHP-001", "PHP Güvenliği", "KRİTİK", "CWE-98", "PHP Dinamik Dosya Dahil Etme (LFI/RFI)",
+     re.compile(r"\b(?:include|include_once|require|require_once)\s*\(?\s*\$_(?:GET|POST|REQUEST|COOKIE)"),
+     "PHP include/require içinde doğrudan kullanıcı girdisi kullanılıyor (LFI/RFI -> RCE)."),
+    ("LANG-PHP-002", "PHP Güvenliği", "KRİTİK", "CWE-502", "PHP Güvensiz unserialize()",
+     re.compile(r"\bunserialize\s*\(\s*\$"),
+     "PHP unserialize() kullanıcı girdisiyle çağrıldığında PHP Object Injection / RCE yol açar; json_decode kullanın."),
+    ("LANG-JAVA-001", "Java Güvenliği", "KRİTİK", "CWE-502", "Java ObjectInputStream.readObject Deserialization",
+     re.compile(r"\bObjectInputStream\b[^;]*\.readObject\s*\("),
+     "Java ObjectInputStream.readObject güvensiz serileştirme çözümü RCE riski taşır."),
+    ("LANG-JAVA-002", "Java Güvenliği", "KRİTİK", "CWE-917", "Spring SpEL Expression Güvensiz Değerlendirme",
+     re.compile(r"SpelExpressionParser\s*\(\s*\)[^;]*\.parseExpression\s*\([^\"')]"),
+     "Spring Expression Language (SpEL) kullanıcı girdisiyle değerlendirildiğinde RCE oluşur."),
+    ("LANG-CS-001", "C# / .NET Güvenliği", "KRİTİK", "CWE-502", ".NET BinaryFormatter / NetDataContractSerializer Kullanımı",
+     re.compile(r"\b(?:BinaryFormatter|NetDataContractSerializer|SoapFormatter|LosFormatter)\b"),
+     ".NET BinaryFormatter ve türevleri güvensizdir (RCE); System.Text.Json kullanın."),
+    ("LANG-CS-002", "C# / .NET Güvenliği", "KRİTİK", "CWE-89", ".NET FromSqlRaw / ExecuteSqlRaw Birleştirme",
+     re.compile(r"\b(?:FromSqlRaw|ExecuteSqlRaw)\s*\(\s*(?:\$\"|[^)]*\+)"),
+     "Entity Framework FromSqlRaw/ExecuteSqlRaw içinde dize birleştirme SQLi oluşturur; FromSqlInterpolated kullanın."),
+
+    # --- Özel Yüzeyler: AI/Agents, WebSocket, Mass Assignment, CI/CD, Local IPC ---
+    ("AI-SEC-001", "AI & Ajan Güvenliği", "YÜKSEK", "CWE-77", "LLM Çıktısının Doğrudan Kod/Kabuk Olarak Yürütülmesi",
+     re.compile(r"(?:eval|exec|subprocess\.(?:run|Popen)|os\.system)\s*\([^)]*(?:completion|llm_output|ai_response|chat_res|choices\[0\])", re.IGNORECASE),
+     "LLM yanıtı doğrulanmadan kod veya kabuk komutu olarak yürütülüyor (Prompt Injection -> RCE)."),
+    ("WS-SEC-001", "WebSocket Güvenliği", "ORTA", "CWE-346", "WebSocket Origin Kontrolü Eksik (CheckOrigin: true)",
+     re.compile(r"CheckOrigin\s*:\s*func\([^)]*\)\s*bool\s*\{\s*return\s+true\s*\}|origins\s*:\s*[\"']\*[\"']"),
+     "WebSocket bağlantılarında tüm Origin'lere izin veriliyor (Cross-Site WebSocket Hijacking)."),
+    ("MASS-001", "Mass Assignment", "YÜKSEK", "CWE-915", "ORM Create/Update İçine Doğrudan req.body Geçilmesi",
+     re.compile(r"\.(?:create|update|findOneAndUpdate|updateMany|assign)\s*\(\s*req\.(?:body|query)\s*[,)]"),
+     "İstemci gövdesi (req.body) alan filtrelemesi (DTO/allowlist) olmadan doğrudan ORM modeline yazılıyor."),
+    ("CICD-001", "CI/CD Güvenliği", "KRİTİK", "CWE-78", "GitHub Actions Workflow Script Injection",
+     re.compile(r"run\s*:.*\$\{\{\s*github\.event\.(?:issue|pull_request|comment|commits|head_commit|discussion)\.[^}]*(?:title|body|message|ref|label)"),
+     "GitHub Actions run bloğunda güvenilmeyen event verisi doğrudan kabuğa enjekte ediliyor; ortam değişkeni üzerinden geçirin."),
+    ("IPC-001", "Masaüstü & Yerel IPC", "KRİTİK", "CWE-94", "Electron nodeIntegration Aktif veya contextIsolation Kapalı",
+     re.compile(r"nodeIntegration\s*:\s*true|contextIsolation\s*:\s*false"),
+     "Electron penceresinde nodeIntegration:true veya contextIsolation:false XSS'i doğrudan RCE'ye dönüştürür."),
 ]
 
 # =============================================================
@@ -533,7 +582,7 @@ def run_deep_analysis(fpath, rel_path):
         findings += analyze_js_taint(fpath, rel_path)
 
     # Entropy (tüm kod dosyaları)
-    if ext in (".js", ".ts", ".jsx", ".tsx", ".py", ".php", ".java", ".go", ".rb", ".env") or ".env" in base:
+    if ext in (".js", ".ts", ".jsx", ".tsx", ".py", ".php", ".java", ".go", ".rb", ".rs", ".cs", ".env", ".yml", ".yaml") or ".env" in base:
         findings += analyze_entropy(fpath, rel_path)
 
     # Genişletilmiş regex kuralları
