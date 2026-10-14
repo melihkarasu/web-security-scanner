@@ -11,8 +11,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
   
   <!-- Precompiled Standalone Tailwind CSS & Dedicated Styling (Sıfır CDN Bağımlılığı) -->
-  <link rel="stylesheet" href="css/tailwind.min.css">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/tailwind.min.css?v=20261014e">
+  <link rel="stylesheet" href="css/style.css?v=20261014e">
 </head>
 <body class="bg-[#F8FAFC] text-mistral-ink font-sans antialiased min-h-full flex flex-col selection:bg-orange-500/20 selection:text-orange-950">
 
@@ -36,10 +36,10 @@
 
       <!-- Durum & Hızlı Aksiyonlar -->
       <div class="flex items-center gap-2 sm:gap-3">
-        <!-- Sunucu Durum Rozeti -->
-        <div id="scanner-mode-pill" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-[11px] font-mono text-emerald-800 font-semibold">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>🟢 Sunucu Aktif</span>
+        <!-- Sunucu / Çalışma Modu Rozeti (Her zaman görünür) -->
+        <div id="scanner-mode-pill" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-stone-200 bg-stone-50 text-[11px] font-mono text-stone-700 font-semibold">
+          <span id="scanner-mode-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span id="scanner-mode-label">Mod kontrol ediliyor…</span>
         </div>
 
         <!-- AI Ayarları Butonu (ÖNE ÇIKARILDI) -->
@@ -169,45 +169,74 @@
     <div class="bg-white border border-stone-200/90 rounded-3xl p-5 sm:p-7 shadow-sm">
       
       <!-- Başlık ve Yönlendirici Bilgi -->
-      <div class="mb-4">
-        <h1 class="text-2xl sm:text-3xl font-extrabold font-editorial tracking-tight text-mistral-ink">
-          Güvenlik Teşhis ve Denetim Merkezi
-        </h1>
-        <p class="text-xs text-mistral-slate mt-1">
-          Hedef alan adını tek bir yerden girin, uygulanacak test modüllerini seçin ve kapsamlı denetimi başlatın.
-        </p>
-      </div>
-
-      <!-- Tek Metin Kutusu (Unified Target URL Input) -->
-      <div class="flex flex-col sm:flex-row gap-2.5 mb-4">
-        <div class="relative flex-1">
-          <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400 font-mono text-sm">
-            🌐
-          </div>
-          <input
-            type="text"
-            id="unified-target-input"
-            placeholder="Hedef alan adı veya URL (örn: example.com veya https://hedef-site.com)"
-            class="w-full pl-10 pr-4 py-3.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm font-mono text-mistral-ink placeholder-stone-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-mistral-orange transition-all shadow-inner"
-          />
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div>
+          <h1 class="text-2xl sm:text-3xl font-extrabold font-editorial tracking-tight text-mistral-ink">
+            Güvenlik Teşhis ve Denetim Merkezi
+          </h1>
+          <p class="text-xs text-mistral-slate mt-1">
+            Alan adını (veya alt dizinli URL'yi: <code class="font-mono text-stone-700">alanadi.com/dizin</code>) ya da yerel proje dizinini girerek kapsamlı denetimi başlatın.
+          </p>
         </div>
-        <button
-          type="button"
-          id="unified-scan-btn"
-          onclick="startUnifiedScan()"
-          class="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-mistral-orange to-amber-600 hover:from-[#e04406] hover:to-amber-700 text-white font-bold text-sm transition-all shadow-sm hover:shadow flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-        >
-          <span id="unified-scan-spinner" class="hidden animate-spin text-base">⏳</span>
-          <span id="unified-scan-btn-text">🚀 Taramayı Başlat</span>
-        </button>
+
+        <!-- Yerel Mod & Derin Tarama Durum Kartı -->
+        <div id="scanner-capability-status" class="flex flex-wrap items-center gap-2 p-2.5 rounded-2xl border border-stone-200 bg-stone-50 text-[11px] font-mono">
+          <span id="status-local-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-200/70 text-stone-700 font-bold">
+            <span>⏳</span>
+            <span>Yerel Mod: Kontrol ediliyor…</span>
+          </span>
+          <span id="status-deep-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-200/70 text-stone-700 font-bold">
+            <span>🔍</span>
+            <span>Derin Tarama: Kontrol ediliyor…</span>
+          </span>
+        </div>
       </div>
 
-      <!-- Hızlı Örnek Alan Adları -->
-      <div class="flex flex-wrap items-center gap-1.5 mb-5 text-[11px] text-mistral-slate">
-        <span class="font-medium">Hızlı Örnekler:</span>
-        <button type="button" onclick="selectPreset('github.com')" class="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 font-mono text-stone-700 transition">github.com</button>
-        <button type="button" onclick="selectPreset('google.com')" class="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 font-mono text-stone-700 transition">google.com</button>
-        <button type="button" onclick="selectPreset('cloudflare.com')" class="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 font-mono text-stone-700 transition">cloudflare.com</button>
+      <!-- Mod Bilgilendirme Şeridi -->
+      <div id="scanner-mode-notice" class="hidden mb-4 p-3 rounded-2xl border text-xs"></div>
+
+      <!-- Hedef Giriş Satırı: Alan Adı / Alt Dizinli URL + Opsiyonel Yerel Proje Dizini -->
+      <div class="flex flex-col gap-2.5 mb-5">
+        <div class="flex flex-col sm:flex-row gap-2.5">
+          <div class="target-input-wrapper flex-1">
+            <div class="target-input-icon text-stone-400">
+              🌐
+            </div>
+            <input
+              type="text"
+              id="unified-target-input"
+              placeholder="Alan adı, alt dizinli URL veya yerel dizin (örn: site.com/panel, http://localhost:3000/api veya /proje/dizini)"
+              class="w-full bg-stone-50 border border-stone-200 rounded-2xl text-sm font-mono text-mistral-ink placeholder-stone-400 focus:bg-white transition-all shadow-inner"
+            />
+          </div>
+          <button
+            type="button"
+            id="unified-scan-btn"
+            onclick="startUnifiedScan()"
+            class="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-mistral-orange to-amber-600 hover:from-[#e04406] hover:to-amber-700 text-white font-bold text-sm transition-all shadow-sm hover:shadow flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+          >
+            <span id="unified-scan-spinner" class="hidden animate-spin text-base">⏳</span>
+            <span id="unified-scan-btn-text">🚀 Taramayı Başlat</span>
+          </button>
+        </div>
+
+        <!-- Yerel Mod: Alan Adı ile Birlikte veya Bağımsız Yerel Dizin (SAST) Girişi -->
+        <div id="local-dir-row" class="flex flex-col sm:flex-row sm:items-center gap-2 pt-1">
+          <div class="target-input-wrapper flex-1">
+            <div class="target-input-icon text-stone-400">
+              📂
+            </div>
+            <input
+              type="text"
+              id="unified-dir-input"
+              placeholder="Yerel proje dizini ile kaynak kod (SAST) taraması (opsiyonel, örn: /var/www/app veya ~/proje)"
+              class="w-full bg-stone-50 border border-stone-200 rounded-2xl text-xs font-mono text-mistral-ink placeholder-stone-400 focus:bg-white transition-all shadow-inner"
+            />
+          </div>
+          <span id="local-dir-hint" class="text-[11px] text-mistral-slate font-mono px-1">
+            Alan adı/dizin URL'si ile birlikte veya tek başına yerel kaynak kod dizini taranabilir.
+          </span>
+        </div>
       </div>
 
       <!-- Modül Seçimi (Test Checkbox Pills) -->
@@ -215,7 +244,7 @@
         <div class="text-[11px] font-bold text-mistral-slate uppercase tracking-wider mb-2.5">
           Uygulanacak Test Modülleri:
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
           
           <!-- Modül 1: Pasif Başlık & DNS -->
           <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
@@ -236,12 +265,25 @@
               <div class="text-xs font-bold text-mistral-ink flex items-center gap-1.5">
                 <span>🔍</span>
                 <span>Derin Pasif Keşif</span>
+                <span id="mod-deep-pill" class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-100 text-emerald-800">Aktif</span>
               </div>
               <p class="text-[10px] text-mistral-slate mt-0.5">Çerez Güvenliği, robots.txt, Teknoloji Parmak İzi</p>
             </div>
           </label>
 
-          <!-- Modül 3: Aktif Zafiyet Testi -->
+          <!-- Modül 3: Yerel Kaynak Kod (SAST) -->
+          <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
+            <input type="checkbox" id="mod-sast" checked class="mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
+            <div>
+              <div class="text-xs font-bold text-mistral-ink flex items-center gap-1.5">
+                <span>📂</span>
+                <span>Kaynak Kod (SAST)</span>
+              </div>
+              <p class="text-[10px] text-mistral-slate mt-0.5">42 Kural, AST/Taint & OSV Bağımlılık CVE Taraması</p>
+            </div>
+          </label>
+
+          <!-- Modül 4: Aktif Zafiyet Testi -->
           <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
             <input type="checkbox" id="mod-active" checked onchange="onActiveModuleToggle()" class="mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
             <div>
@@ -253,7 +295,7 @@
             </div>
           </label>
 
-          <!-- Modül 4: AI Red Team -->
+          <!-- Modül 5: AI Red Team -->
           <label class="relative flex items-start gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50/40 hover:bg-amber-50 transition cursor-pointer select-none">
             <input type="checkbox" id="mod-ai" onchange="onAIModuleToggle()" class="mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
             <div>
@@ -404,6 +446,11 @@
             <span>Derin Pasif & Teknoloji</span>
           </button>
 
+          <button type="button" onclick="switchDetailTab('tab-sast')" id="btn-tab-sast" class="detail-tab-btn px-4 py-2.5 rounded-t-xl text-mistral-slate hover:text-mistral-ink font-semibold flex items-center gap-1.5 transition">
+            <span>📂</span>
+            <span>Kaynak Kod (SAST)</span>
+          </button>
+
           <button type="button" onclick="switchDetailTab('tab-active')" id="btn-tab-active" class="detail-tab-btn px-4 py-2.5 rounded-t-xl text-mistral-slate hover:text-mistral-ink font-semibold flex items-center gap-1.5 transition">
             <span>⚡</span>
             <span>Aktif Test Raporu</span>
@@ -442,13 +489,45 @@
 
           <!-- SEKME 4: Derin Pasif & Teknoloji -->
           <div id="tab-deep" class="detail-tab-content hidden space-y-4">
-            <div id="deep-scan-container" class="space-y-3"></div>
+            <div id="deep-scan-card" class="space-y-3">
+              <div id="deep-scan-container" class="space-y-3">
+                <p class="text-xs text-mistral-slate">Derin pasif tarama sonuçları burada listelenecek.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- SEKME 4B: Yerel Dizin / Kaynak Kod Analizi (SAST) -->
+          <div id="tab-sast" class="detail-tab-content hidden space-y-4">
+            <div id="sast-stats-card" class="p-4 rounded-2xl border border-stone-200 bg-white">
+              <div id="sast-stats-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+            </div>
+            <div id="sast-severity-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+            <div id="sast-deps-card" class="hidden space-y-2">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">📦 Bağımlılık CVE Denetimi (Google OSV)</h4>
+              <div id="sast-deps-container" class="space-y-2"></div>
+            </div>
+            <div id="sast-findings-list" class="space-y-2.5">
+              <p class="text-xs text-mistral-slate">Yerel bir proje dizini (örn: <code class="font-mono">/var/www/app</code> veya <code class="font-mono">.</code>) tarandığında SAST bulguları burada listelenir.</p>
+            </div>
           </div>
 
           <!-- SEKME 5: Aktif Test Raporu -->
           <div id="tab-active" class="detail-tab-content hidden space-y-4">
-            <div id="active-results-container" class="space-y-3">
-              <p class="text-xs text-mistral-slate">Aktif test sonuçları burada listelenecek.</p>
+            <div id="active-results-container" class="space-y-4">
+              <div id="active-stats-grid" class="grid grid-cols-2 sm:grid-cols-5 gap-2.5"></div>
+              <div id="active-severity-summary" class="grid grid-cols-2 sm:grid-cols-5 gap-2.5"></div>
+              <div id="active-modules-status" class="grid grid-cols-1 sm:grid-cols-3 gap-2"></div>
+              <div id="active-sitemap-card" class="hidden space-y-1.5">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">🗺️ Taranan Site Haritası</h4>
+                <div id="active-sitemap-list" class="space-y-1"></div>
+              </div>
+              <div id="active-chains-card" class="hidden space-y-1.5">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-rose-700">🔗 Zincirleme Risk Korelasyonları</h4>
+                <div id="active-chains-list" class="space-y-2"></div>
+              </div>
+              <div id="active-findings-list" class="space-y-2.5">
+                <p class="text-xs text-mistral-slate">Aktif test sonuçları burada listelenecek.</p>
+              </div>
             </div>
           </div>
 
@@ -576,6 +655,6 @@
   </footer>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261014d"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261014e"></script>
 </body>
 </html>

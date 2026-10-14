@@ -95,18 +95,44 @@ header {
 }
 
 /* Form Kontrolleri */
-#unified-target-input {
+.target-input-wrapper {
+  position: relative;
+  flex: 1 1 0%;
+  display: flex;
+  align-items: center;
+}
+
+.target-input-icon {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-size: 1rem;
+  line-height: 1;
+  z-index: 2;
+  user-select: none;
+}
+
+#unified-target-input,
+#unified-dir-input {
   border: 1px solid #CBD5E1 !important;
   background-color: #FFFFFF !important;
   color: #0F172A !important;
   border-radius: 1rem !important;
-  padding: 0.875rem 1rem 0.875rem 2.5rem !important;
+  padding: 0.875rem 1rem 0.875rem 2.75rem !important;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.875rem;
+  line-height: 1.35;
   width: 100%;
 }
 
-#unified-target-input:focus {
+#unified-target-input:focus,
+#unified-dir-input:focus {
   border-color: #FA520F !important;
   box-shadow: 0 0 0 3px rgba(250, 82, 15, 0.15) !important;
   outline: none !important;
@@ -118,13 +144,143 @@ input[type="checkbox"] {
   height: 1.125rem;
 }
 
-/* AI Thought Log Terminal */
-#ai-thought-log {
-  background-color: #090D16 !important;
+/* Koyu Zeminli Terminal ve Kod Blokları (Siyah Üzerine Siyah Yazı Koruması) */
+.bg-stone-900,
+.bg-stone-950,
+.bg-black,
+.bg-black\/60,
+#ai-thought-log,
+#strix-log,
+pre.bg-stone-900,
+pre.bg-stone-950 {
+  background-color: #0F172A !important;
   color: #F1F5F9 !important;
+}
+
+.bg-stone-950,
+#ai-thought-log,
+#strix-log {
+  background-color: #090D16 !important;
+}
+
+.bg-stone-900 code,
+.bg-stone-950 code,
+.bg-black\/60 code,
+pre.bg-stone-900 code,
+pre.bg-stone-950 code {
+  color: inherit !important;
+  background: transparent !important;
+}
+
+/* AI Thought Log & Strix Log Terminal */
+#ai-thought-log,
+#strix-log {
   font-family: 'JetBrains Mono', monospace !important;
   border-radius: 0.75rem;
   border: 1px solid #1E293B;
+}
+
+#strix-log {
+  color: #6EE7B7 !important;
+}
+
+/* Eksik Tailwind Yardımcı Sınıfları (Tam Parite) */
+.inset-y-0 { top: 0px; bottom: 0px; }
+.left-0 { left: 0px; }
+.pl-3\.5 { padding-left: 0.875rem; }
+.pl-10 { padding-left: 2.5rem; }
+.pl-11 { padding-left: 2.75rem; }
+.pt-1\.5 { padding-top: 0.375rem; }
+.py-0\.2 { padding-top: 0.1rem; padding-bottom: 0.1rem; }
+.mt-12 { margin-top: 3rem; }
+.w-0 { width: 0px; }
+.min-h-full { min-height: 100%; }
+.max-h-32 { max-height: 8rem; }
+.max-h-\[280px\] { max-height: 280px; }
+.max-h-\[400px\] { max-height: 400px; }
+.z-40 { z-index: 40; }
+.flex-shrink-0, .shrink-0 { flex-shrink: 0; }
+.whitespace-nowrap { white-space: nowrap; }
+.list-disc { list-style-type: disc; }
+.list-inside { list-style-position: inside; }
+.outline-none { outline: 2px solid transparent; outline-offset: 2px; }
+.shadow-xs { box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.05); }
+.rounded-t-xl { border-top-left-radius: 0.75rem; border-top-right-radius: 0.75rem; }
+.border-b-2 { border-bottom-width: 2px; }
+.disabled\:opacity-50:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Eksik Metin ve Arka Plan Renkleri */
+.text-stone-100 { color: #F5F5F4 !important; }
+.text-stone-200 { color: #E7E5E4 !important; }
+.text-stone-300 { color: #D6D3D1 !important; }
+.text-stone-400 { color: #A8A29E !important; }
+.text-stone-500 { color: #78716C !important; }
+.text-stone-600 { color: #57534E !important; }
+.text-stone-700 { color: #44403C !important; }
+.text-stone-800 { color: #292524 !important; }
+.text-amber-200 { color: #FDE68A !important; }
+.text-amber-400 { color: #FBBF24 !important; }
+.text-amber-800 { color: #92400E !important; }
+.text-amber-900 { color: #78350F !important; }
+.text-amber-950 { color: #451A03 !important; }
+.text-orange-900 { color: #7C2D12 !important; }
+.text-emerald-300, .text-emerald-300\/90 { color: #6EE7B7 !important; }
+.text-emerald-400 { color: #34D399 !important; }
+.text-emerald-700 { color: #047857 !important; }
+.text-emerald-800 { color: #065F46 !important; }
+.text-emerald-900 { color: #064E3B !important; }
+.text-emerald-950 { color: #022C22 !important; }
+.text-sky-800 { color: #075985 !important; }
+.text-sky-900 { color: #0C4A6E !important; }
+.text-indigo-700 { color: #4338CA !important; }
+.text-cyan-400 { color: #22D3EE !important; }
+.text-rose-400 { color: #FB7185 !important; }
+
+.bg-\[\#F8FAFC\] { background-color: #F8FAFC; }
+.bg-stone-50\/50 { background-color: rgba(250, 250, 249, 0.5); }
+.bg-stone-50\/60 { background-color: rgba(250, 250, 249, 0.6); }
+.bg-stone-50\/70 { background-color: rgba(250, 250, 249, 0.7); }
+.bg-stone-200\/70 { background-color: rgba(231, 229, 228, 0.7); }
+.bg-stone-300 { background-color: #D6D3D1; }
+.bg-stone-500 { background-color: #78716C; }
+.bg-stone-600 { background-color: #57534E; }
+.bg-amber-400 { background-color: #FBBF24; }
+.bg-amber-50\/40 { background-color: rgba(255, 251, 235, 0.4); }
+.bg-amber-50\/50 { background-color: rgba(255, 251, 235, 0.5); }
+.bg-amber-50\/70 { background-color: rgba(255, 251, 235, 0.7); }
+.bg-orange-50 { background-color: #FFF7ED; }
+.bg-emerald-50\/30 { background-color: rgba(236, 253, 245, 0.3); }
+.bg-emerald-50\/50 { background-color: rgba(236, 253, 245, 0.5); }
+.bg-emerald-50\/90 { background-color: rgba(236, 253, 245, 0.9); }
+.bg-rose-50\/40 { background-color: rgba(255, 241, 242, 0.4); }
+.bg-rose-50\/60 { background-color: rgba(255, 241, 242, 0.6); }
+.bg-sky-100 { background-color: #E0F2FE; }
+.bg-sky-500 { background-color: #0EA5E9; }
+.bg-sky-600 { background-color: #0284C7; }
+.bg-indigo-100 { background-color: #E0E7FF; }
+.bg-white\/80 { background-color: rgba(255, 255, 255, 0.8); }
+
+.border-stone-200\/60 { border-color: rgba(231, 229, 228, 0.6); }
+.border-stone-200\/70 { border-color: rgba(231, 229, 228, 0.7); }
+.border-stone-200\/80 { border-color: rgba(231, 229, 228, 0.8); }
+.border-stone-200\/90 { border-color: rgba(231, 229, 228, 0.9); }
+.border-stone-800 { border-color: #292524; }
+.border-amber-300\/80 { border-color: rgba(252, 211, 77, 0.8); }
+.border-orange-200 { border-color: #FED7AA; }
+.border-rose-100 { border-color: #FFE4E6; }
+.border-indigo-200 { border-color: #C7D2FE; }
+
+@media (min-width: 640px) {
+  .sm\:inline-flex { display: inline-flex; }
+  .sm\:p-7 { padding: 1.75rem; }
+  .sm\:py-8 { padding-top: 2rem; padding-bottom: 2rem; }
+  .sm\:col-span-2 { grid-column: span 2 / span 2; }
+}
+@media (min-width: 768px) {
+  .md\:inline-flex { display: inline-flex; }
+}
+@media (min-width: 1024px) {
+  .lg\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
 
 /* Sekmeler */

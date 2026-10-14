@@ -491,8 +491,13 @@ async function probePublicHeadersFallback(domain) {
 
 // Çalışma Modunu Otomatik Algılama (Lokal Sunucu vs GitHub Pages)
 async function detectScannerMode() {
+  const modePillEl = document.getElementById('scanner-mode-pill');
   const modeBadgeEl = document.getElementById('scanner-mode-badge');
   const modeNoticeEl = document.getElementById('scanner-mode-notice');
+  const statusLocalBadge = document.getElementById('status-local-badge');
+  const statusDeepBadge = document.getElementById('status-deep-badge');
+  const modDeepPill = document.getElementById('mod-deep-pill');
+  const localDirRow = document.getElementById('local-dir-row');
 
   try {
     const res = await fetch('/api/status', { signal: AbortSignal.timeout(1500) });
@@ -500,8 +505,27 @@ async function detectScannerMode() {
       const data = await res.json();
       if (data.mode === 'local_server') {
         STATE.mode = 'local_api';
+        if (modePillEl) {
+          modePillEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-[11px] font-mono text-emerald-800 font-semibold';
+          modePillEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span>🟢 Yerel Mod & Derin Tarama Aktif</span>';
+        }
+        if (statusLocalBadge) {
+          statusLocalBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold';
+          statusLocalBadge.innerHTML = '<span>🟢</span><span>Yerel Mod: Aktif</span>';
+        }
+        if (statusDeepBadge) {
+          statusDeepBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold';
+          statusDeepBadge.innerHTML = '<span>🔍</span><span>Derin Tarama & SAST: Aktif</span>';
+        }
+        if (modDeepPill) {
+          modDeepPill.className = 'px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-100 text-emerald-800';
+          modDeepPill.innerText = 'Aktif';
+        }
+        if (localDirRow) {
+          localDirRow.classList.remove('hidden');
+        }
         if (modeBadgeEl) {
-          modeBadgeEl.innerHTML = '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[11px] font-mono shadow-xs">🟢 Lokal Mod (Tam Başlık Taraması Aktif)</span>';
+          modeBadgeEl.innerHTML = '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[11px] font-mono shadow-xs">🟢 Lokal Mod (Tam Başlık & Dizin Taraması Aktif)</span>';
         }
         if (modeNoticeEl) {
           modeNoticeEl.className = 'p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-300 text-xs text-emerald-950 mb-4 flex items-center justify-between gap-3 shadow-xs';
@@ -509,20 +533,51 @@ async function detectScannerMode() {
             <div class="flex items-center gap-2.5">
               <span class="text-lg">🚀</span>
               <div>
-                <strong class="font-bold text-emerald-900">Lokal Sunucu Aktif (127.0.0.1:8765):</strong>
-                <span class="text-emerald-800 text-[11px] block sm:inline">CORS engeli yok. Derin pasif analiz, SAST (42 kural), etik onaylı aktif testler ve AI Red Team orkestrasyonu hazır.</span>
+                <strong class="font-bold text-emerald-900">Yerel Sunucu & Derin Tarama Aktif (127.0.0.1:8765):</strong>
+                <span class="text-emerald-800 text-[11px] block sm:inline">Alan adı + alt dizin (<code class="font-mono">site.com/dizin</code>), yerel proje dizini (SAST), derin pasif analiz, etik onaylı aktif testler, AI Red Team ve Strix hazır.</span>
               </div>
             </div>
-            <span class="hidden md:inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold border border-emerald-300">TAM YETKİ</span>
+            <span class="hidden md:inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold border border-emerald-300 shrink-0">TAM YETKİ</span>
           `;
         }
+        loadStrixCapabilities();
+        loadStrixPastRuns();
         return;
       }
     }
   } catch (e) {}
 
-  // GitHub Pages veya Statik Barındırma Modu: Zaten index.html içinde zengin karşılaştırma kartı yüklü
+  // GitHub Pages veya Statik Barındırma Modu
   STATE.mode = 'github_pages';
+  if (modePillEl) {
+    modePillEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 text-[11px] font-mono text-amber-900 font-semibold';
+    modePillEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span><span>🟡 Statik Mod (Derin Tarama Pasif)</span>';
+  }
+  if (statusLocalBadge) {
+    statusLocalBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100 border border-amber-300 text-amber-900 font-bold';
+    statusLocalBadge.innerHTML = '<span>🟡</span><span>Yerel Mod: Pasif (GitHub Pages)</span>';
+  }
+  if (statusDeepBadge) {
+    statusDeepBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-200/70 border border-stone-300 text-stone-700 font-bold';
+    statusDeepBadge.innerHTML = '<span>⚪</span><span>Derin Tarama: Pasif (Lokal Sunucu Gerekli)</span>';
+  }
+  if (modDeepPill) {
+    modDeepPill.className = 'px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-100 text-amber-800';
+    modDeepPill.innerText = 'Lokal Mod';
+  }
+  if (modeNoticeEl) {
+    modeNoticeEl.className = 'p-3.5 rounded-2xl bg-amber-50/70 border border-amber-300 text-xs text-amber-950 mb-4 flex items-center justify-between gap-3 shadow-xs';
+    modeNoticeEl.innerHTML = `
+      <div class="flex items-center gap-2.5">
+        <span class="text-lg">ℹ️</span>
+        <div>
+          <strong class="font-bold text-amber-900">Tarayıcı Önizleme Modu (Yerel Mod Pasif):</strong>
+          <span class="text-amber-800 text-[11px] block sm:inline">Şu an yalnızca DoH üzerinden pasif DNS denetimi aktiftir. Derin pasif tarama, yerel dizin (SAST), aktif testler ve AI/Strix için yerel sunucuyu (<code class="font-mono">python3 server.py</code>) çalıştırın.</span>
+        </div>
+      </div>
+      <span class="hidden md:inline-flex items-center px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-mono text-[10px] font-bold border border-amber-300 shrink-0">PASİF ÖNİZLEME</span>
+    `;
+  }
   if (modeBadgeEl) {
     modeBadgeEl.innerHTML = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[11px] font-mono shadow-xs">🟡 GitHub Pages Modu (Pasif DoH Önizlemesi)</span>';
   }
@@ -2254,54 +2309,104 @@ function renderUnifiedDashboard(domain, findings, reqCount, elapsedSec) {
   }).join('');
 }
 
+// Girdinin yerel dosya sistemi dizini olup olmadığını algılar
+function isLocalDirectoryInput(val) {
+  if (!val) return false;
+  const s = val.trim();
+  if (/^(https?:\/\/)/i.test(s)) return false;
+  if (s === '.' || s === '..' || s.startsWith('/') || s.startsWith('~/') || s.startsWith('./') || s.startsWith('../') || /^[a-zA-Z]:[\\/]/.test(s)) {
+    return true;
+  }
+  return false;
+}
+
 async function startUnifiedScan() {
   hideScanError();
   const input = document.getElementById('unified-target-input');
+  const dirInput = document.getElementById('unified-dir-input');
   const btn = document.getElementById('unified-scan-btn');
   const spinner = document.getElementById('unified-scan-spinner');
   const btnText = document.getElementById('unified-scan-btn-text');
 
   let raw = input ? input.value.trim() : '';
-  if (!raw) {
-    showToast('Lütfen taranacak bir alan adı veya URL girin.', 'warning');
+  let rawDir = dirInput ? dirInput.value.trim() : '';
+
+  if (!raw && !rawDir) {
+    showToast('Lütfen taranacak bir alan adı (örn: site.com/dizin) veya yerel proje dizini girin.', 'warning');
     input?.focus();
     return;
   }
 
-  // Otomatik https:// ekleme
-  if (!raw.startsWith('http://') && !raw.startsWith('https://')) {
-    raw = 'https://' + raw;
+  // Ana kutuya doğrudan yerel dizin (/var/www/app, ~/proje, ./src) yazıldıysa:
+  if (raw && isLocalDirectoryInput(raw) && !rawDir) {
+    rawDir = raw;
+    raw = '';
   }
 
-  let cleanUrl = raw;
+  let cleanUrl = '';
   let cleanDomain = '';
-  try {
-    const u = new URL(cleanUrl);
-    cleanDomain = u.hostname;
-    cleanUrl = u.origin + u.pathname;
-  } catch (e) {
-    showScanError('Geçersiz Alan Adı Formatı', 'Girdiğiniz adres standart bir internet adresine (URL) uymuyor: ' + raw, [
-      'Alan adını "example.com" veya "https://example.com" şeklinde girin.',
-      'Boşluk veya Türkçe özel karakter barındırmadığından emin olun.'
+  let displayTarget = '';
+
+  if (raw) {
+    // Otomatik شema ekleme (localhost / 127.0.0.1 ise http://, diğerlerinde https://)
+    let candidate = raw;
+    if (!candidate.startsWith('http://') && !candidate.startsWith('https://')) {
+      const isLoopback = /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|172\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?(\/|$)/i.test(candidate);
+      candidate = (isLoopback ? 'http://' : 'https://') + candidate;
+    }
+
+    try {
+      const u = new URL(candidate);
+      cleanDomain = u.hostname;
+      // Alt dizin (pathname) ve sorgu parametrelerini (search) koru!
+      cleanUrl = u.origin + (u.pathname || '/') + (u.search || '');
+      const pathAndQuery = ((u.pathname && u.pathname !== '/') ? u.pathname : '') + (u.search || '');
+      displayTarget = u.host + pathAndQuery;
+    } catch (e) {
+      showScanError('Geçersiz Hedef Formatı', 'Girdiğiniz adres geçerli bir alan adı/URL veya yerel dizin yoluna uymuyor: ' + raw, [
+        'Alan adı + dizin için: "ornek.com/panel" veya "https://ornek.com/api/v1"',
+        'Yerel dizin (SAST) için: "/home/kullanici/proje" veya "~/proje" şeklinde girin.'
+      ]);
+      return;
+    }
+  }
+
+  if (rawDir && STATE.mode !== 'local_api') {
+    showScanError('Yerel Mod Gerekli', 'Yerel proje dizini (SAST) taraması yalnızca yerel sunucu modunda (python3 server.py) çalışır.', [
+      'Terminalden "python3 server.py" komutunu çalıştırarak yerel modu aktif edin.',
+      'Üstteki durum rozetinde "🟢 Yerel Mod: Aktif" ibaresini doğrulayın.'
     ]);
     return;
   }
 
-  STATE.currentDomain = cleanDomain;
+  STATE.currentDomain = displayTarget || rawDir;
   STATE.targetUrl = cleanUrl;
+  STATE.targetDir = rawDir;
+
+  // Eğer hem URL hem yerel dizin girildiyse Strix ek hedeflerine otomatik bağla (beyaz-kutu)
+  if (rawDir) {
+    const extraEl = document.getElementById('strix-extra-targets');
+    if (extraEl && !extraEl.value.includes(rawDir)) {
+      extraEl.value = (extraEl.value ? extraEl.value.trim() + '\n' : '') + rawDir;
+    }
+  }
 
   const modPassive = document.getElementById('mod-passive')?.checked ?? true;
   const modDeep = document.getElementById('mod-deep')?.checked ?? true;
+  const modSast = document.getElementById('mod-sast')?.checked ?? true;
   const modActive = document.getElementById('mod-active')?.checked ?? false;
   const modAi = document.getElementById('mod-ai')?.checked ?? false;
 
-  if (!modPassive && !modDeep && !modActive && !modAi) {
-    showToast('En az bir test modülü seçmelisiniz.', 'warning');
+  const hasWebScan = Boolean(cleanUrl) && (modPassive || modDeep || modActive || modAi);
+  const hasDirScan = Boolean(rawDir) && (modSast || !cleanUrl);
+
+  if (!hasWebScan && !hasDirScan) {
+    showToast('En az bir uygun test modülü seçmelisiniz.', 'warning');
     return;
   }
 
-  // Etik onay kontrolü
-  if (modActive || modAi) {
+  // Etik onay kontrolü (aktif veya AI web taraması varsa)
+  if (cleanUrl && (modActive || modAi)) {
     const ethical = document.getElementById('unified-ethical-check');
     if (!ethical || !ethical.checked) {
       showScanError('Etik Onay Gerekli', 'Aktif güvenlik testi veya AI Red Team analizi için etik sorumluluk beyanını onaylamanız zorunludur.', [
@@ -2326,10 +2431,10 @@ async function startUnifiedScan() {
 
   try {
     // -------------------------------------------------------------
-    // 1. PASİF BAŞLIK & DNS TARAMASI
+    // 1. PASİF BAŞLIK & DNS TARAMASI (Alan adı + alt dizin URL'si)
     // -------------------------------------------------------------
-    if (modPassive) {
-      updateProgressBar(15, `[1/4] ${cleanDomain} için HTTP başlıkları ve DNS kayıtları sorgulanıyor...`);
+    if (cleanUrl && modPassive) {
+      updateProgressBar(15, `[1/5] ${displayTarget} için HTTP başlıkları ve DNS kayıtları sorgulanıyor...`);
       
       let headerMap = {};
       try {
@@ -2346,7 +2451,7 @@ async function startUnifiedScan() {
       const headerEval = evaluateHeaders(headerMap);
       STATE.results.headers = headerEval;
 
-      updateProgressBar(30, `[1/4] Cloudflare & Google DoH üzerinden DNSSEC, DMARC, SPF sorgulanıyor...`);
+      updateProgressBar(25, `[1/5] Cloudflare & Google DoH üzerinden DNSSEC, DMARC, SPF sorgulanıyor...`);
       const dnsReport = await performDnsSecurityAudit(cleanDomain);
       totalRequests += 5;
       STATE.results.dns = dnsReport;
@@ -2391,10 +2496,10 @@ async function startUnifiedScan() {
     }
 
     // -------------------------------------------------------------
-    // 2. DERİN PASİF KEŞİF (Cookies, TLS, Robots, Tech)
+    // 2. DERİN PASİF KEŞİF (Cookies, TLS, Robots, Tech — alt dizin dahil)
     // -------------------------------------------------------------
-    if (modDeep) {
-      updateProgressBar(50, `[2/4] Derin pasif analiz: Çerez güvenliği, robots.txt ve teknoloji parmak izi...`);
+    if (cleanUrl && modDeep && STATE.mode === 'local_api') {
+      updateProgressBar(40, `[2/5] Derin pasif analiz (${displayTarget}): Çerez güvenliği, TLS, robots.txt ve teknoloji parmak izi...`);
       try {
         const dRes = await fetch('/api/deep-scan?url=' + encodeURIComponent(cleanUrl));
         totalRequests += 4;
@@ -2403,25 +2508,26 @@ async function startUnifiedScan() {
           STATE.results.deepScan = dData;
           renderDeepScanResults(dData);
 
-          if (dData.cookies) {
-            dData.cookies.forEach(c => {
-              if (c.flags?.includes('Eksik Secure') || c.flags?.includes('Eksik HttpOnly')) {
-                allFindings.push({
-                  type: 'COOKIE',
-                  severity: 'ORTA',
-                  title: `Güvensiz Çerez Yapılandırması: ${c.name}`,
-                  desc: `${c.name} çerezinde güvenlik bayrakları eksik: ${c.flags.join(', ')}`,
-                  fix: 'Set-Cookie başlığına "Secure; HttpOnly; SameSite=Lax" bayraklarını ekleyin.'
-                });
-              }
-            });
-          }
-          if (dData.robots_txt?.sensitive_paths?.length > 0) {
+          const cookieFindings = dData.cookies?.findings || (Array.isArray(dData.cookies) ? dData.cookies : []);
+          cookieFindings.forEach(c => {
+            if (c.issues && c.issues.length > 0) {
+              allFindings.push({
+                type: 'COOKIE',
+                severity: 'ORTA',
+                title: `Güvensiz Çerez Yapılandırması: ${c.name}`,
+                desc: `${c.name} çerezinde güvenlik eksikleri: ${c.issues.join(', ')}`,
+                fix: 'Set-Cookie başlığına "Secure; HttpOnly; SameSite=Lax" bayraklarını ekleyin.'
+              });
+            }
+          });
+          const robotsFindings = dData.robots?.findings || [];
+          if (robotsFindings.length > 0) {
             allFindings.push({
               type: 'ROBOTS',
               severity: 'DÜŞÜK',
               title: 'robots.txt İçinde Hassas Dizin İfşası',
-              desc: 'robots.txt dosyasında hassas dizinler listelenmiş: ' + dData.robots_txt.sensitive_paths.join(', '),
+              desc: robotsFindings.map(r => r.issue).join('; '),
+              evidence: robotsFindings.map(r => r.evidence).join(', '),
               fix: 'Hassas yönetim yollarını robots.txt dosyasına yazmak yerine kimlik doğrulama ile koruyun.'
             });
           }
@@ -2432,10 +2538,63 @@ async function startUnifiedScan() {
     }
 
     // -------------------------------------------------------------
-    // 3. AKTİF ZAFİYET TARAMASI
+    // 2B. YEREL DİZİN / KAYNAK KOD ANALİZİ (SAST + OSV CVE)
     // -------------------------------------------------------------
-    if (modActive) {
-      updateProgressBar(70, `[3/4] Aktif güvenlik testleri: SQLi, XSS, CSRF, SSRF & Portlar taranıyor...`);
+    if (hasDirScan && STATE.mode === 'local_api') {
+      updateProgressBar(55, `[3/5] Yerel dizin kaynak kod taraması (SAST + OSV CVE): ${rawDir}...`);
+      try {
+        const sRes = await fetch('/api/sast?path=' + encodeURIComponent(rawDir), { signal: AbortSignal.timeout(120000) });
+        totalRequests++;
+        const sData = await sRes.json();
+        if (!sData.success) {
+          showToast('SAST dizin hatası: ' + (sData.error || 'Dizin taranamadı'), 'error');
+        } else {
+          STATE.results.sast = sData;
+          renderSastStats(sData);
+          renderSastFindings();
+          renderSastDeps(sData.dependencies);
+
+          (sData.findings || []).forEach(f => {
+            allFindings.push({
+              type: 'SAST',
+              severity: f.severity || 'ORTA',
+              title: `[${f.rule_id}] ${f.title} (${f.file}:${f.line})`,
+              desc: f.description || '',
+              evidence: f.match || '',
+              fix: f.fix || 'Kaynak koddaki güvensiz çağrıyı parametrik/güvenli alternatifle değiştirin.'
+            });
+          });
+          const vulnDeps = sData.dependencies?.vulnerable || [];
+          vulnDeps.forEach(v => {
+            allFindings.push({
+              type: 'CVE',
+              severity: 'YÜKSEK',
+              title: `Bağımlılık Zafiyeti: ${v.name}@${v.version} (${v.vuln_count} CVE)`,
+              desc: (v.vulns || []).map(x => `${x.id}: ${x.summary}`).join(' | '),
+              fix: `${v.name} paketini güvenli sürüme yükseltin.`
+            });
+          });
+
+          // Sadece yerel dizin tarandıysa skor hesapla ve SAST sekmesini öne çıkar
+          if (!cleanUrl) {
+            const s = sData.summary || {};
+            const penalty = (s['KRİTİK'] || 0) * 18 + (s['YÜKSEK'] || 0) * 10 + (s['ORTA'] || 0) * 4 + (s['DÜŞÜK'] || 0) * 1;
+            STATE.score = Math.max(0, 100 - penalty);
+            STATE.grade = STATE.score >= 90 ? 'A' : STATE.score >= 75 ? 'B' : STATE.score >= 60 ? 'C' : STATE.score >= 40 ? 'D' : 'F';
+            switchDetailTab('tab-sast');
+          }
+        }
+      } catch (e) {
+        console.error('SAST tarama hatası:', e);
+        showToast('Yerel dizin taraması başarısız: ' + e.message, 'error');
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 3. AKTİF ZAFİYET TARAMASI (Alt dizin URL'si dahil)
+    // -------------------------------------------------------------
+    if (cleanUrl && modActive && STATE.mode === 'local_api') {
+      updateProgressBar(75, `[4/5] Aktif güvenlik testleri (${displayTarget}): SQLi, XSS, CSRF, SSRF & Portlar taranıyor...`);
       try {
         // Etik onayı sunucuya kaydet
         const confirmRes = await fetch('/api/active-confirm', {
@@ -2479,8 +2638,8 @@ async function startUnifiedScan() {
     // -------------------------------------------------------------
     // 4. AI RED TEAM ORKESTRASYONU
     // -------------------------------------------------------------
-    if (modAi) {
-      updateProgressBar(90, `[4/4] AI Red Team ajanları (Scout, Strategist, Analyst) çalıştırılıyor...`);
+    if (cleanUrl && modAi && STATE.mode === 'local_api') {
+      updateProgressBar(90, `[5/5] AI Red Team ajanları (Scout, Strategist, Analyst) çalıştırılıyor...`);
       try {
         const aiRes = await startAIOrchestrationScan(cleanUrl, ['sqli', 'xss', 'csrf', 'ssrf']);
         if (aiRes) STATE.results.aiScan = aiRes;
@@ -2508,7 +2667,8 @@ async function startUnifiedScan() {
     completeProgressBar();
 
     const elapsedSec = ((performance.now() - startTime) / 1000).toFixed(1);
-    renderUnifiedDashboard(cleanDomain, allFindings, totalRequests, elapsedSec);
+    const summaryLabel = (displayTarget && rawDir) ? `${displayTarget} + ${rawDir}` : (displayTarget || rawDir);
+    renderUnifiedDashboard(summaryLabel, allFindings, totalRequests, elapsedSec);
 
     showToast(`Tarama tamamlandı! Toplam ${allFindings.length} bulgu listelendi.`, 'success');
 
@@ -2534,6 +2694,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const uInput = document.getElementById('unified-target-input');
   if (uInput) {
     uInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') startUnifiedScan();
+    });
+  }
+  const dInput = document.getElementById('unified-dir-input');
+  if (dInput) {
+    dInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') startUnifiedScan();
     });
   }
