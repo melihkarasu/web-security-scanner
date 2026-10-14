@@ -2827,7 +2827,7 @@ async function loadStrixCapabilities() {
       return;
     }
     el.innerHTML = '✅ <strong>Strix ' + escapeHtml(d.version || '') + '</strong> kurulu · Sandbox: ' +
-      (d.sandbox_image ? '<code>' + escapeHtml(d.sandbox_image) + '</code>' : 'imaj bekleniyor (docker pull ghcr.io/usestrix/strix-sandbox)') +
+      (d.sandbox_image ? '<code>' + escapeHtml(d.sandbox_image) + '</code>' : 'imaj bekleniyor (docker pull ghcr.io/usestrix/strix-sandbox:1.3.0)') +
       '<br>' + (d.features || []).map(f => '• ' + escapeHtml(f)).join('<br>');
   } catch (e) {
     el.innerText = 'Strix durumu alınamadı: ' + e.message;

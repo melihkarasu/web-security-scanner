@@ -122,7 +122,7 @@ def strix_capabilities():
             "Hızlı/standart/derin tarama modları",
         ]
     elif caps["docker_available"]:
-        caps["features"] = ["Sandbox imajı henüz çekilmemiş: docker pull ghcr.io/usestrix/strix-sandbox"]
+        caps["features"] = ["Sandbox imajı henüz çekilmemiş: docker pull ghcr.io/usestrix/strix-sandbox:1.3.0"]
     return caps
 
 

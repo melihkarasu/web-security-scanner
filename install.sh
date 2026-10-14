@@ -70,7 +70,7 @@ if [ "$FULL" = "1" ]; then
   # Strix sandbox imajını da çek (Docker modunda taramalar için)
   if [ "$FULL" = "1" ]; then
     say "Strix sandbox imajı çekiliyor (bir kez, ~1.4 GB)…"
-    docker pull ghcr.io/usestrix/strix-sandbox || warn "Sandbox imajı çekilemedi; Strix taramaları Docker gerektirir."
+    docker pull ghcr.io/usestrix/strix-sandbox:1.3.0 || warn "Sandbox imajı çekilemedi; Strix taramaları Docker gerektirir."
   fi
 fi
 
