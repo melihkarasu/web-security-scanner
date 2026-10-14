@@ -2,10 +2,18 @@ node_modules/
 .DS_Store
 *.log
 .env
+.env.*
 __pycache__/
 *.pyc
-
-# Strix tarama çalışma dizinleri (geçici)
+*.pyo
+*.pyd
+.venv/
+venv/
+.venv-strix/
 strix_scans/
 strix_runs/
-.venv-strix/
+*service-account*.json
+*credentials*.json
+*.pem
+*.key
+*.bak

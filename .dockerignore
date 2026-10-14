@@ -6,8 +6,15 @@ __pycache__
 *.pyd
 .venv
 venv
+.venv-strix
 .env
+.env.*
 .DS_Store
 strix_scans/
 strix_runs/
 install.sh
+*service-account*.json
+*credentials*.json
+*.pem
+*.key
+*.bak

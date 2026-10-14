@@ -2607,7 +2607,7 @@ async function startUnifiedScan() {
           throw new Error(confirmData.error || 'Etik onay sunucu tarafından reddedildi.');
         }
 
-        const activeUrl = '/api/active-scan?url=' + encodeURIComponent(cleanUrl) + '&modules=sqli,xss,csrf,ssrf,idor,ports';
+        const activeUrl = '/api/active-scan?url=' + encodeURIComponent(cleanUrl);
         const aRes = await fetch(activeUrl);
         const aData = await aRes.json();
         
