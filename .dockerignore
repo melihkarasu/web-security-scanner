@@ -8,3 +8,6 @@ __pycache__
 venv
 .env
 .DS_Store
+strix_scans/
+strix_runs/
+install.sh

@@ -75,6 +75,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_strix_cancel()
             return
 
+        # Strix AI Pentest: CLI güncelleme (--update)
+        if parsed.path == "/api/strix-update":
+            self.handle_api_strix_update()
+            return
+
         self.send_json({"success": False, "error": "Bilinmeyen POST ucu"}, status=404)
 
     def do_GET(self):
@@ -123,6 +128,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         # 1i. API: /api/strix-runs (tarama listesi)
         if parsed.path == "/api/strix-runs":
             self.send_json({"success": True, "runs": STRIX_MANAGER.list_runs()})
+            return
+
+        # 1j. API: /api/strix-past-runs (diskteki tüm taramalar + resume listesi)
+        if parsed.path == "/api/strix-past-runs":
+            self.send_json({"success": True, "runs": STRIX_MANAGER.list_all_runs()})
             return
 
         # 2. API: /api/status (sunucu aktif mi kontrolü)
@@ -694,6 +704,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
     # STRIX: Gerçek Strix CLI entegrasyonu (subprocess + dosya tabanlı durum)
     # Başlatma etik onay geçidine bağlıdır; durum/rapor uçları salt-okurdur.
     # =============================================================
+    def handle_api_strix_update(self):
+        """Strix CLI'yı günceller (--update)."""
+        result = STRIX_MANAGER.update_strix()
+        self.send_json(result, status=200 if result.get("success") else 400)
+
     def handle_api_strix_scan_post(self):
         """Strix otonom pentest taramasını başlatır."""
         try:
@@ -706,26 +721,49 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
 
         url = (data.get("url") or "").strip()
         mode = (data.get("mode") or "standard").strip().lower()
-        instruction = (data.get("instruction") or "").strip()[:2000]
+        instruction = (data.get("instruction") or "").strip()[:8000]
         fail_on = (data.get("fail_on") or None)
         extra_targets = data.get("extra_targets") or []
+        # --- Tam özellik paritesi: Strix CLI bayrakları ---
+        resume = (data.get("resume") or "").strip()[:200]
+        scope_mode = (data.get("scope_mode") or None)
+        diff_base = (data.get("diff_base") or None)
+        config = data.get("config") if isinstance(data.get("config"), dict) else None
+        mcp_config = data.get("mcp_config") if isinstance(data.get("mcp_config"), dict) else None
+        mcp_servers = data.get("mcp_servers") or []
+        mcp_exclude = data.get("mcp_exclude") or []
+        target_list = data.get("target_list") or []
+        workspace_files = data.get("workspace_files") or []
         ai_config = data.get("ai_config") or {}
         try:
             max_turns = int(data.get("max_turns") or 120)
         except (TypeError, ValueError):
             max_turns = 120
+        try:
+            max_budget = float(data.get("max_budget")) if data.get("max_budget") else None
+        except (TypeError, ValueError):
+            max_budget = None
 
-        if not url:
-            self.send_json({"success": False, "error": "url alanı gereklidir"}, status=400)
+        if not url and not resume:
+            self.send_json({"success": False, "error": "url alanı gereklidir (veya resume için run adı)"}, status=400)
             return
-        if not url.startswith("http://") and not url.startswith("https://"):
+        if url and not url.startswith("http://") and not url.startswith("https://"):
             url = "https://" + url
 
         try:
-            hostname = urllib.parse.urlparse(url).hostname
+            hostname = urllib.parse.urlparse(url).hostname if url else None
         except ValueError:
             hostname = None
-        if not hostname or not ETHICAL_GATE.is_confirmed(hostname):
+        # Resume: hedef URL yoksa orijinal taramanın hedefinden hostname çöz —
+        # etik onay geçidi resume yolunda da zorlanır (sunucu restart sonrası boşluk)
+        if not hostname and resume:
+            info = STRIX_MANAGER.get_run_info(resume)
+            if info and info.get("target"):
+                try:
+                    hostname = urllib.parse.urlparse(info["target"]).hostname
+                except ValueError:
+                    hostname = None
+        if hostname and not ETHICAL_GATE.is_confirmed(hostname):
             self.send_json({
                 "success": False,
                 "error": "ETIK_ONAY_YOK",
@@ -735,8 +773,13 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
 
         result = STRIX_MANAGER.start(url, ai_config, mode=mode,
                                      instruction=instruction, max_turns=max_turns,
-                                     max_budget=data.get("max_budget"),
-                                     fail_on=fail_on, extra_targets=extra_targets)
+                                     max_budget=max_budget,
+                                     fail_on=fail_on, extra_targets=extra_targets,
+                                     scope_mode=scope_mode, diff_base=diff_base,
+                                     config=config, mcp_config=mcp_config,
+                                     mcp_servers=mcp_servers, mcp_exclude=mcp_exclude,
+                                     target_list=target_list,
+                                     workspace_files=workspace_files, resume=resume)
         self.send_json(result, status=200 if result.get("success") else 400)
 
     def handle_api_strix_status(self, parsed_path):

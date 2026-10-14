@@ -501,6 +501,40 @@
               <div id="strix-capabilities" class="text-[11px] text-mistral-slate leading-relaxed">Strix kurulum durumu kontrol ediliyor…</div>
               <p class="text-[10px] text-stone-400 mt-2">Strix, Docker sandbox içinde otonom ajanlarla gerçek istismar doğrulaması (PoC) üretir. AI Ayarları panelindeki LLM yapılandırması kullanılır; telemetri kapalıdır (STRIX_TELEMETRY=0).</p>
             </div>
+
+            <!-- Gelişmiş Seçenekler (tüm CLI özellikleri) -->
+            <details class="p-4 rounded-2xl border border-stone-200 bg-stone-50/60">
+              <summary class="text-xs font-bold text-mistral-ink cursor-pointer select-none">⚙️ Gelişmiş Seçenekler (tüm Strix özellikleri)</summary>
+              <div class="grid sm:grid-cols-2 gap-3 mt-3">
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Maks. Tur<input type="number" id="strix-max-turns" value="120" min="1" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Maks. Bütçe (USD)<input type="number" id="strix-max-budget" placeholder="örn: 2.5" step="0.1" min="0" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Fail-On Eşiği
+                  <select id="strix-fail-on" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"><option value="">(kapalı)</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Kapsam Modu (kod hedefleri)
+                  <select id="strix-scope-mode" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"><option value="">(varsayılan)</option><option value="auto">auto</option><option value="diff">diff</option><option value="full">full</option></select></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Diff Base (scope=diff iken)<input type="text" id="strix-diff-base" placeholder="örn: origin/main" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Özel Talimat (instruction)<textarea id="strix-instruction" rows="2" placeholder="örn: IDOR ve auth testlerine odaklan; test hesabı admin:pass123" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">Ek Hedefler (satır başına URL/repo/dizin — beyaz-kutu çoklu hedef)<textarea id="strix-extra-targets" rows="2" placeholder="https://github.com/user/repo&#10;./kaynak-kod" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">Hedef Listesi (satır başına hedef — --target-list)<textarea id="strix-target-list" rows="2" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Sadece MCP Sunucuları (virgülle)<input type="text" id="strix-mcp-servers" placeholder="örn: burp,semgrep" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Hariç MCP Sunucuları (virgülle)<input type="text" id="strix-mcp-exclude" placeholder="örn: harici-api" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">MCP Config (JSON — --mcp-config)<textarea id="strix-mcp-config" rows="2" placeholder='{"mcpServers": {...}}' class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">Workspace Dosyaları (JSON dizisi: name/content/dest — --workspace-file)<textarea id="strix-workspace-files" rows="2" placeholder='[{"name":"wordlist.txt","content":"admin\nroot","dest":"lists/wordlist.txt"}]' class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">CLI Config (JSON — --config)<textarea id="strix-cli-config" rows="2" placeholder='{}' class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
+              </div>
+            </details>
+
+            <!-- Geçmiş Taramalar (resume) -->
+            <div class="p-4 rounded-2xl border border-stone-200 bg-white">
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <h4 class="text-sm font-bold font-editorial text-mistral-ink">🗂️ Geçmiş Strix Taramaları (resume)</h4>
+                <div class="flex gap-2">
+                  <button type="button" onclick="loadStrixPastRuns()" class="px-2.5 py-1 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[10px] font-bold">Yenile</button>
+                  <button type="button" onclick="strixUpdateCLI()" class="px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-[10px] font-bold text-amber-900">⬆ Strix'i Güncelle</button>
+                </div>
+              </div>
+              <div id="strix-past-runs" class="space-y-1.5 text-[11px] text-mistral-slate">Yükleniyor…</div>
+            </div>
             <div id="strix-status-card" class="hidden p-4 rounded-2xl border border-amber-200 bg-amber-50/50 text-xs">
               <div class="flex items-center gap-2 mb-1.5">
                 <span id="strix-status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
@@ -542,6 +576,6 @@
   </footer>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261014c"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261014d"></script>
 </body>
 </html>

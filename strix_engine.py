@@ -331,8 +331,99 @@ class StrixManager:
         self._lock = threading.Lock()
         self._scans = {}  # scan_id -> StrixScan
 
+    # -------------------------------------------------------------
+    # Yardımcı: run adına göre workspace bul (resume için)
+    # -------------------------------------------------------------
+    def _runs_base(self):
+        return os.environ.get("STRIX_WORKSPACE", os.path.join(os.getcwd(), "strix_scans"))
+
+    def _find_run_dir(self, run_name):
+        base = self._runs_base()
+        if not os.path.isdir(base) or not run_name:
+            return None
+        for scan_id in os.listdir(base):
+            cand = os.path.join(base, scan_id, "strix_runs", run_name)
+            if os.path.isdir(cand):
+                return cand
+        return None
+
+    def get_run_info(self, run_name):
+        """Önceki taramanın kaydını döndürür (resume etik kapısı için)."""
+        run_dir = self._find_run_dir(run_name)
+        if not run_dir:
+            return None
+        try:
+            with open(os.path.join(run_dir, "run.json"), "r", encoding="utf-8") as f:
+                rec = json.load(f)
+        except Exception:
+            rec = {}
+        ti = rec.get("targets_info") or []
+        target = str(ti[0].get("original", "")) if ti and isinstance(ti[0], dict) else ""
+        return {"run_name": run_name, "run_dir": run_dir, "target": target,
+                "status": rec.get("status") or "unknown"}
+
+    def list_all_runs(self):
+        """Diskteki tüm Strix taramalarını özetler (resume + geçmiş görünümü)."""
+        base = self._runs_base()
+        runs = []
+        if not os.path.isdir(base):
+            return runs
+        for scan_id in os.listdir(base):
+            runs_dir = os.path.join(base, scan_id, "strix_runs")
+            if not os.path.isdir(runs_dir):
+                continue
+            for name in os.listdir(runs_dir):
+                rj = os.path.join(runs_dir, name, "run.json")
+                if not os.path.isfile(rj):
+                    continue
+                try:
+                    with open(rj, "r", encoding="utf-8") as f:
+                        rec = json.load(f)
+                except Exception:
+                    rec = {}
+                try:
+                    with open(os.path.join(runs_dir, name, "vulnerabilities.json"), "r", encoding="utf-8") as f:
+                        vulns = json.load(f)
+                    n = len(vulns) if isinstance(vulns, list) else 0
+                except Exception:
+                    n = 0
+                ti = rec.get("targets_info") or []
+                target = str(ti[0].get("original", "")) if ti and isinstance(ti[0], dict) else ""
+                runs.append({
+                    "run_name": name, "scan_id": scan_id, "target": target,
+                    "status": rec.get("status") or "unknown",
+                    "start_time": rec.get("start_time"), "end_time": rec.get("end_time"),
+                    "findings": n,
+                    "resumable": os.path.isfile(os.path.join(runs_dir, name, ".state", "agents.json")),
+                })
+        runs.sort(key=lambda r: str(r.get("start_time") or ""), reverse=True)
+        return runs[:100]
+
+    def update_strix(self):
+        """Strix CLI kendi güncelleme akışı (--update)."""
+        binary = _which_strix()
+        if not binary:
+            return {"success": False, "error": "STRIX_KURULU_DEĞİL", "message": "Strix bulunamadı."}
+        try:
+            out = subprocess.run([binary, "--update"], capture_output=True, text=True, timeout=300)
+            return {"success": out.returncode == 0,
+                    "output": ((out.stdout or "") + (out.stderr or ""))[-2000:]}
+        except Exception as e:
+            return {"success": False, "error": str(e)[:200]}
+
     def start(self, target, ai_config, mode="standard", instruction="",
-              max_turns=120, max_budget=None, fail_on=None, extra_targets=None):
+              max_turns=120, max_budget=None, fail_on=None, extra_targets=None,
+              scope_mode=None, diff_base=None, config=None, mcp_config=None,
+              mcp_servers=None, mcp_exclude=None, target_list=None,
+              workspace_files=None, resume=None):
+        """Strix CLI'nın tüm tarama özelliklerini açığa çıkarır.
+
+        resume: önceki run adı — orijinal workspace dizininde --resume ile devam eder.
+        target_list: satır başına hedef listesi (dosyaya yazılıp --target-list).
+        workspace_files: [{name, content, dest?}] — sandbox workspace'e kopyalanır.
+        config/mcp_config: dict → JSON dosyası (--config / --mcp-config).
+        scope_mode/diff_base: kod hedefleri için diff kapsamı.
+        """
         if mode not in SCAN_MODES:
             mode = "standard"
         binary = _which_strix()
@@ -350,11 +441,27 @@ class StrixManager:
                             "message": "Zaten çalışan bir Strix taraması var: %s (hedef: %s)" % (s.scan_id, s.target),
                             "active_scan_id": s.scan_id}
 
-            scan_id = "strix_%s" % uuid.uuid4().hex[:10]
-            workspace_dir = os.path.join(
-                os.environ.get("STRIX_WORKSPACE", os.path.join(os.getcwd(), "strix_scans")),
-                scan_id)
-            os.makedirs(workspace_dir, exist_ok=True)
+            # --- Resume modu: orijinal workspace'te devam ---
+            # run_dir = <workspace>/strix_runs/<run_name>; Strix cwd altına kendi
+            # strix_runs/ dizinini açtığından cwd = workspace (iki seviye yukarı) olmalı.
+            run_name = (resume or "").strip()
+            if run_name:
+                info = self.get_run_info(run_name)
+                if not info:
+                    return {"success": False, "error": "STRIX_RUN_BULUNAMADI",
+                            "message": "Önceki tarama bulunamadı: %s" % run_name}
+                workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(info["run_dir"])))
+                target = target or info.get("target") or "(resume)"
+            else:
+                if not target:
+                    return {"success": False, "error": "EKSİK_HEDEF",
+                            "message": "Yeni tarama için url, resume için run adı gereklidir."}
+                scan_id = "strix_%s" % uuid.uuid4().hex[:10]
+                workspace_dir = os.path.join(self._runs_base(), scan_id)
+                os.makedirs(workspace_dir, exist_ok=True)
+
+            if run_name:
+                scan_id = "strix_%s" % uuid.uuid4().hex[:10]
             log_path = os.path.join(workspace_dir, "strix_output.log")
 
             try:
@@ -362,18 +469,59 @@ class StrixManager:
             except ValueError as e:
                 return {"success": False, "error": "STRIX_YAPILANDIRMA", "message": str(e)}
 
-            cmd = [binary, "--target", target, "--non-interactive", "--scan-mode", mode,
+            # --- Yardımcı dosyalar (argv limitlerinden kaçınmak + dosya bayrakları) ---
+            def _write(rel, content, limit=262144):
+                path = os.path.join(workspace_dir, rel)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(str(content)[:limit])
+                return path
+
+            cmd = [binary, "--non-interactive", "--scan-mode", mode,
                    "--max-turns", str(max_turns)]
-            # Çoklu hedef (beyaz-kutu: kaynak + canlı URL birlikte taranabilir)
-            for t in (extra_targets or [])[:5]:
-                if isinstance(t, str) and t.strip():
-                    cmd += ["--target", t.strip()]
+
+            if run_name:
+                cmd += ["--resume", run_name]
+            else:
+                cmd += ["--target", target]
+                # Çoklu hedef (beyaz-kutu: kaynak + canlı URL birlikte)
+                for t in (extra_targets or [])[:5]:
+                    if isinstance(t, str) and t.strip():
+                        cmd += ["--target", t.strip()]
+                # Hedef listesi dosyası
+                tl = [str(t).strip() for t in (target_list or []) if str(t).strip()][:50]
+                if tl:
+                    cmd += ["--target-list", _write("targets.txt", "\n".join(tl))]
+
             if max_budget:
                 cmd += ["--max-budget", str(max_budget)]
             if fail_on in ("critical", "high", "medium", "low", "info"):
                 cmd += ["--fail-on", fail_on]
             if instruction:
-                cmd += ["--instruction", instruction]
+                cmd += ["--instruction-file", _write("instruction.txt", instruction, 8000)]
+            if scope_mode in ("auto", "diff", "full"):
+                cmd += ["--scope-mode", scope_mode]
+                if scope_mode == "diff" and diff_base:
+                    cmd += ["--diff-base", str(diff_base)[:200]]
+            if isinstance(config, dict) and config:
+                cmd += ["--config", _write("cli-config.json", json.dumps(config))]
+            if isinstance(mcp_config, dict) and mcp_config:
+                cmd += ["--mcp-config", _write("mcp-servers.json", json.dumps(mcp_config))]
+            for name in (mcp_servers or [])[:10]:
+                if isinstance(name, str) and name.strip():
+                    cmd += ["--mcp-server", name.strip()]
+            for name in (mcp_exclude or [])[:10]:
+                if isinstance(name, str) and name.strip():
+                    cmd += ["--mcp-exclude", name.strip()]
+            for wf in (workspace_files or [])[:5]:
+                if not isinstance(wf, dict):
+                    continue
+                name = os.path.basename(str(wf.get("name") or "")).strip()
+                if not name or name.startswith("."):
+                    continue
+                path = _write("workspace_files/%s" % name, wf.get("content") or "")
+                dest = str(wf.get("dest") or "").strip()
+                cmd += ["--workspace-file", path + (":" + dest if dest else "")]
 
             try:
                 logf = open(log_path, "ab", buffering=0)
@@ -393,6 +541,7 @@ class StrixManager:
                 del self._scans[k]
 
             return {"success": True, "scan_id": scan_id, "target": target, "mode": mode,
+                    "resumed_run": run_name or None,
                     "command": " ".join(cmd[:6]) + " …", "message": "Strix taraması başlatıldı."}
 
     def get(self, scan_id):

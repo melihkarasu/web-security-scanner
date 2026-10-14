@@ -184,7 +184,7 @@ Kurulum durumu ve tespit edilen yetenekler **Strix** sekmesinde otomatik göster
 
 > **Not:** Strix sandbox'ı izole bir Docker konteyneridir; `localhost` hedeflerini test etmek için hedefi Docker bridge IP'si (ör. `http://172.17.0.1:3000`) üzerinden verin.
 
-> **Kapsam şeffaflığı:** Panel, Strix'in çekirdek akışını açığa çıkarır (hedef, mod, talimat, tur/bütçe limitleri, çoklu hedef, `--fail-on`, iptal, canlı bulgu/loğ). İleri CLI bayrakları (`--resume`, `--target-list`, `--mcp-config`, `--workspace-file`, `--scope-mode`/`--diff-base`) bu uygulama üzerinden değil, Strix CLI'sının kendisiyle kullanılabilir — motor tam güçte çalışır, sarmalayıcı tüm bayrakları aracılaştırmaz.
+> **Kapsam şeffaflığı:** Panel, Strix'in **tüm tarama bayraklarını** açığa çıkarır: mod, talimat (dosya), çoklu hedef, hedef listesi, tur/bütçe limitleri, `--fail-on`, kapsam modu (`--scope-mode`/`--diff-base`), özel `--config`, `--mcp-config` + MCP seçim/hariç tutma, `--workspace-file`, önceki taramaları listeleme + `--resume` ile devam, `--update` ile CLI güncelleme ve canlı iptal. Strix Cloud komutları (`strix cloud …`) yönetilen harici hizmettir ve kasıtlı olarak sarmalanmaz.
 
 ### 6. Professional Reporting
 - **Markdown** — Human-readable, version-control friendly

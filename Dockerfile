@@ -7,9 +7,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Strix CLI (yalnızca INSTALL_STRIX=1 ile inşa edildiğinde; çekirdek sıfır-bağımlılık kalır)
+# Not: Debian 13'te docker.io CLI barındırmaz; sandbox konteynerleri host daemon'da
+# (mount edilen /var/run/docker.sock) çalıştığından yalnızca docker-cli yeterlidir.
 ARG INSTALL_STRIX=0
 RUN if [ "$INSTALL_STRIX" = "1" ]; then \
-        apt-get update && apt-get install -y --no-install-recommends docker.io && rm -rf /var/lib/apt/lists/* && \
+        apt-get update && apt-get install -y --no-install-recommends docker-cli && rm -rf /var/lib/apt/lists/* && \
         pip install --no-cache-dir strix-agent; \
     fi
 

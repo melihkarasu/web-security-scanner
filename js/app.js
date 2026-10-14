@@ -2542,6 +2542,7 @@ document.addEventListener('DOMContentLoaded', () => {
   onActiveModuleToggle();
   updateAIStatusUI();
   loadStrixCapabilities();
+  loadStrixPastRuns();
 });
 
 // =============================================================
@@ -2626,7 +2627,7 @@ let STRIX_ACTIVE_ID = null;
 function strixGetTargetUrl() {
   let raw = (document.getElementById('unified-target-input')?.value || '').trim();
   if (!raw) raw = STATE.targetUrl || '';
-  if (raw && !raw.startsWith('http://') && !raw.startsWith('https://')) raw = 'https://' + raw;
+  if (raw && !raw.startsWith('http://') && !raw.startsWith('https://') && !raw.startsWith('./') && !raw.startsWith('../') && !raw.startsWith('git@')) raw = 'https://' + raw;
   return raw;
 }
 
@@ -2667,10 +2668,11 @@ async function loadStrixCapabilities() {
   }
 }
 
-async function startStrixScan() {
+async function startStrixScan(options = {}) {
   if (STATE.mode !== 'local_api') { showToast('Strix yalnızca lokal sunucu modunda çalışır.', 'warning'); return; }
+  const isResume = !!options.resume;
   const target = strixGetTargetUrl();
-  if (!target) { showToast('Önce üstteki hedef alanına bir URL girin.', 'warning'); return; }
+  if (!target && !isResume) { showToast('Önce üstteki hedef alanına bir URL girin.', 'warning'); return; }
   const eth = document.getElementById('unified-ethical-check');
   if (eth && !eth.checked) { showToast('Strix pentest için etik sorumluluk beyanını onaylayın.', 'warning'); return; }
 
@@ -2678,14 +2680,42 @@ async function startStrixScan() {
   if (btn) btn.disabled = true;
   try {
     // Etik onayı sunucuya kaydet (aktif test altyapısıyla aynı geçit)
-    await fetch('/api/active-confirm', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: target, confirmed: true })
-    });
+    if (target) {
+      await fetch('/api/active-confirm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: target, confirmed: true })
+      });
+    }
+
+    // Gelişmiş seçenekler (tüm Strix CLI özellikleri)
+    const val = (id) => (document.getElementById(id)?.value || '').trim();
+    const payload = {
+      url: target || undefined,
+      mode: val('strix-mode') || 'standard',
+      ai_config: strixAIConfig(),
+      resume: isResume ? options.resume : undefined,
+      max_turns: parseInt(val('strix-max-turns')) || 120,
+      max_budget: parseFloat(val('strix-max-budget')) || undefined,
+      fail_on: val('strix-fail-on') || undefined,
+      scope_mode: val('strix-scope-mode') || undefined,
+      diff_base: val('strix-diff-base') || undefined,
+      instruction: val('strix-instruction') || undefined,
+      extra_targets: (val('strix-extra-targets') || '').split('\n').map(s => s.trim()).filter(Boolean),
+      target_list: (val('strix-target-list') || '').split('\n').map(s => s.trim()).filter(Boolean),
+      mcp_servers: (val('strix-mcp-servers') || '').split(',').map(s => s.trim()).filter(Boolean),
+      mcp_exclude: (val('strix-mcp-exclude') || '').split(',').map(s => s.trim()).filter(Boolean),
+    };
+    // JSON alanları (geçersiz JSON'da uyar, taramayı engelleme)
+    for (const [field, id] of [['mcp_config', 'strix-mcp-config'], ['workspace_files', 'strix-workspace-files'], ['config', 'strix-cli-config']]) {
+      const raw = val(id);
+      if (!raw) continue;
+      try { payload[field] = JSON.parse(raw); }
+      catch (e) { showToast('JSON alanı geçersiz (' + field + '), yok sayıldı: ' + e.message, 'warning'); }
+    }
 
     const res = await fetch('/api/strix-scan', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: target, mode: document.getElementById('strix-mode')?.value || 'standard', ai_config: strixAIConfig() }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(30000)
     });
     const d = await res.json();
@@ -2695,7 +2725,7 @@ async function startStrixScan() {
       return;
     }
     STRIX_ACTIVE_ID = d.scan_id;
-    showToast('Strix taraması başladı: ' + d.scan_id + ' (' + d.mode + ')', 'success');
+    showToast((isResume ? 'Strix taraması devam ettiriliyor: ' : 'Strix taraması başladı: ') + d.scan_id + (d.resumed_run ? ' (resume: ' + d.resumed_run + ')' : ''), 'success');
     document.getElementById('strix-status-card')?.classList.remove('hidden');
     document.getElementById('strix-cancel-btn')?.classList.remove('hidden');
     if (STRIX_POLL_TIMER) clearInterval(STRIX_POLL_TIMER);
@@ -2707,6 +2737,44 @@ async function startStrixScan() {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+async function loadStrixPastRuns() {
+  const el = document.getElementById('strix-past-runs');
+  if (!el) return;
+  if (STATE.mode !== 'local_api') { el.innerHTML = '<span class="text-stone-400">Yalnızca lokal sunucu modunda.</span>'; return; }
+  el.innerHTML = '<span class="text-stone-400">Yükleniyor…</span>';
+  try {
+    const res = await fetch('/api/strix-past-runs', { signal: AbortSignal.timeout(15000) });
+    const d = await res.json();
+    if (!d.success || !(d.runs || []).length) {
+      el.innerHTML = '<span class="text-stone-400">Henüz kayıtlı tarama yok.</span>';
+      return;
+    }
+    const stBadge = { running: 'bg-emerald-100 text-emerald-800', completed: 'bg-sky-100 text-sky-800', interrupted: 'bg-amber-100 text-amber-800', error: 'bg-rose-100 text-rose-800' };
+    el.innerHTML = d.runs.map(r =>
+      '<div class="flex items-center gap-2 p-2 rounded-lg border border-stone-200 bg-stone-50">' +
+      '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono shrink-0 ' + (stBadge[r.status] || 'bg-stone-200 text-stone-700') + '">' + escapeHtml(r.status || '?') + '</span>' +
+      '<div class="min-w-0 flex-1"><div class="font-mono truncate" title="' + escapeAttr(r.run_name) + '">' + escapeHtml(r.run_name) + '</div>' +
+      '<div class="text-[9px] text-stone-400 truncate">' + escapeHtml(r.target || '-') + ' · ' + (r.findings || 0) + ' bulgu · ' + escapeHtml(r.start_time || '') + '</div></div>' +
+      (r.resumable
+        ? '<button type="button" onclick="startStrixScan({resume: ' + JSON.stringify(r.run_name).replace(/"/g, '&quot;') + '})" class="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-bold shrink-0">▶ Devam</button>'
+        : '<span class="text-[9px] text-stone-400 shrink-0">bitmiş</span>') +
+      '</div>').join('');
+  } catch (e) {
+    el.innerText = 'Yüklenemedi: ' + e.message;
+  }
+}
+
+async function strixUpdateCLI() {
+  if (STATE.mode !== 'local_api') { showToast('Yalnızca lokal sunucu modunda.', 'warning'); return; }
+  showToast('Strix güncelleme kontrol ediliyor (birkaç dk sürebilir)…', 'info');
+  try {
+    const res = await fetch('/api/strix-update', { method: 'POST', signal: AbortSignal.timeout(300000) });
+    const d = await res.json();
+    if (d.success) { showToast('Strix güncellendi/kontrol edildi.', 'success'); loadStrixCapabilities(); }
+    else showToast('Güncelleme başarısız: ' + (d.error || d.output || '?'), 'error');
+  } catch (e) { showToast('Güncelleme isteği başarısız: ' + e.message, 'error'); }
 }
 
 async function cancelStrixScan() {
