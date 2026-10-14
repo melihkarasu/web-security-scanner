@@ -380,15 +380,24 @@ def test_ssrf(client, base_url):
 
 
 def test_port_scan(hostname):
-    """Temel TCP connect taraması (yalnızca yaygın portlar)."""
+    """Temel TCP connect taraması (24 yaygın port, paralel soket kontrolü ile ~3 sn'de tamamlanır)."""
+    from concurrent.futures import ThreadPoolExecutor
     findings = []
     open_ports = []
-    for port, service in COMMON_PORTS.items():
+
+    def _probe_port(item):
+        port, service = item
         try:
-            with socket.create_connection((hostname, port), timeout=PORT_SCAN_TIMEOUT):
-                open_ports.append({"port": port, "service": service})
+            with socket.create_connection((hostname, port), timeout=1.2):
+                return {"port": port, "service": service}
         except (socket.timeout, ConnectionRefusedError, OSError):
-            continue
+            return None
+
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        for res in ex.map(_probe_port, COMMON_PORTS.items()):
+            if res:
+                open_ports.append(res)
+    open_ports.sort(key=lambda x: x["port"])
 
     risky = [p for p in open_ports if p["service"] in ("Docker API", "Redis", "MongoDB", "Elasticsearch", "VNC", "RDP", "MSSQL", "Oracle", "MySQL", "PostgreSQL")]
     if risky:

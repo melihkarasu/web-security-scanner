@@ -18,7 +18,7 @@ import socket
 import urllib.request
 import urllib.parse
 import urllib.error
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, SimpleHTTPRequestHandler
 import webbrowser
 import threading
 import time
@@ -1091,7 +1091,7 @@ def main():
         print(f"HATA: {DEFAULT_PORT}-{DEFAULT_PORT+10} aralığında boş port bulunamadı.", file=sys.stderr)
         sys.exit(1)
 
-    server = HTTPServer((HOST, port), ScannerHTTPHandler)
+    server = ThreadingHTTPServer((HOST, port), ScannerHTTPHandler)
     display_host = "127.0.0.1" if HOST in ("0.0.0.0", "") else HOST
     url = f"http://{display_host}:{port}"
 
