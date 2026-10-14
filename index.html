@@ -28,7 +28,7 @@
         <div>
           <div class="flex items-center gap-2">
             <span class="font-extrabold text-base tracking-tight font-editorial text-mistral-ink">Web Security Scanner</span>
-            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-orange-100 text-mistral-orange font-bold">v2.0 Pro</span>
+            <span id="header-edition-badge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-orange-100 text-mistral-orange font-bold">v2.0 Full</span>
           </div>
           <p class="text-[11px] text-mistral-slate hidden sm:block">Tek Merkezli Pasif, Aktif & AI Destekli Güvenlik Denetimi</p>
         </div>
@@ -36,6 +36,12 @@
 
       <!-- Durum & Hızlı Aksiyonlar -->
       <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Lite vs Full Sürüm Anahtarı -->
+        <div class="inline-flex items-center rounded-xl border border-stone-200 bg-stone-100 p-0.5 text-[11px] font-mono font-bold shadow-xs" title="Sürüm Görünümü: Lite (Sıfır LLM) vs Full (AI & Sandbox)">
+          <button type="button" id="edition-btn-lite" onclick="setScannerEdition('lite')" class="px-2.5 py-1 rounded-lg text-stone-600 hover:text-mistral-ink transition cursor-pointer">⚡ Lite</button>
+          <button type="button" id="edition-btn-full" onclick="setScannerEdition('full')" class="px-2.5 py-1 rounded-lg bg-mistral-orange text-white transition cursor-pointer">🚀 Full (AI)</button>
+        </div>
+
         <!-- Sunucu / Çalışma Modu Rozeti (Her zaman görünür) -->
         <div id="scanner-mode-pill" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-stone-200 bg-stone-50 text-[11px] font-mono text-stone-700 font-semibold">
           <span id="scanner-mode-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
@@ -328,7 +334,7 @@
         </div>
 
         <!-- GRUP 2: API Key / Service Account Gerektiren Yapay Zeka (LLM) Destekli Analizler -->
-        <div class="p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/40 space-y-3">
+        <div id="ai-analysis-group-box" class="p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/40 space-y-3">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div class="text-[11px] font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
               <span>🤖</span>
@@ -862,6 +868,6 @@
   </footer>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261014l"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261014m"></script>
 </body>
 </html>

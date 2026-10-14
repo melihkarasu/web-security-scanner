@@ -505,6 +505,8 @@ async function detectScannerMode() {
       const data = await res.json();
       if (data.mode === 'local_server') {
         STATE.mode = 'local_api';
+        const srvEdition = (data.edition || '').toLowerCase() === 'lite' ? 'lite' : (localStorage.getItem('wss_edition') || 'full');
+        setScannerEdition(srvEdition, false);
         if (modePillEl) {
           modePillEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-[11px] font-mono text-emerald-800 font-semibold';
           modePillEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span>🟢 Yerel Mod & Derin Tarama Aktif</span>';
@@ -2349,6 +2351,52 @@ async function startAIOrchestrationScan(targetUrl, modules) {
 // UNIFIED SCANNER CONTROLLER (TEK MERKEZLİ TARAMA YÖNETİCİSİ)
 // =============================================================
 
+function setScannerEdition(edition, save = true) {
+  const ed = edition === 'lite' ? 'lite' : 'full';
+  STATE.edition = ed;
+  if (save) {
+    try { localStorage.setItem('wss_edition', ed); } catch (e) {}
+  }
+
+  const badge = document.getElementById('header-edition-badge');
+  const btnLite = document.getElementById('edition-btn-lite');
+  const btnFull = document.getElementById('edition-btn-full');
+  const headerAiBtn = document.getElementById('header-ai-btn');
+  const aiPanel = document.getElementById('ai-config-panel');
+  const aiGroupBox = document.getElementById('ai-analysis-group-box');
+  const tabAiBtn = document.getElementById('btn-tab-ai');
+  const tabStrixBtn = document.getElementById('btn-tab-strix');
+  const sastAiBtn = document.getElementById('sast-ai-btn');
+
+  if (ed === 'lite') {
+    if (badge) {
+      badge.innerText = 'v2.0 Lite';
+      badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold';
+    }
+    if (btnLite) btnLite.className = 'px-2.5 py-1 rounded-lg bg-emerald-600 text-white transition cursor-pointer';
+    if (btnFull) btnFull.className = 'px-2.5 py-1 rounded-lg text-stone-600 hover:text-mistral-ink transition cursor-pointer';
+    headerAiBtn?.classList.add('hidden');
+    aiPanel?.classList.add('hidden');
+    aiGroupBox?.classList.add('hidden');
+    tabAiBtn?.classList.add('hidden');
+    tabStrixBtn?.classList.add('hidden');
+    sastAiBtn?.classList.add('hidden');
+    toggleAnalysisGroup('ai', false);
+  } else {
+    if (badge) {
+      badge.innerText = 'v2.0 Full';
+      badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-orange-100 text-mistral-orange font-bold';
+    }
+    if (btnFull) btnFull.className = 'px-2.5 py-1 rounded-lg bg-mistral-orange text-white transition cursor-pointer';
+    if (btnLite) btnLite.className = 'px-2.5 py-1 rounded-lg text-stone-600 hover:text-mistral-ink transition cursor-pointer';
+    headerAiBtn?.classList.remove('hidden');
+    aiGroupBox?.classList.remove('hidden');
+    tabAiBtn?.classList.remove('hidden');
+    tabStrixBtn?.classList.remove('hidden');
+    sastAiBtn?.classList.remove('hidden');
+  }
+}
+
 function toggleAnalysisGroup(group, checked) {
   const cls = group === 'ai' ? '.group-ai' : '.group-standard';
   document.querySelectorAll(cls).forEach(el => { el.checked = Boolean(checked); });
@@ -2650,7 +2698,8 @@ function buildAndRenderAnalysisItemsReport(itemTracker, ctx) {
   };
 
   const reportItems = [];
-  for (let i = 1; i <= 10; i++) {
+  const maxItemIndex = STATE.edition === 'lite' ? 7 : 10;
+  for (let i = 1; i <= maxItemIndex; i++) {
     const it = itemTracker[i];
     const needsUrl = [1, 2, 3, 5, 6, 7, 8].includes(i);
     const needsDir = [4, 9].includes(i);
@@ -2738,7 +2787,7 @@ function buildAndRenderAnalysisItemsReport(itemTracker, ctx) {
   if (pillEl) {
     const ranCount = reportItems.filter(r => r.statusKey === 'completed_clean' || r.statusKey === 'completed_findings' || r.statusKey === 'running_async').length;
     const skipCount = reportItems.length - ranCount;
-    pillEl.innerText = `Çalıştırılan: ${ranCount}/10 · Atlanan/Seçilmeyen: ${skipCount}`;
+    pillEl.innerText = `${STATE.edition === 'lite' ? '⚡ Lite Sürüm' : '🚀 Full Sürüm'} · Çalıştırılan: ${ranCount}/${reportItems.length} · Atlanan/Seçilmeyen: ${skipCount}`;
   }
   if (!listEl) return;
 

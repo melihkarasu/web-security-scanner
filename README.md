@@ -43,38 +43,43 @@ Web Security Scanner bridges that gap with a **Unified Single-Input Command Cent
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start — Choose Your Edition (`Lite` vs `Full`)
+
+Web Security Scanner offers **two installation & runtime editions** from the same codebase, plus a zero-install browser preview. You can also switch between **⚡ Lite** and **🚀 Full (AI)** views at any time from the top navigation bar:
+
+| Edition | Footprint & Dependencies | Included Capabilities | Best For |
+|---------|--------------------------|-----------------------|----------|
+| **⚡ Web Security Scanner Lite** *(Fast Install)* | **~2 MB**, Python 3 stdlib only, **0 pip packages, 0 Docker requirement, 0 LLM keys** | **All 7 Standard Deterministic Analyses:** HTTP Headers, DNS/Email, Deep Passive (Cookies/TLS/Robots/Tech), 98-Rule 7-Language SAST + 8-Ecosystem OSV CVEs, and all 12 Active DAST Modules | Instant local/CI auditing in 2 seconds with zero setup |
+| **🚀 Web Security Scanner Full** *(Comprehensive AI & Sandbox)* | Python 3 + `strix-agent` CLI + `strix-sandbox` Docker image (~1.4 GB) + LLM API key / local Ollama | **All 10 Analyses:** Everything in Lite **+** AI Red Team Orchestration, 4-Phase AI Semantic Code Audit, and Autonomous Container Sandbox Pentest (PoC + SARIF 2.1.0 + PR Fix) | Deep AI-driven red teaming and autonomous PoC validation |
 
 ### Option 1: Zero-Install Browser Preview (GitHub Pages)
 Open **[melihkarasu.github.io/web-security-scanner](https://melihkarasu.github.io/web-security-scanner/)** in your browser.  
-Performs passive DNS and email security auditing via DoH. To unlock deep passive scanning, local directory SAST, active testing, AI Red Team, and Strix, run Local or Docker mode below.
+Performs passive DNS and email security auditing via DoH.
 
-### Option 2: Local Mode (Terminal — One Command or Manual)
+### Option 2: Terminal One-Command Install (`Lite` or `Full`)
 ```bash
-# One-command installer (Core mode — Python 3 stdlib only):
-curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash
+# ⚡ 1) Fast Install — Web Security Scanner Lite (Zero dependencies, no LLM setup, ready in ~2s):
+curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --lite
 
-# One-command installer (Full mode — installs strix-agent CLI + pulls Strix Docker sandbox image):
+# 🚀 2) Comprehensive Install — Web Security Scanner Full (Includes AI Red Team + Strix Docker Sandbox):
 curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --full
 
-# Or clone and run manually (Linux / macOS / Windows):
+# Or interactive menu (prompts you to pick 1=Lite or 2=Full) / manual run:
 git clone https://github.com/melihkarasu/web-security-scanner.git
 cd web-security-scanner
-python3 server.py
+python3 server.py --lite   # or: python3 server.py --full
 ```
 Your browser opens `http://127.0.0.1:8765` automatically (`NO_BROWSER=1` disables auto-open).
 
-### Option 3: Docker Mode (Containerized)
-Run the scanner inside an isolated container:
+### Option 3: Docker Mode (`Lite` or `Full` Container)
 ```bash
-# Core container (non-root user, lightweight):
-docker compose up -d
+# ⚡ Docker Lite (Lightweight, non-root, zero LLM/Strix overhead):
+curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --docker-lite
+# (or: docker compose up -d)
 
-# Or with full Strix CLI + host Docker socket integration:
-docker compose -f docker-compose.yml -f docker-compose.strix.yml up -d --build
-
-# Or via the one-command installer:
-curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --docker
+# 🚀 Docker Full (Includes Strix CLI + host Docker socket for autonomous sandbox PoC runs):
+curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --docker-full
+# (or: docker compose -f docker-compose.yml -f docker-compose.strix.yml up -d --build)
 ```
 Access the Web UI at **`http://localhost:8765`**.
 

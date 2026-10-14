@@ -32,6 +32,7 @@ from strix_engine import STRIX_MANAGER, strix_capabilities
 HOST = os.environ.get("HOST", "127.0.0.1")
 DEFAULT_PORT = int(os.environ.get("PORT", "8765"))
 NO_BROWSER = os.environ.get("NO_BROWSER", "0").lower() in ("1", "true", "yes")
+EDITION = "lite" if ("--lite" in sys.argv or os.environ.get("WSS_EDITION", "").lower() == "lite") else "full"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 WebSecurityScanner/1.0"
 TIMEOUT_SECONDS = 8
 
@@ -145,12 +146,13 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.send_json({"success": True, "runs": STRIX_MANAGER.list_all_runs()})
             return
 
-        # 2. API: /api/status (sunucu aktif mi kontrolü)
+        # 2. API: /api/status (sunucu aktif mi ve hangi sürüm: lite vs full)
         if parsed.path == "/api/status":
             self.send_json({
                 "status": "online",
                 "mode": "local_server",
-                "version": "1.0.0",
+                "edition": EDITION,
+                "version": "2.0.0",
                 "host": HOST
             })
             return
