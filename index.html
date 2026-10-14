@@ -600,6 +600,16 @@
                 <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">MCP Config (JSON — --mcp-config)<textarea id="strix-mcp-config" rows="2" placeholder='{"mcpServers": {...}}' class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
                 <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">Workspace Dosyaları (JSON dizisi: name/content/dest — --workspace-file)<textarea id="strix-workspace-files" rows="2" placeholder='[{"name":"wordlist.txt","content":"admin\nroot","dest":"lists/wordlist.txt"}]' class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
                 <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">CLI Config (JSON — --config)<textarea id="strix-cli-config" rows="2" placeholder='{}' class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Postman API Key (POSTMAN_API_KEY)<input type="password" id="strix-postman-key" placeholder="PMAK-..." class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Web Arama Sağlayıcı (STRIX_WEB_SEARCH_PROVIDER)
+                  <select id="strix-search-provider" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"><option value="">(varsayılan)</option><option value="perplexity">perplexity</option><option value="exa">exa</option></select></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Perplexity API Key (PERPLEXITY_API_KEY)<input type="password" id="strix-perplexity-key" placeholder="pplx-..." class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Exa API Key (EXA_API_KEY)<input type="password" id="strix-exa-key" placeholder="exa-..." class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Reasoning Effort (STRIX_REASONING_EFFORT)
+                  <select id="strix-reasoning-effort" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"><option value="high" selected>high</option><option value="medium">medium</option><option value="low">low</option></select></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Dedupe Model (STRIX_DEDUPE_MODEL)<input type="text" id="strix-dedupe-model" placeholder="opsiyonel model" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Sandbox CPU Limiti (STRIX_SANDBOX_CPUS)<input type="text" id="strix-sandbox-cpus" placeholder="örn: 2" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Sandbox RAM Limiti (STRIX_SANDBOX_MEM_LIMIT)<input type="text" id="strix-sandbox-mem" placeholder="örn: 4g" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
               </div>
             </details>
 
@@ -623,8 +633,34 @@
               <div id="strix-summary" class="font-mono text-[11px] text-stone-600"></div>
             </div>
             <div id="strix-findings-card" class="hidden space-y-2">
-              <h4 class="text-sm font-bold font-editorial text-mistral-ink">🛡️ Strix Doğrulanmış Bulguları (PoC + CVSS)</h4>
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h4 class="text-sm font-bold font-editorial text-mistral-ink">🛡️ Strix Doğrulanmış Bulguları (PoC + CVSS + PR Fix)</h4>
+                <div id="strix-artifact-dl-bar" class="hidden flex items-center gap-1.5">
+                  <button type="button" onclick="downloadStrixArtifact('sarif')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-[10px] font-mono font-bold text-stone-700">⬇ SARIF 2.1.0</button>
+                  <button type="button" onclick="downloadStrixArtifact('csv')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-[10px] font-mono font-bold text-stone-700">⬇ CSV</button>
+                  <button type="button" onclick="downloadStrixArtifact('md')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-[10px] font-mono font-bold text-stone-700">⬇ Pentest MD</button>
+                </div>
+              </div>
               <div id="strix-findings-list" class="space-y-2"></div>
+            </div>
+
+            <!-- Strix Alt-Ajan Ağacı, Kapsam Defteri (coverage.json) & Yönetici Raporu -->
+            <div id="strix-artifacts-card" class="hidden space-y-3">
+              <!-- Alt-Ajan Topolojisi -->
+              <div id="strix-agents-panel" class="hidden p-4 rounded-2xl border border-stone-200 bg-white space-y-2">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">🕸️ Strix Otonom Alt-Ajan Topolojisi (.state/agents.json & agents.db)</h4>
+                <div id="strix-agents-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+              </div>
+              <!-- Kapsam Defteri (coverage.json) -->
+              <div id="strix-coverage-panel" class="hidden p-4 rounded-2xl border border-stone-200 bg-white space-y-2">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">📋 Strix Kapsam Defteri & Boşluk Analizi (coverage.json)</h4>
+                <div id="strix-coverage-list" class="space-y-2 text-[11px]"></div>
+              </div>
+              <!-- Strix Yerel Yönetici Raporu (penetration_test_report.md) -->
+              <details id="strix-native-md-panel" class="hidden p-4 rounded-2xl border border-stone-200 bg-white">
+                <summary class="text-xs font-bold text-mistral-ink cursor-pointer">📄 Strix Yerel Yönetici Raporu (penetration_test_report.md)</summary>
+                <pre id="strix-native-md-body" class="mt-2 p-3 rounded-xl bg-stone-50 border border-stone-200 text-[11px] font-mono text-stone-800 whitespace-pre-wrap max-h-[320px] overflow-y-auto"></pre>
+              </details>
             </div>
             <div class="bg-stone-950 border border-stone-800 rounded-2xl p-4">
               <div class="text-[11px] font-mono text-stone-500 mb-2">strix_output.log (canlı)</div>
@@ -655,6 +691,6 @@
   </footer>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261014f"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261014g"></script>
 </body>
 </html>

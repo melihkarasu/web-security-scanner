@@ -735,6 +735,7 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         target_list = data.get("target_list") or []
         workspace_files = data.get("workspace_files") or []
         ai_config = data.get("ai_config") or {}
+        strix_env_opts = data.get("strix_env_opts") if isinstance(data.get("strix_env_opts"), dict) else {}
         try:
             max_turns = int(data.get("max_turns") or 120)
         except (TypeError, ValueError):
@@ -747,11 +748,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         if not url and not resume:
             self.send_json({"success": False, "error": "url alanı gereklidir (veya resume için run adı)"}, status=400)
             return
-        if url and not url.startswith("http://") and not url.startswith("https://"):
+        if url and not url.startswith(("http://", "https://", "postman://", "./", "../", "/", "~/")) and not url.startswith("git@"):
             url = "https://" + url
 
         try:
-            hostname = urllib.parse.urlparse(url).hostname if url else None
+            hostname = urllib.parse.urlparse(url).hostname if (url and url.startswith(("http://", "https://"))) else None
         except ValueError:
             hostname = None
         # Resume: hedef URL yoksa orijinal taramanın hedefinden hostname çöz —
@@ -779,7 +780,8 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
                                      config=config, mcp_config=mcp_config,
                                      mcp_servers=mcp_servers, mcp_exclude=mcp_exclude,
                                      target_list=target_list,
-                                     workspace_files=workspace_files, resume=resume)
+                                     workspace_files=workspace_files, resume=resume,
+                                     strix_env_opts=strix_env_opts)
         self.send_json(result, status=200 if result.get("success") else 400)
 
     def handle_api_strix_status(self, parsed_path):
@@ -794,6 +796,14 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
     def handle_api_strix_report(self, parsed_path):
         qs = urllib.parse.parse_qs(parsed_path.query)
         scan_id = (qs.get("scan_id") or [""])[0].strip()
+        run_name = (qs.get("run_name") or [""])[0].strip()
+        if run_name:
+            rep = STRIX_MANAGER.get_report_by_run_name(run_name)
+            if not rep:
+                self.send_json({"success": False, "error": "Geçmiş tarama bulunamadı: %s" % run_name}, status=404)
+                return
+            self.send_json(rep)
+            return
         scan = STRIX_MANAGER.get(scan_id)
         if not scan:
             self.send_json({"success": False, "error": "Tarama bulunamadı: %s" % scan_id}, status=404)

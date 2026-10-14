@@ -2793,7 +2793,7 @@ let STRIX_ACTIVE_ID = null;
 function strixGetTargetUrl() {
   let raw = (document.getElementById('unified-target-input')?.value || '').trim();
   if (!raw) raw = STATE.targetUrl || '';
-  if (raw && !raw.startsWith('http://') && !raw.startsWith('https://') && !raw.startsWith('./') && !raw.startsWith('../') && !raw.startsWith('git@')) raw = 'https://' + raw;
+  if (raw && !raw.startsWith('http://') && !raw.startsWith('https://') && !raw.startsWith('postman://') && !raw.startsWith('./') && !raw.startsWith('../') && !raw.startsWith('/') && !raw.startsWith('~/') && !raw.startsWith('git@')) raw = 'https://' + raw;
   return raw;
 }
 
@@ -2870,6 +2870,16 @@ async function startStrixScan(options = {}) {
       target_list: (val('strix-target-list') || '').split('\n').map(s => s.trim()).filter(Boolean),
       mcp_servers: (val('strix-mcp-servers') || '').split(',').map(s => s.trim()).filter(Boolean),
       mcp_exclude: (val('strix-mcp-exclude') || '').split(',').map(s => s.trim()).filter(Boolean),
+      strix_env_opts: {
+        postman_api_key: val('strix-postman-key') || undefined,
+        web_search_provider: val('strix-search-provider') || undefined,
+        perplexity_api_key: val('strix-perplexity-key') || undefined,
+        exa_api_key: val('strix-exa-key') || undefined,
+        reasoning_effort: val('strix-reasoning-effort') || 'high',
+        dedupe_model: val('strix-dedupe-model') || undefined,
+        sandbox_cpus: val('strix-sandbox-cpus') || undefined,
+        sandbox_mem_limit: val('strix-sandbox-mem') || undefined,
+      },
     };
     // JSON alanları (geçersiz JSON'da uyar, taramayı engelleme)
     for (const [field, id] of [['mcp_config', 'strix-mcp-config'], ['workspace_files', 'strix-workspace-files'], ['config', 'strix-cli-config']]) {
@@ -2923,6 +2933,7 @@ async function loadStrixPastRuns() {
       '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono shrink-0 ' + (stBadge[r.status] || 'bg-stone-200 text-stone-700') + '">' + escapeHtml(r.status || '?') + '</span>' +
       '<div class="min-w-0 flex-1"><div class="font-mono truncate" title="' + escapeAttr(r.run_name) + '">' + escapeHtml(r.run_name) + '</div>' +
       '<div class="text-[9px] text-stone-400 truncate">' + escapeHtml(r.target || '-') + ' · ' + (r.findings || 0) + ' bulgu · ' + escapeHtml(r.start_time || '') + '</div></div>' +
+      '<button type="button" onclick="inspectStrixRun(' + JSON.stringify(r.run_name).replace(/"/g, '&quot;') + ')" class="px-2 py-1 rounded-lg border border-stone-300 bg-white hover:bg-stone-100 text-stone-700 text-[9px] font-bold shrink-0">🔍 İncele</button>' +
       (r.resumable
         ? '<button type="button" onclick="startStrixScan({resume: ' + JSON.stringify(r.run_name).replace(/"/g, '&quot;') + '})" class="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-bold shrink-0">▶ Devam</button>'
         : '<span class="text-[9px] text-stone-400 shrink-0">bitmiş</span>') +
@@ -2975,11 +2986,12 @@ async function pollStrixStatus() {
     const logEl = document.getElementById('strix-log');
     if (logEl && d.log_tail) { logEl.textContent = d.log_tail; logEl.scrollTop = logEl.scrollHeight; }
 
-    if (d.finding_count > 0 || !d.running) {
+    if (d.finding_count > 0 || !d.running || (d.agents && d.agents.length > 0)) {
       const rep = await (await fetch('/api/strix-report?scan_id=' + encodeURIComponent(STRIX_ACTIVE_ID), { signal: AbortSignal.timeout(15000) })).json();
       if (rep.success) {
-        STATE.results.strixScan = rep;  // rapor dışa aktarmaya (MD/JSON/HTML) dahil
+        STATE.results.strixScan = rep;
         renderStrixFindings(rep.findings || []);
+        renderStrixArtifacts(rep);
       }
     }
 
@@ -2998,26 +3010,203 @@ async function pollStrixStatus() {
   } catch (e) { /* geçici ağ hatası: sonraki turda dene */ }
 }
 
+async function inspectStrixRun(runName) {
+  if (!runName) return;
+  try {
+    const res = await fetch('/api/strix-report?run_name=' + encodeURIComponent(runName), { signal: AbortSignal.timeout(15000) });
+    const rep = await res.json();
+    if (!rep.success) {
+      showToast('Tarama raporu yüklenemedi: ' + (rep.error || '?'), 'error');
+      return;
+    }
+    STATE.results.strixScan = rep;
+    renderStrixFindings(rep.findings || []);
+    renderStrixArtifacts(rep);
+    showToast('Strix tarama artefaktları yüklendi: ' + runName, 'success');
+  } catch (e) {
+    showToast('Rapor okuma hatası: ' + e.message, 'error');
+  }
+}
+
+function downloadStrixArtifact(kind) {
+  const rep = STATE.results.strixScan;
+  if (!rep || !rep.artifacts) {
+    showToast('Önce bir Strix taraması çalıştırın veya geçmiş taramalardan "🔍 İncele" seçin.', 'warning');
+    return;
+  }
+  const runName = rep.scan?.run_name || 'strix-run';
+  const art = rep.artifacts;
+  if (kind === 'sarif') {
+    if (!art.sarif) { showToast('Bu tarama için SARIF 2.1.0 çıktısı henüz oluşmamış.', 'warning'); return; }
+    downloadFile(runName + '-findings.sarif', JSON.stringify(art.sarif, null, 2), 'application/sarif+json');
+    showToast('SARIF 2.1.0 raporu indirildi!', 'success');
+  } else if (kind === 'csv') {
+    if (!art.csv_report) { showToast('Bu tarama için CSV çıktısı henüz oluşmamış.', 'warning'); return; }
+    downloadFile(runName + '-vulnerabilities.csv', art.csv_report, 'text/csv');
+    showToast('CSV raporu indirildi!', 'success');
+  } else if (kind === 'md') {
+    if (!art.markdown_report) { showToast('Bu tarama için Strix Markdown raporu henüz oluşmamış.', 'warning'); return; }
+    downloadFile(runName + '-penetration_test_report.md', art.markdown_report, 'text/markdown');
+    showToast('Strix yönetici Markdown raporu indirildi!', 'success');
+  }
+}
+
+function renderStrixArtifacts(rep) {
+  const wrap = document.getElementById('strix-artifacts-card');
+  const dlBar = document.getElementById('strix-artifact-dl-bar');
+  const agentsPanel = document.getElementById('strix-agents-panel');
+  const agentsList = document.getElementById('strix-agents-list');
+  const covPanel = document.getElementById('strix-coverage-panel');
+  const covList = document.getElementById('strix-coverage-list');
+  const mdPanel = document.getElementById('strix-native-md-panel');
+  const mdBody = document.getElementById('strix-native-md-body');
+
+  const art = (rep && rep.artifacts) || {};
+  const agents = art.agents || [];
+  const cov = art.coverage || {};
+  const md = (art.markdown_report || '').trim();
+
+  if (dlBar) {
+    if (art.sarif || art.csv_report || md) dlBar.classList.remove('hidden');
+    else dlBar.classList.add('hidden');
+  }
+
+  let anyVisible = false;
+
+  // 1) Alt-ajan topolojisi
+  if (agentsPanel && agentsList) {
+    if (agents.length === 0) {
+      agentsPanel.classList.add('hidden');
+    } else {
+      anyVisible = true;
+      agentsPanel.classList.remove('hidden');
+      const stColors = {
+        completed: 'bg-emerald-100 text-emerald-800',
+        running: 'bg-amber-100 text-amber-900',
+        waiting: 'bg-sky-100 text-sky-800',
+        stopped: 'bg-stone-200 text-stone-700',
+        crashed: 'bg-rose-100 text-rose-800'
+      };
+      agentsList.innerHTML = agents.map(a =>
+        '<div class="p-2.5 rounded-xl border border-stone-200 bg-stone-50 text-[11px]">' +
+        '<div class="flex items-center justify-between gap-2 mb-1">' +
+        '<span class="font-bold font-mono text-mistral-ink">🤖 ' + escapeHtml(a.name || a.id) + '</span>' +
+        '<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ' + (stColors[a.status] || 'bg-stone-200 text-stone-700') + '">' + escapeHtml(a.status || 'unknown') + '</span>' +
+        '</div>' +
+        '<div class="text-[10px] font-mono text-stone-500">ID: ' + escapeHtml(a.id) + (a.parent_id ? ' · Üst Ajan: ' + escapeHtml(a.parent_id) : ' · Kök Ajan') + (a.events_count ? ' · ' + a.events_count + ' olay' : '') + '</div>' +
+        ((a.skills && a.skills.length) ? '<div class="mt-1 flex flex-wrap gap-1">' + a.skills.map(s => '<span class="px-1.5 py-0.2 rounded bg-orange-50 border border-orange-200 text-[9px] font-mono text-orange-900">' + escapeHtml(s) + '</span>').join('') + '</div>' : '') +
+        (a.task ? '<div class="mt-1 text-[10px] text-stone-600 truncate" title="' + escapeAttr(a.task) + '">' + escapeHtml(a.task) + '</div>' : '') +
+        (a.error ? '<div class="mt-1 text-[10px] text-rose-700 font-mono">' + escapeHtml(a.error) + '</div>' : '') +
+        '</div>'
+      ).join('');
+    }
+  }
+
+  // 2) Kapsam defteri (coverage.json)
+  if (covPanel && covList) {
+    const reported = cov.agent_reported || cov.entries || [];
+    const observed = cov.machine_observed || {};
+    const gaps = observed.gaps || cov.gaps || [];
+    if (!reported.length && !gaps.length && !Object.keys(observed).length) {
+      covPanel.classList.add('hidden');
+    } else {
+      anyVisible = true;
+      covPanel.classList.remove('hidden');
+      let html = '';
+      if (observed && typeof observed === 'object' && Object.keys(observed).length) {
+        html += '<div class="p-2 rounded-lg bg-stone-50 border border-stone-200 font-mono text-[10px] text-stone-700">' +
+          'Tamamlanma: <strong>' + (observed.complete ? '✅ Tam' : '⚠️ Kısmi') + '</strong>' +
+          (observed.skills_carried ? ' · Yüklenen Beceri: ' + observed.skills_carried.length : '') +
+          (gaps.length ? ' · Kapsam Boşluğu (Gaps): <span class="text-rose-700 font-bold">' + gaps.length + '</span>' : ' · Boşluk Yok') +
+          '</div>';
+      }
+      if (Array.isArray(reported) && reported.length > 0) {
+        html += '<div class="space-y-1">' + reported.slice(0, 30).map(r =>
+          '<div class="p-2 rounded-lg border border-stone-200 bg-white flex items-start justify-between gap-2">' +
+          '<div><span class="font-bold text-mistral-ink">' + escapeHtml(r.surface || r.target || r.area || r.skill || '-') + '</span>' +
+          (r.notes || r.rationale || r.summary ? '<p class="text-[10px] text-stone-600 mt-0.5">' + escapeHtml(r.notes || r.rationale || r.summary) + '</p>' : '') + '</div>' +
+          '<span class="px-1.5 py-0.5 rounded bg-stone-100 border border-stone-200 font-mono text-[9px] shrink-0">' + escapeHtml(r.outcome || r.status || 'checked') + '</span>' +
+          '</div>'
+        ).join('') + '</div>';
+      }
+      covList.innerHTML = html;
+    }
+  }
+
+  // 3) Strix yerel yönetici raporu (penetration_test_report.md)
+  if (mdPanel && mdBody) {
+    if (!md) {
+      mdPanel.classList.add('hidden');
+    } else {
+      anyVisible = true;
+      mdPanel.classList.remove('hidden');
+      mdBody.textContent = md;
+    }
+  }
+
+  if (wrap) {
+    if (anyVisible) wrap.classList.remove('hidden');
+    else wrap.classList.add('hidden');
+  }
+}
+
 function renderStrixFindings(findings) {
   const card = document.getElementById('strix-findings-card');
   const list = document.getElementById('strix-findings-list');
   if (!card || !list) return;
-  if (!findings.length) { card.classList.add('hidden'); return; }
+  if (!findings.length) {
+    if (STATE.results.strixScan?.artifacts && (STATE.results.strixScan.artifacts.sarif || STATE.results.strixScan.artifacts.markdown_report)) {
+      card.classList.remove('hidden');
+      list.innerHTML = '<div class="p-3 rounded-xl bg-stone-50 border border-stone-200 text-xs text-mistral-slate">Bu taramada doğrulanmış zafiyet kaydı yok; üstteki butonlardan SARIF/MD artefaktlarını indirebilirsiniz.</div>';
+    } else {
+      card.classList.add('hidden');
+    }
+    return;
+  }
   card.classList.remove('hidden');
   const sevBadge = { 'KRİTİK': 'bg-rose-600 text-white', 'YÜKSEK': 'bg-orange-500 text-white', 'ORTA': 'bg-amber-500 text-white', 'DÜŞÜK': 'bg-stone-500 text-white', 'BİLGİ': 'bg-sky-600 text-white' };
-  list.innerHTML = findings.map(f =>
-    '<div class="p-3 rounded-xl border border-rose-200 bg-white">' +
-    '<div class="flex items-center gap-2 mb-1 flex-wrap">' +
-    '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono ' + (sevBadge[f.severity] || 'bg-stone-500 text-white') + '">' + escapeHtml(f.severity) + '</span>' +
-    (f.cvss != null ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-rose-50 border border-rose-200 text-rose-700">CVSS ' + escapeHtml(String(f.cvss)) + '</span>' : '') +
-    '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-100 border border-stone-200">' + escapeHtml(f.cwe || '-') + '</span>' +
-    (f.endpoint ? '<span class="text-[10px] font-mono text-stone-500 truncate">' + escapeHtml((f.method || '') + ' ' + f.endpoint) + '</span>' : '') +
-    '</div>' +
-    '<div class="text-xs font-bold text-mistral-ink mb-1">' + escapeHtml((f.title || '').replace(/^\[STRIX\]\s*/, '')) + '</div>' +
-    (f.description ? '<p class="text-[11px] text-stone-600 mb-1">' + escapeHtml(f.description) + '</p>' : '') +
-    (f.evidence ? '<div class="text-[10px] font-mono bg-stone-900 text-emerald-300 p-2 rounded-lg overflow-x-auto mb-1 max-h-32 overflow-y-auto"><code>' + escapeHtml(f.evidence) + '</code></div>' : '') +
-    (f.poc ? '<details class="mb-1"><summary class="text-[10px] font-bold text-mistral-orange cursor-pointer">PoC scripti</summary><pre class="text-[10px] font-mono bg-stone-950 text-amber-200 p-2 rounded-lg overflow-x-auto mt-1">' + escapeHtml(f.poc) + '</pre></details>' : '') +
-    (f.fix && f.fix !== '-' ? '<p class="text-[11px] text-emerald-800 bg-emerald-50 rounded-lg px-2 py-1"><strong>Çözüm:</strong> ' + escapeHtml(f.fix) + '</p>' : '') +
-    '</div>').join('');
+  list.innerHTML = findings.map(f => {
+    const breakdownEntries = f.cvss_breakdown && typeof f.cvss_breakdown === 'object' ? Object.entries(f.cvss_breakdown) : [];
+    const codeLocs = Array.isArray(f.code_locations) ? f.code_locations : [];
+    return '<div class="p-3.5 rounded-xl border border-rose-200 bg-white space-y-1.5">' +
+      '<div class="flex items-center gap-1.5 flex-wrap">' +
+      '<span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono ' + (sevBadge[f.severity] || 'bg-stone-500 text-white') + '">' + escapeHtml(f.severity) + '</span>' +
+      (f.cvss != null ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-rose-50 border border-rose-200 text-rose-700 font-bold">CVSS ' + escapeHtml(String(f.cvss)) + '</span>' : '') +
+      '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-100 border border-stone-200">' + escapeHtml(f.cwe || '-') + '</span>' +
+      (f.cve ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-100 border border-amber-200 text-amber-900">' + escapeHtml(f.cve) + '</span>' : '') +
+      (f.finding_class ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-100 text-stone-700">' + escapeHtml(f.finding_class) + '</span>' : '') +
+      (f.confidence ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-50 border border-emerald-200 text-emerald-800">güven: ' + escapeHtml(f.confidence) + '</span>' : '') +
+      (f.fix_effort ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-sky-50 border border-sky-200 text-sky-800">efor: ' + escapeHtml(f.fix_effort) + '</span>' : '') +
+      (f.agent_name ? '<span class="text-[10px] font-mono text-stone-500">🤖 ' + escapeHtml(f.agent_name) + '</span>' : '') +
+      (f.endpoint ? '<span class="text-[10px] font-mono text-stone-500 truncate ml-auto">' + escapeHtml((f.method || '') + ' ' + f.endpoint) + '</span>' : '') +
+      '</div>' +
+      '<div class="text-xs font-bold text-mistral-ink">' + escapeHtml((f.title || '').replace(/^\[STRIX\]\s*/, '')) + '</div>' +
+      (f.description ? '<p class="text-[11px] text-stone-600 leading-relaxed">' + escapeHtml(f.description) + '</p>' : '') +
+      (f.impact ? '<p class="text-[11px] text-rose-800 bg-rose-50/60 rounded-lg px-2 py-1"><strong>Etki:</strong> ' + escapeHtml(f.impact) + '</p>' : '') +
+      (breakdownEntries.length ? '<div class="text-[10px] font-mono text-stone-600 bg-stone-50 px-2 py-1 rounded border border-stone-200"><strong>CVSS Kırılımı:</strong> ' + breakdownEntries.map(([k, v]) => escapeHtml(k + ':' + v)).join(' · ') + '</div>' : '') +
+      (f.evidence ? '<div class="text-[10px] font-mono bg-stone-900 text-emerald-300 p-2 rounded-lg overflow-x-auto max-h-32 overflow-y-auto"><code>' + escapeHtml(f.evidence) + '</code></div>' : '') +
+      (f.confidence_rationale || f.assumptions || f.counterevidence || f.severity_change_conditions
+        ? '<details class="text-[11px]"><summary class="text-[10px] font-bold text-stone-600 cursor-pointer">🔬 Güven Gerekçesi, Varsayımlar & Karşı-Kanıt</summary>' +
+          '<div class="mt-1 p-2 rounded-lg bg-stone-50 border border-stone-200 space-y-1 text-[10px] text-stone-700">' +
+          (f.confidence_rationale ? '<div><strong>Güven Gerekçesi:</strong> ' + escapeHtml(f.confidence_rationale) + '</div>' : '') +
+          (f.assumptions ? '<div><strong>Varsayımlar:</strong> ' + escapeHtml(f.assumptions) + '</div>' : '') +
+          (f.counterevidence ? '<div><strong>Karşı-Kanıt:</strong> ' + escapeHtml(f.counterevidence) + '</div>' : '') +
+          (f.severity_change_conditions ? '<div><strong>Şiddet Değişim Koşulları:</strong> ' + escapeHtml(f.severity_change_conditions) + '</div>' : '') +
+          '</div></details>'
+        : '') +
+      (codeLocs.length
+        ? '<details class="text-[11px]"><summary class="text-[10px] font-bold text-stone-600 cursor-pointer">📍 Kaynak Kod Konumları & Önerilen Yama (' + codeLocs.length + ')</summary>' +
+          '<div class="mt-1 space-y-1">' + codeLocs.map(loc =>
+            '<div class="p-2 rounded bg-stone-50 border border-stone-200 font-mono text-[10px]">' +
+            '<div>' + escapeHtml((loc.file || loc.path || '?') + ':' + (loc.start_line || loc.line || '')) + '</div>' +
+            (loc.fix_after ? '<pre class="mt-1 p-1.5 rounded bg-stone-900 text-emerald-300 overflow-x-auto"><code>' + escapeHtml(loc.fix_after) + '</code></pre>' : '') +
+            '</div>'
+          ).join('') + '</div></details>'
+        : '') +
+      (f.poc ? '<details><summary class="text-[10px] font-bold text-mistral-orange cursor-pointer">⚡ Çalıştırılabilir PoC Scripti</summary><pre class="text-[10px] font-mono bg-stone-950 text-amber-200 p-2 rounded-lg overflow-x-auto mt-1"><code>' + escapeHtml(f.poc) + '</code></pre></details>' : '') +
+      (f.fix && f.fix !== '-' ? '<p class="text-[11px] text-emerald-800 bg-emerald-50 rounded-lg px-2 py-1"><strong>Çözüm:</strong> ' + escapeHtml(f.fix) + (f.fix_verification ? '<br><strong>Doğrulama:</strong> ' + escapeHtml(f.fix_verification) : '') + '</p>' : '') +
+      (f.fix_pr_body ? '<details><summary class="text-[10px] font-bold text-emerald-700 cursor-pointer">🔀 Hazır PR Açıklaması (fix_pr_body)</summary><pre class="text-[10px] font-mono bg-stone-900 text-stone-100 p-2 rounded-lg overflow-x-auto mt-1"><code>' + escapeHtml(f.fix_pr_body) + '</code></pre></details>' : '') +
+      '</div>';
+  }).join('');
 }
 
