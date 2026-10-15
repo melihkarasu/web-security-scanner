@@ -2,95 +2,129 @@
 <html lang="tr" class="h-full">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>Web Security Scanner — Modern Güvenlik Denetim Paketi</title>
   
   <!-- Fontlar: Newsreader (Editorial), Inter (UI), JetBrains Mono (Kod) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
   
-  <!-- Precompiled Standalone Tailwind CSS & Dedicated Styling (Sıfır CDN Bağımlılığı) -->
-  <link rel="stylesheet" href="css/tailwind.min.css?v=20261014f">
-  <link rel="stylesheet" href="css/style.css?v=20261014f">
+  <!-- Precompiled Standalone Tailwind CSS & Dedicated Modern Design System -->
+  <link rel="stylesheet" href="css/tailwind.min.css?v=20261015a">
+  <link rel="stylesheet" href="css/style.css?v=20261015a">
 </head>
 <body class="bg-[#F8FAFC] text-mistral-ink font-sans antialiased min-h-full flex flex-col selection:bg-orange-500/20 selection:text-orange-950">
 
-  <!-- Üst Gezinme / Header -->
-  <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-mistral-hairline transition-all">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+  <!-- Mistral Signature Sunset Stripe -->
+  <div class="sunset-stripe"></div>
+
+  <!-- Üst Gezinme / Header (Mobil Uyumlu Çok Satırlı / Esnek Yapı) -->
+  <header class="app-header">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
       
       <!-- Logo & Başlık -->
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-mistral-orange to-amber-600 flex items-center justify-center text-xl shadow-sm text-white">
-          🛡️
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="brand-mark" aria-hidden="true">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
         </div>
-        <div>
-          <div class="flex items-center gap-2">
-            <span class="font-extrabold text-base tracking-tight font-editorial text-mistral-ink">Web Security Scanner</span>
-            <span id="header-edition-badge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-orange-100 text-mistral-orange font-bold">v2.0 Full</span>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-extrabold text-base sm:text-lg tracking-tight font-editorial text-mistral-ink truncate">Web Security Scanner</span>
+            <span id="header-edition-badge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-orange-100 text-mistral-orange border border-orange-200 font-bold">v2.0 Full</span>
           </div>
-          <p class="text-[11px] text-mistral-slate hidden sm:block">Tek Merkezli Pasif, Aktif & AI Destekli Güvenlik Denetimi</p>
+          <p class="text-[11px] text-mistral-slate hidden sm:block truncate">Tek Merkezli Pasif, Aktif, SAST &amp; Otonom AI Güvenlik Denetimi</p>
         </div>
       </div>
 
-      <!-- Durum & Hızlı Aksiyonlar -->
-      <div class="flex items-center gap-2 sm:gap-3">
-        <!-- Lite vs Full Sürüm Anahtarı -->
-        <div class="inline-flex items-center rounded-xl border border-stone-200 bg-stone-100 p-0.5 text-[11px] font-mono font-bold shadow-xs" title="Sürüm Görünümü: Lite (Sıfır LLM) vs Full (AI & Sandbox)">
-          <button type="button" id="edition-btn-lite" onclick="setScannerEdition('lite')" class="px-2.5 py-1 rounded-lg text-stone-600 hover:text-mistral-ink transition cursor-pointer">⚡ Lite</button>
-          <button type="button" id="edition-btn-full" onclick="setScannerEdition('full')" class="px-2.5 py-1 rounded-lg bg-mistral-orange text-white transition cursor-pointer">🚀 Full (AI)</button>
+      <!-- Durum & Hızlı Aksiyonlar (Mobil Uyumlu) -->
+      <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end pt-1.5 sm:pt-0 border-t sm:border-t-0 border-stone-200/70">
+        
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Lite vs Full Sürüm Anahtarı -->
+          <div class="segmented-group" title="Sürüm Görünümü: Lite (Sıfır LLM) vs Full (AI & Sandbox)">
+            <button type="button" id="edition-btn-lite" onclick="setScannerEdition('lite')" class="segmented-item">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>Lite</span>
+            </button>
+            <button type="button" id="edition-btn-full" onclick="setScannerEdition('full')" class="segmented-item is-active-orange">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/><circle cx="12" cy="12" r="3"/></svg>
+              <span>Full (AI)</span>
+            </button>
+          </div>
+
+          <!-- Sunucu / Çalışma Modu Rozeti -->
+          <div id="scanner-mode-pill" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-mono text-stone-700 font-semibold">
+            <span id="scanner-mode-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
+            <span id="scanner-mode-label" class="truncate max-w-[160px] sm:max-w-none">Mod kontrol ediliyor…</span>
+          </div>
         </div>
 
-        <!-- Sunucu / Çalışma Modu Rozeti (Her zaman görünür) -->
-        <div id="scanner-mode-pill" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-stone-200 bg-stone-50 text-[11px] font-mono text-stone-700 font-semibold">
-          <span id="scanner-mode-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-          <span id="scanner-mode-label">Mod kontrol ediliyor…</span>
+        <div class="flex items-center gap-1.5 sm:gap-2">
+          <!-- AI Ayarları Butonu -->
+          <button type="button" onclick="toggleAIConfig()" id="header-ai-btn" class="btn btn-sm btn-ai">
+            <svg class="w-4 h-4 text-amber-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/>
+            </svg>
+            <span>AI Ayarları</span>
+            <span id="header-ai-indicator" class="w-2 h-2 rounded-full bg-amber-500"></span>
+          </button>
+
+          <!-- Rapor İndirme Menüsü -->
+          <div class="segmented-group" title="Denetim Raporunu Dışa Aktar">
+            <button type="button" onclick="exportMarkdownReport()" class="segmented-item" title="Markdown Raporu İndir">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>MD</span>
+            </button>
+            <button type="button" onclick="exportJsonReport()" class="segmented-item" title="JSON Raporu İndir">
+              <span>JSON</span>
+            </button>
+            <button type="button" onclick="exportHtmlReport()" class="segmented-item hidden sm:inline-flex" title="HTML Raporu İndir">
+              <span>HTML</span>
+            </button>
+          </div>
+
+          <!-- GitHub Linki -->
+          <a href="https://github.com/melihkarasu/web-security-scanner" target="_blank" rel="noopener" class="btn btn-sm btn-secondary !px-2.5" title="GitHub Deposu">
+            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          </a>
         </div>
 
-        <!-- AI Ayarları Butonu (ÖNE ÇIKARILDI) -->
-        <button type="button" onclick="toggleAIConfig()" id="header-ai-btn" class="px-3.5 py-1.5 rounded-xl border border-amber-300/80 bg-amber-50 hover:bg-amber-100/80 text-amber-900 text-xs font-bold transition shadow-xs flex items-center gap-2 cursor-pointer">
-          <span class="text-sm">🤖</span>
-          <span>AI Ayarları</span>
-          <span id="header-ai-indicator" class="w-2 h-2 rounded-full bg-amber-400"></span>
-        </button>
-
-        <!-- Rapor İndirme Menüsü -->
-        <div class="flex items-center rounded-xl border border-stone-200 bg-white p-0.5 shadow-xs">
-          <button onclick="exportMarkdownReport()" class="px-2.5 py-1 text-xs font-semibold text-mistral-slate hover:text-mistral-ink hover:bg-stone-50 rounded-lg transition" title="Markdown Raporu İndir">.md</button>
-          <span class="text-stone-300 text-xs">|</span>
-          <button onclick="exportJsonReport()" class="px-2.5 py-1 text-xs font-semibold text-mistral-slate hover:text-mistral-ink hover:bg-stone-50 rounded-lg transition" title="JSON Raporu İndir">.json</button>
-        </div>
-
-        <!-- GitHub Linki -->
-        <a href="https://github.com/melihkarasu/web-security-scanner" target="_blank" rel="noopener" class="p-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-mistral-slate hover:text-mistral-ink transition shadow-xs" title="GitHub Deposu">
-          <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-        </a>
       </div>
     </div>
   </header>
 
   <!-- Ana İçerik -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 w-full flex-1 space-y-6">
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-8 w-full flex-1 space-y-6">
 
     <!-- AI Konfigürasyon Paneli (Drawer / Modal Kartı) -->
-    <div id="ai-config-panel" class="hidden bg-white border-2 border-mistral-orange/40 rounded-2xl p-5 sm:p-6 shadow-lg transition-all animate-in fade-in duration-200">
-      <div class="flex items-center justify-between pb-3 mb-4 border-b border-stone-200">
+    <div id="ai-config-panel" class="hidden bg-white border-2 border-mistral-orange/40 rounded-2xl p-4 sm:p-6 shadow-md transition-all">
+      <div class="flex flex-wrap items-center justify-between gap-3 pb-3.5 mb-4 border-b border-stone-200">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center text-lg">🤖</div>
+          <div class="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 text-mistral-orange flex items-center justify-center shrink-0">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/>
+            </svg>
+          </div>
           <div>
-            <h3 class="text-base font-bold font-editorial text-mistral-ink">AI Red Team & LLM Orkestrasyon Paneli</h3>
+            <h3 class="text-base font-bold font-editorial text-mistral-ink">AI Red Team &amp; LLM Orkestrasyon Paneli</h3>
             <p class="text-xs text-mistral-slate">OpenAI Compatible, Google Gemini API veya Vertex AI (bölge: global) yapılandırması.</p>
           </div>
         </div>
-        <button onclick="toggleAIConfig()" class="text-xs font-bold text-mistral-slate hover:text-mistral-ink px-3 py-1.5 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 transition cursor-pointer">✕ Kapat</button>
+        <button type="button" onclick="toggleAIConfig()" class="btn btn-sm btn-secondary">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <span>Kapat</span>
+        </button>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <!-- Sağlayıcı Seçimi -->
-        <div class="space-y-1">
-          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">LLM Sağlayıcı</label>
-          <select id="ai-provider" onchange="onAIProviderChange()" class="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none">
+        <div class="space-y-1.5">
+          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider block">LLM Sağlayıcı</label>
+          <select id="ai-provider" onchange="onAIProviderChange()" class="modern-field font-mono">
             <option value="openai">OpenAI Compatible (Özel Endpoint / DeepSeek / Groq vb.)</option>
             <option value="gemini">Google Gemini API (Doğrudan Key - AI Studio)</option>
             <option value="vertex">Google Cloud Vertex AI (Bölge: global)</option>
@@ -100,44 +134,44 @@
         </div>
 
         <!-- Model Seçimi -->
-        <div class="space-y-1">
+        <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Model</label>
             <span class="text-[10px] text-stone-400 font-mono">Hızlı seç:</span>
           </div>
-          <input type="text" id="ai-model" value="gemini-3.1-pro" placeholder="örn: gemini-3.1-pro" class="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none" />
-          <div class="flex flex-wrap gap-1 mt-1">
-            <button type="button" onclick="setModelPreset('gemini-3.1-pro')" class="px-2 py-0.5 rounded bg-orange-100 text-orange-900 text-[10px] font-mono hover:bg-orange-200 transition">gemini-3.1-pro</button>
-            <button type="button" onclick="setModelPreset('gemini-3.8-flash')" class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-mono hover:bg-amber-200 transition">gemini-3.8-flash</button>
-            <button type="button" onclick="setModelPreset('gpt-4o')" class="px-2 py-0.5 rounded bg-stone-100 text-stone-800 text-[10px] font-mono hover:bg-stone-200 transition">gpt-4o</button>
-            <button type="button" onclick="setModelPreset('deepseek-chat')" class="px-2 py-0.5 rounded bg-sky-100 text-sky-900 text-[10px] font-mono hover:bg-sky-200 transition">deepseek-chat</button>
+          <input type="text" id="ai-model" value="gemini-3.1-pro" placeholder="örn: gemini-3.1-pro" class="modern-field font-mono" />
+          <div class="flex flex-wrap gap-1.5 pt-0.5">
+            <button type="button" onclick="setModelPreset('gemini-3.1-pro')" class="px-2 py-0.5 rounded-md bg-orange-50 border border-orange-200 text-orange-900 text-[10px] font-mono font-semibold hover:bg-orange-200 transition">gemini-3.1-pro</button>
+            <button type="button" onclick="setModelPreset('gemini-3.8-flash')" class="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-mono font-semibold hover:bg-amber-200 transition">gemini-3.8-flash</button>
+            <button type="button" onclick="setModelPreset('gpt-4o')" class="px-2 py-0.5 rounded-md bg-stone-100 border border-stone-200 text-stone-800 text-[10px] font-mono font-semibold hover:bg-stone-200 transition">gpt-4o</button>
+            <button type="button" onclick="setModelPreset('deepseek-chat')" class="px-2 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-900 text-[10px] font-mono font-semibold hover:bg-sky-200 transition">deepseek-chat</button>
           </div>
         </div>
 
         <!-- Base URL (OpenAI Compatible & Ollama için) -->
-        <div id="ai-base-url-container" class="space-y-1">
-          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Base URL (Endpoint)</label>
-          <input type="text" id="ai-base-url" value="https://api.openai.com/v1" placeholder="https://api.openai.com/v1" class="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none" />
+        <div id="ai-base-url-container" class="space-y-1.5">
+          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider block">Base URL (Endpoint)</label>
+          <input type="text" id="ai-base-url" value="https://api.openai.com/v1" placeholder="https://api.openai.com/v1" class="modern-field font-mono" />
           <p class="text-[10px] text-stone-500">Örn: https://api.deepseek.com/v1 veya http://localhost:11434/v1</p>
         </div>
 
         <!-- Project ID (Vertex AI için) -->
-        <div id="ai-project-id-container" class="space-y-1 hidden">
-          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Project ID (Google Cloud)</label>
-          <input type="text" id="ai-project-id" placeholder="my-gcp-project-id" class="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none" />
+        <div id="ai-project-id-container" class="space-y-1.5 hidden">
+          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider block">Project ID (Google Cloud)</label>
+          <input type="text" id="ai-project-id" placeholder="my-gcp-project-id" class="modern-field font-mono" />
         </div>
 
         <!-- Bölge / Region (Vertex AI için: global) -->
-        <div id="ai-region-container" class="space-y-1 hidden">
-          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Bölge (Region)</label>
-          <input type="text" id="ai-region" value="global" placeholder="global" class="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none" />
-          <p class="text-[10px] text-emerald-700 font-semibold">✓ Bölge: "global" (us-central1 DEĞİL).</p>
+        <div id="ai-region-container" class="space-y-1.5 hidden">
+          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider block">Bölge (Region)</label>
+          <input type="text" id="ai-region" value="global" placeholder="global" class="modern-field font-mono" />
+          <p class="text-[10px] text-emerald-700 font-semibold">Bölge: "global" (us-central1 DEĞİL).</p>
         </div>
 
         <!-- Kimlik Doğrulama Türü (Vertex için) -->
-        <div id="ai-auth-type-container" class="space-y-1 hidden">
-          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Vertex Kimlik Doğrulama</label>
-          <select id="ai-auth-type" onchange="onAuthTypeChange()" class="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none">
+        <div id="ai-auth-type-container" class="space-y-1.5 hidden">
+          <label class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider block">Vertex Kimlik Doğrulama</label>
+          <select id="ai-auth-type" onchange="onAuthTypeChange()" class="modern-field font-mono">
             <option value="service_account">Service Account (JSON Anahtarı - Önerilen)</option>
             <option value="api_key">Vertex API Key</option>
           </select>
@@ -145,92 +179,101 @@
       </div>
 
       <!-- Kimlik Doğrulama Alanı -->
-      <div id="ai-auth-container" class="mt-4 space-y-1">
-        <label id="ai-auth-label" class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">API Key veya Service Account JSON İçeriği</label>
-        <textarea id="ai-auth" rows="3" placeholder="sk-... veya Service Account JSON içeriğini buraya yapıştırın..." class="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-orange-500/20 outline-none"></textarea>
+      <div id="ai-auth-container" class="mt-4 space-y-1.5">
+        <label id="ai-auth-label" class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider block">API Key veya Service Account JSON İçeriği</label>
+        <textarea id="ai-auth" rows="3" placeholder="sk-... veya Service Account JSON içeriğini buraya yapıştırın..." class="modern-field font-mono"></textarea>
       </div>
 
       <!-- Aksiyon & Test Barı -->
-      <div class="mt-4 pt-3 border-t border-stone-200 flex flex-wrap items-center justify-between gap-3">
+      <div class="mt-4 pt-3.5 border-t border-stone-200 flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-2">
           <span id="ai-status-indicator" class="w-2.5 h-2.5 rounded-full bg-stone-300"></span>
           <span id="ai-status-text" class="text-xs font-mono text-mistral-slate">AI Modülü Hazır</span>
         </div>
-        <div class="flex items-center gap-2">
-          <button type="button" onclick="saveAIConfig(true)" class="px-3.5 py-2 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-xs font-bold text-mistral-ink transition shadow-xs flex items-center gap-1.5 cursor-pointer">
-            <span>💾</span>
+        <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <button type="button" onclick="saveAIConfig(true)" class="btn btn-sm btn-secondary">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             <span>Ayarları Kaydet</span>
           </button>
-          <button type="button" id="ai-test-btn" onclick="testAIConnection()" class="px-4 py-2 rounded-xl bg-mistral-orange hover:bg-[#e04406] text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer">
-            <span id="ai-test-spinner" class="hidden animate-spin">⏳</span>
-            <span id="ai-test-btn-text">⚡ Bağlantıyı Test Et</span>
+          <button type="button" id="ai-test-btn" onclick="testAIConnection()" class="btn btn-sm btn-primary">
+            <svg id="ai-test-spinner" class="hidden animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span id="ai-test-btn-text">Bağlantıyı Test Et</span>
           </button>
         </div>
       </div>
     </div>
 
     <!-- ============================================================= -->
-    <!-- 🚀 TEK GİRİŞLİ KOMUTA MERKEZİ (UNIFIED COMMAND CENTER)          -->
+    <!-- TEK GİRİŞLİ KOMUTA MERKEZİ (UNIFIED COMMAND CENTER)          -->
     <!-- ============================================================= -->
-    <div class="bg-white border border-stone-200/90 rounded-3xl p-5 sm:p-7 shadow-sm">
+    <section class="command-hero p-5 sm:p-7">
       
       <!-- Başlık ve Yönlendirici Bilgi -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div>
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
+        <div class="space-y-1">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-50 border border-orange-200 text-mistral-orange text-[11px] font-mono font-bold mb-1">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            <span>BİRLEŞİK GÜVENLİK DENETİM MOTORU</span>
+          </div>
           <h1 class="text-2xl sm:text-3xl font-extrabold font-editorial tracking-tight text-mistral-ink">
             Güvenlik Teşhis ve Denetim Merkezi
           </h1>
-          <p class="text-xs text-mistral-slate mt-1">
-            Alan adını (veya alt dizinli URL'yi: <code class="font-mono text-stone-700">alanadi.com/dizin</code>) ya da yerel proje dizinini girerek kapsamlı denetimi başlatın.
+          <p class="text-xs sm:text-sm text-mistral-slate leading-relaxed max-w-2xl">
+            Alan adını (veya alt dizinli URL'yi: <code class="font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-800 border border-stone-200">alanadi.com/dizin</code>) ya da yerel proje dizinini girerek kapsamlı güvenlik denetimini başlatın.
           </p>
         </div>
 
         <!-- Yerel Mod & Derin Tarama Durum Kartı -->
-        <div id="scanner-capability-status" class="flex flex-wrap items-center gap-2 p-2.5 rounded-2xl border border-stone-200 bg-stone-50 text-[11px] font-mono">
-          <span id="status-local-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-200/70 text-stone-700 font-bold">
-            <span>⏳</span>
+        <div id="scanner-capability-status" class="flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-stone-200 bg-stone-50/80 text-[11px] font-mono self-start lg:self-auto">
+          <span id="status-local-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-200/70 text-stone-700 font-bold">
+            <span class="w-2 h-2 rounded-full bg-stone-400"></span>
             <span>Yerel Mod: Kontrol ediliyor…</span>
           </span>
-          <span id="status-deep-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-200/70 text-stone-700 font-bold">
-            <span>🔍</span>
+          <span id="status-deep-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-200/70 text-stone-700 font-bold">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <span>Derin Tarama: Kontrol ediliyor…</span>
           </span>
         </div>
       </div>
 
       <!-- Mod Bilgilendirme Şeridi -->
-      <div id="scanner-mode-notice" class="hidden mb-4 p-3 rounded-2xl border text-xs"></div>
+      <div id="scanner-mode-notice" class="hidden mb-5 p-3.5 rounded-2xl border text-xs"></div>
 
-      <!-- Hedef Giriş Satırı: Alan Adı / Alt Dizinli URL + Opsiyonel Yerel Proje Dizini -->
-      <div class="flex flex-col gap-2.5 mb-5">
+      <!-- Omni-Input Dock: Hedef Giriş Satırı & Yerel Proje Dizini -->
+      <div class="omni-dock space-y-2.5 mb-6">
         <div class="flex flex-col sm:flex-row gap-2.5">
           <div class="target-input-wrapper flex-1">
-            <div class="target-input-icon text-stone-400">
-              🌐
+            <div class="target-input-icon" aria-hidden="true">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
             </div>
             <input
               type="text"
               id="unified-target-input"
-              placeholder="Alan adı, alt dizinli URL veya yerel dizin (örn: site.com/panel, http://localhost:3000/api veya /proje/dizini)"
-              class="w-full bg-stone-50 border border-stone-200 rounded-2xl text-sm font-mono text-mistral-ink placeholder-stone-400 focus:bg-white transition-all shadow-inner"
+              placeholder="Alan adı, alt dizinli URL veya yerel dizin (örn: site.com/panel, http://localhost:3000/api)"
             />
           </div>
           <button
             type="button"
             id="unified-scan-btn"
             onclick="startUnifiedScan()"
-            class="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-mistral-orange to-amber-600 hover:from-[#e04406] hover:to-amber-700 text-white font-bold text-sm transition-all shadow-sm hover:shadow flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+            class="btn btn-lg btn-primary shrink-0"
           >
-            <span id="unified-scan-spinner" class="hidden animate-spin text-base">⏳</span>
-            <span id="unified-scan-btn-text">🚀 Taramayı Başlat</span>
+            <svg id="unified-scan-spinner" class="hidden animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            <span id="unified-scan-btn-text">Taramayı Başlat</span>
           </button>
         </div>
 
         <!-- Yerel Mod: Alan Adı ile Birlikte veya Bağımsız Yerel Dizin (SAST) Girişi -->
-        <div id="local-dir-row" class="flex flex-col sm:flex-row sm:items-center gap-2 pt-1">
+        <div id="local-dir-row" class="flex flex-col md:flex-row md:items-center gap-2 pt-0.5">
           <div class="target-input-wrapper flex-1">
-            <div class="target-input-icon text-stone-400">
-              📂
+            <div class="target-input-icon" aria-hidden="true">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
             </div>
             <input
               type="text"
@@ -238,154 +281,211 @@
               list="sast-dir-suggestions"
               autocomplete="off"
               placeholder="Yerel proje dizini veya sadece klasör adı (örn: sarjharitasi, kandemir veya /var/www/app)"
-              class="w-full bg-stone-50 border border-stone-200 rounded-2xl text-xs font-mono text-mistral-ink placeholder-stone-400 focus:bg-white transition-all shadow-inner"
             />
             <datalist id="sast-dir-suggestions"></datalist>
           </div>
-          <span id="local-dir-hint" class="text-[11px] text-mistral-slate font-mono px-1">
-            Tam yol yazmasanız da klasör adından dizin konumu otomatik bulunur ve tamamlanır.
+          <span id="local-dir-hint" class="text-[11px] text-mistral-slate font-mono px-1.5 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-mistral-orange shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <span>Klasör adından dizin konumu otomatik bulunur ve tamamlanır.</span>
           </span>
         </div>
       </div>
 
-      <!-- Modül Seçimi: 10 Maddelik Açıklamalı Analiz Listesi (Standart + API Key Gerektiren AI Grubu) -->
-      <div class="pt-4 border-t border-stone-100 space-y-4">
+      <!-- Modül Seçimi: 10 Maddelik Açıklamalı Analiz Matrisi -->
+      <div class="pt-4 border-t border-stone-200/80 space-y-5">
         
         <!-- GRUP 1: Standart & Deterministik Güvenlik Analizleri -->
         <div>
-          <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
-            <div class="text-[11px] font-bold text-mistral-ink uppercase tracking-wider flex items-center gap-1.5">
-              <span>🛡️</span>
-              <span>1. Standart & Deterministik Güvenlik Analizleri (API Key Gerektirmez)</span>
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div class="text-xs font-bold text-mistral-ink uppercase tracking-wider flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-orange-50 border border-orange-200 text-mistral-orange inline-flex items-center justify-center">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </span>
+              <span>1. Standart &amp; Deterministik Güvenlik Analizleri <span class="text-stone-400 font-normal normal-case">(API Key Gerektirmez)</span></span>
             </div>
-            <div class="flex items-center gap-2 text-[11px] font-mono">
-              <button type="button" onclick="toggleAnalysisGroup('standard', true)" class="px-2 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold transition cursor-pointer">Tümünü Seç</button>
-              <button type="button" onclick="toggleAnalysisGroup('standard', false)" class="px-2 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold transition cursor-pointer">Temizle</button>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="toggleAnalysisGroup('standard', true)" class="btn btn-xs btn-secondary">Tümünü Seç</button>
+              <button type="button" onclick="toggleAnalysisGroup('standard', false)" class="btn btn-xs btn-secondary">Temizle</button>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <!-- Madde 1: HTTP Güvenlik Başlıkları & Sızıntı -->
-            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
-              <input type="checkbox" id="chk-headers" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-              <div>
-                <div class="text-xs font-bold text-mistral-ink">1. HTTP Güvenlik Başlıkları & Bilgi Sızıntısı Analizi</div>
-                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy ve Server/X-Powered-By sürüm ifşası denetimi.</p>
+            <label class="module-card">
+              <div class="module-icon-box" aria-hidden="true">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-mistral-ink">1. HTTP Güvenlik Başlıkları &amp; Bilgi Sızıntısı</span>
+                  <input type="checkbox" id="chk-headers" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard">
+                </div>
+                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy ve Server/X-Powered-By sürüm ifşası denetimi.</p>
               </div>
             </label>
 
             <!-- Madde 2: DNS & E-posta Savunması -->
-            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
-              <input type="checkbox" id="chk-dns" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-              <div>
-                <div class="text-xs font-bold text-mistral-ink">2. DNS & E-posta Savunma Kayıtları Denetimi</div>
-                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">DMARC politikası, SPF yetkilendirmesi, DNSSEC imzası, CAA sertifika kısıtları, IPv6 (AAAA) ve MX e-posta sahteciliği (spoofing) kontrolü.</p>
+            <label class="module-card">
+              <div class="module-icon-box" aria-hidden="true">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-mistral-ink">2. DNS &amp; E-posta Savunma Kayıtları Denetimi</span>
+                  <input type="checkbox" id="chk-dns" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard">
+                </div>
+                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">DMARC politikası, SPF yetkilendirmesi, DNSSEC imzası, CAA sertifika kısıtları, IPv6 (AAAA) ve MX e-posta sahteciliği (spoofing) kontrolü.</p>
               </div>
             </label>
 
             <!-- Madde 3: Derin Pasif Keşif -->
-            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
-              <input type="checkbox" id="chk-deep" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-              <div>
-                <div class="text-xs font-bold text-mistral-ink flex items-center gap-1.5">
-                  <span>3. Derin Pasif Keşif, Çerez & TLS/SSL Sertifika Analizi</span>
-                  <span id="mod-deep-pill" class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-100 text-emerald-800">Aktif</span>
+            <label class="module-card">
+              <div class="module-icon-box" aria-hidden="true">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="text-xs font-bold text-mistral-ink flex items-center gap-1.5 flex-wrap">
+                    <span>3. Derin Pasif Keşif, Çerez &amp; TLS/SSL Analizi</span>
+                    <span id="mod-deep-pill" class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-100 text-emerald-800 border border-emerald-200">Aktif</span>
+                  </div>
+                  <input type="checkbox" id="chk-deep" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard">
                 </div>
-                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">Çerez bayrakları (HttpOnly, Secure, SameSite), TLS sürümü ve sertifika bitiş süresi, <code class="font-mono">robots.txt</code> hassas yol ifşası, Mixed Content ve teknoloji parmak izi.</p>
+                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">Çerez bayrakları (HttpOnly, Secure, SameSite), TLS sürümü ve sertifika bitiş süresi, <code class="font-mono">robots.txt</code> hassas yol ifşası, Mixed Content ve teknoloji parmak izi.</p>
               </div>
             </label>
 
             <!-- Madde 4: Yerel Kaynak Kod (SAST) & CVE -->
-            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
-              <input type="checkbox" id="chk-sast" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-              <div>
-                <div class="text-xs font-bold text-mistral-ink">4. Statik Kaynak Kod & Tedarik Zinciri CVE Analizi (SAST)</div>
-                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">7 dilde 98 statik/AST/taint/entropy kuralı, gömülü sır/anahtar tespiti ve 8 ekosistemde (npm, PyPI, Go, Cargo, Composer, Maven, NuGet, RubyGems) canlı Google OSV CVE taraması.</p>
+            <label class="module-card">
+              <div class="module-icon-box" aria-hidden="true">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-mistral-ink">4. Statik Kaynak Kod &amp; Tedarik Zinciri CVE (SAST)</span>
+                  <input type="checkbox" id="chk-sast" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard">
+                </div>
+                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">7 dilde 98 statik/AST/taint/entropy kuralı, gömülü sır/anahtar tespiti ve 8 ekosistemde (npm, PyPI, Go, Cargo, Composer, Maven, NuGet, RubyGems) canlı OSV CVE taraması.</p>
               </div>
             </label>
 
             <!-- Madde 5: Aktif Enjeksiyon Testleri -->
-            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
-              <input type="checkbox" id="chk-active-inj" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-              <div>
-                <div class="text-xs font-bold text-mistral-ink">5. Aktif Enjeksiyon & Girdi Manipülasyonu Testleri</div>
-                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">SQL Injection (Error/Boolean/Time-based), NoSQL Injection (<code class="font-mono">$ne</code>), SSTI şablon motoru enjeksiyonu ve Reflected/DOM XSS testleri (zararsız okuma probları).</p>
+            <label class="module-card">
+              <div class="module-icon-box" aria-hidden="true">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-mistral-ink">5. Aktif Enjeksiyon &amp; Girdi Manipülasyonu Testleri</span>
+                  <input type="checkbox" id="chk-active-inj" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard">
+                </div>
+                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">SQL Injection (Error/Boolean/Time-based), NoSQL Injection (<code class="font-mono">$ne</code>), SSTI şablon motoru enjeksiyonu ve Reflected/DOM XSS testleri (zararsız okuma probları).</p>
               </div>
             </label>
 
             <!-- Madde 6: Aktif Erişim, Yönlendirme & Oturum -->
-            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none">
-              <input type="checkbox" id="chk-active-access" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-              <div>
-                <div class="text-xs font-bold text-mistral-ink">6. Aktif Oturum, CSRF, SSRF & Erişim Kontrolü Testleri</div>
-                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">CSRF form token/SameSite denetimi, SSRF iç ağ erişim probları, Open Redirect açık yönlendirme, IDOR nesne referansı ve derin CORS/CSP politika analizi.</p>
+            <label class="module-card">
+              <div class="module-icon-box" aria-hidden="true">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-mistral-ink">6. Aktif Oturum, CSRF, SSRF &amp; Erişim Kontrolü</span>
+                  <input type="checkbox" id="chk-active-access" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard">
+                </div>
+                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">CSRF form token/SameSite denetimi, SSRF iç ağ erişim probları, Open Redirect açık yönlendirme, IDOR nesne referansı ve derin CORS/CSP politika analizi.</p>
               </div>
             </label>
 
             <!-- Madde 7: Tarayıcı Simülasyonu, İş Mantığı & Port -->
-            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition cursor-pointer select-none md:col-span-2">
-              <input type="checkbox" id="chk-active-crawl" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-              <div>
-                <div class="text-xs font-bold text-mistral-ink">7. Tarayıcı Simülasyonu (Crawler/JS), İş Mantığı & Altyapı Port Taraması</div>
-                <p class="text-[11px] text-mistral-slate mt-0.5 leading-relaxed">Otomatik sayfa gezgini (link/form keşfi), harici <code class="font-mono">.js</code> DOM-XSS kaynak→sink analizi, otomatik form enjeksiyonu, Clickjacking, iş mantığı (negatif/taşma/yetki bypass/yarış durumu) ve 24 yaygın TCP veritabanı/altyapı port taraması.</p>
+            <label class="module-card md:col-span-2">
+              <div class="module-icon-box" aria-hidden="true">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-mistral-ink">7. Tarayıcı Simülasyonu (Crawler/JS), İş Mantığı &amp; Altyapı Port Taraması</span>
+                  <input type="checkbox" id="chk-active-crawl" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard">
+                </div>
+                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">Otomatik sayfa gezgini (link/form keşfi), harici <code class="font-mono">.js</code> DOM-XSS kaynak→sink analizi, otomatik form enjeksiyonu, Clickjacking, iş mantığı (negatif/taşma/yetki bypass/yarış durumu) ve 24 yaygın TCP veritabanı/altyapı port taraması.</p>
               </div>
             </label>
           </div>
         </div>
 
         <!-- GRUP 2: API Key / Service Account Gerektiren Yapay Zeka (LLM) Destekli Analizler -->
-        <div id="ai-analysis-group-box" class="p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/40 space-y-3">
+        <div id="ai-analysis-group-box" class="p-4 sm:p-5 rounded-2xl border border-amber-300/90 bg-amber-50/40 space-y-3.5">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="text-[11px] font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
-              <span>🤖</span>
-              <span>2. Yapay Zeka (LLM) & Otonom Ajan Analizleri (API Key / Service Account Gerektirir)</span>
+            <div class="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-amber-100 border border-amber-300 text-amber-900 inline-flex items-center justify-center">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
+              </span>
+              <span>2. Yapay Zeka (LLM) &amp; Otonom Ajan Analizleri <span class="text-amber-800 font-normal normal-case">(API Key / Service Account Gerektirir)</span></span>
             </div>
-            <div class="flex items-center gap-2 text-[11px] font-mono">
-              <button type="button" onclick="toggleAIConfig()" class="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold border border-amber-300 transition cursor-pointer">⚙️ AI / API Anahtarı Yapılandır</button>
-              <button type="button" onclick="toggleAnalysisGroup('ai', true)" class="px-2 py-0.5 rounded bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 font-semibold transition cursor-pointer">Tümünü Seç</button>
-              <button type="button" onclick="toggleAnalysisGroup('ai', false)" class="px-2 py-0.5 rounded bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 font-semibold transition cursor-pointer">Temizle</button>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button type="button" onclick="toggleAIConfig()" class="btn btn-xs btn-ai">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>AI / API Anahtarı Yapılandır</span>
+              </button>
+              <button type="button" onclick="toggleAnalysisGroup('ai', true)" class="btn btn-xs btn-secondary">Tümünü Seç</button>
+              <button type="button" onclick="toggleAnalysisGroup('ai', false)" class="btn btn-xs btn-secondary">Temizle</button>
             </div>
           </div>
 
           <!-- Bilgilendirme Notu -->
-          <div class="p-2.5 rounded-xl bg-white/90 border border-amber-200 text-[11px] text-amber-950 flex items-start gap-2">
-            <span class="text-sm shrink-0">ℹ️</span>
+          <div class="p-3 rounded-xl bg-white/90 border border-amber-200 text-[11px] text-amber-950 flex items-start gap-2.5">
+            <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
             <div class="leading-relaxed">
-              <strong>Yapılandırma Bilgilendirmesi:</strong> Bu gruptaki analizlerin çalışması için üstteki <strong>🤖 AI Ayarları</strong> panelinden bir LLM sağlayıcısı (<strong>OpenAI Compatible, Google Gemini API, Google Cloud Vertex AI Service Account JSON / API Key, OpenRouter</strong> veya yerel <strong>Ollama</strong>) tanımlanmalıdır. Seçilmeyen veya anahtarı girilmemiş analizler sonuç raporunda açıkça <em>"Seçilmedi / Yapılandırma Eksik nedeniyle atlandı"</em> olarak raporlanır.
+              <strong>Yapılandırma Bilgilendirmesi:</strong> Bu gruptaki analizlerin çalışması için üstteki <strong>AI Ayarları</strong> panelinden bir LLM sağlayıcısı (<strong>OpenAI Compatible, Google Gemini API, Google Cloud Vertex AI Service Account JSON / API Key, OpenRouter</strong> veya yerel <strong>Ollama</strong>) tanımlanmalıdır. Seçilmeyen veya anahtarı girilmemiş analizler sonuç raporunda açıkça <em>"Seçilmedi / Yapılandırma Eksik nedeniyle atlandı"</em> olarak raporlanır.
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <!-- Madde 8: AI Red Team Dinamik Saldırı Orkestrasyonu -->
-            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-amber-200 bg-white hover:bg-amber-50/40 transition cursor-pointer select-none">
-              <input type="checkbox" id="chk-ai-redteam" onchange="syncLegacyModuleFlags()" class="analysis-item-check group-ai mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-              <div>
-                <div class="text-xs font-bold text-amber-950">8. AI Red Team Dinamik Saldırı Orkestrasyonu</div>
-                <p class="text-[11px] text-stone-600 mt-0.5 leading-relaxed">Scout, Strategist, Analyst ve Reporter ajanlarıyla keşif verisini analiz eder, hedefe özel canlı HTTP probları göndererek kanıt doğrulaması yapar ve saldırı zinciri raporu üretir.</p>
+            <label class="module-card module-card-ai">
+              <div class="module-icon-box" aria-hidden="true">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-amber-950">8. AI Red Team Saldırı Orkestrasyonu</span>
+                  <input type="checkbox" id="chk-ai-redteam" onchange="syncLegacyModuleFlags()" class="analysis-item-check group-ai">
+                </div>
+                <p class="text-[11px] text-stone-600 mt-1 leading-relaxed">Scout, Strategist, Analyst ve Reporter ajanlarıyla keşif verisini analiz eder, hedefe özel canlı HTTP probları göndererek kanıt doğrulaması yapar.</p>
               </div>
             </label>
 
             <!-- Madde 9: 4-Aşamalı AI Semantik Kaynak Kod & Mimari Denetimi -->
-            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-amber-200 bg-white hover:bg-amber-50/40 transition cursor-pointer select-none">
-              <input type="checkbox" id="chk-ai-sast" onchange="syncLegacyModuleFlags()" class="analysis-item-check group-ai mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-              <div>
-                <div class="text-xs font-bold text-amber-950">9. 4-Aşamalı AI Semantik Kaynak Kod & Mimari Denetimi</div>
-                <p class="text-[11px] text-stone-600 mt-0.5 leading-relaxed">Yerel proje dizinindeki kaynak kodları <strong>Recon → Hunt → Adversarial Verify → Report</strong> aşamalarıyla inceleyerek iş mantığı, yetkilendirme (AuthZ) ve mimari sınır hatalarını doğrular.</p>
+            <label class="module-card module-card-ai">
+              <div class="module-icon-box" aria-hidden="true">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m10 13-2 2 2 2"/><path d="m14 17 2-2-2-2"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-amber-950">9. 4-Aşamalı AI Semantik Kod Denetimi</span>
+                  <input type="checkbox" id="chk-ai-sast" onchange="syncLegacyModuleFlags()" class="analysis-item-check group-ai">
+                </div>
+                <p class="text-[11px] text-stone-600 mt-1 leading-relaxed">Yerel proje dizinindeki kaynak kodları <strong>Recon → Hunt → Adversarial Verify → Report</strong> aşamalarıyla inceleyerek AuthZ ve mimari sınır hatalarını doğrular.</p>
               </div>
             </label>
 
             <!-- Madde 10: Derin Otonom Sızma Testi & Konteyner Sandbox PoC Doğrulaması -->
-            <label class="relative flex items-start gap-3 p-3 rounded-xl border border-amber-200 bg-white hover:bg-amber-50/40 transition cursor-pointer select-none">
-              <input type="checkbox" id="chk-ai-pentest" onchange="syncLegacyModuleFlags()" class="analysis-item-check group-ai mt-0.5 w-4 h-4 text-mistral-orange rounded border-stone-300 focus:ring-orange-500">
-              <div>
-                <div class="text-xs font-bold text-amber-950">10. Derin Otonom Sızma Testi & Sandbox PoC Doğrulaması</div>
-                <p class="text-[11px] text-stone-600 mt-0.5 leading-relaxed">İzole Docker sandbox ortamında çoklu otonom ajanlarla derinlemesine sızma testi yürütür; çalıştırılabilir istismar kanıtı (PoC scripti), CVSS 3.1 kırılımı, SARIF 2.1.0 ve hazır yama önerisi üretir.</p>
+            <label class="module-card module-card-ai">
+              <div class="module-icon-box" aria-hidden="true">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-amber-950">10. Otonom Sızma Testi &amp; Sandbox PoC</span>
+                  <input type="checkbox" id="chk-ai-pentest" onchange="syncLegacyModuleFlags()" class="analysis-item-check group-ai">
+                </div>
+                <p class="text-[11px] text-stone-600 mt-1 leading-relaxed">İzole Docker sandbox ortamında çoklu otonom ajanlarla derin sızma testi yürütür; çalıştırılabilir istismar kanıtı (PoC), CVSS 3.1 ve hazır yama önerisi üretir.</p>
               </div>
             </label>
           </div>
         </div>
 
-        <!-- Geriye dönük uyumluluk için gizli ana bayraklar (chk-* seçimlerine göre otomatik güncellenir) -->
+        <!-- Geriye dönük uyumluluk için gizli ana bayraklar -->
         <div class="hidden">
           <input type="checkbox" id="mod-passive" checked>
           <input type="checkbox" id="mod-deep" checked>
@@ -395,56 +495,61 @@
         </div>
       </div>
 
-      <!-- Etik ve Yasal Onay Kutusu (Aktif Test veya AI Seçildiğinde) -->
+      <!-- Etik ve Yasal Onay Kutusu -->
       <div id="unified-ethical-container" class="mt-4 p-3.5 rounded-xl border border-amber-300/80 bg-amber-50/70 text-xs">
-        <label class="flex items-start gap-2.5 cursor-pointer">
-          <input type="checkbox" id="unified-ethical-check" checked class="mt-0.5 w-4 h-4 text-mistral-orange rounded border-amber-400 focus:ring-orange-500">
-          <div class="text-amber-950">
-            <span class="font-bold">Yasal & Etik Kullanım Beyanı:</span>
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" id="unified-ethical-check" checked class="mt-0.5">
+          <div class="text-amber-950 leading-relaxed">
+            <span class="font-bold">Yasal &amp; Etik Kullanım Beyanı:</span>
             <span class="text-stone-700"> Hedef sistem üzerinde test yetkim olduğunu veya sistemin bana ait olduğunu; aktif güvenlik denetiminin doğuracağı tüm yasal ve etik sorumluluğu üstlendiğimi onaylıyorum.</span>
           </div>
         </label>
       </div>
 
       <!-- Canlı Tarama İlerleme Çubuğu -->
-      <div id="scan-progress-container" class="hidden mt-5 pt-4 border-t border-stone-100">
-        <div class="flex items-center justify-between text-xs mb-1.5">
-          <span id="scan-progress-status" class="font-medium text-mistral-ink flex items-center gap-2">
+      <div id="scan-progress-container" class="hidden mt-5 pt-4 border-t border-stone-200/80">
+        <div class="flex items-center justify-between text-xs mb-2">
+          <span id="scan-progress-status" class="font-semibold text-mistral-ink flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-mistral-orange animate-ping"></span>
             <span>Tarama başlatılıyor...</span>
           </span>
-          <span id="scan-progress-percent" class="font-mono text-mistral-slate font-bold">0%</span>
+          <span id="scan-progress-percent" class="font-mono text-mistral-orange font-bold">0%</span>
         </div>
-        <div class="w-full h-2 bg-stone-100 rounded-full overflow-hidden">
-          <div id="scan-progress-bar" class="h-full bg-gradient-to-r from-mistral-orange to-amber-500 w-0 transition-all duration-300"></div>
+        <div class="w-full h-2.5 bg-stone-100 rounded-full overflow-hidden border border-stone-200/60">
+          <div id="scan-progress-bar" class="h-full bg-gradient-to-r from-mistral-orange to-amber-500 w-0 transition-all duration-300 rounded-full"></div>
         </div>
       </div>
 
-    </div>
+    </section>
 
     <!-- ============================================================= -->
-    <!-- 📊 SONUÇLAR VE RAPORLAMA BÖLÜMÜ                               -->
+    <!-- SONUÇLAR VE RAPORLAMA BÖLÜMÜ                                  -->
     <!-- ============================================================= -->
     
     <!-- Boş Durum (Henüz Tarama Yapılmadı) -->
-    <div id="scan-empty-state" class="p-12 text-center rounded-3xl border border-dashed border-stone-200 bg-white">
-      <div class="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center text-3xl mx-auto mb-3">
-        🛡️
+    <div id="scan-empty-state" class="p-10 sm:p-14 text-center rounded-3xl border border-dashed border-stone-300 bg-white/80 shadow-xs">
+      <div class="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-200 text-mistral-orange flex items-center justify-center mx-auto mb-4 shadow-xs">
+        <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <circle cx="12" cy="11" r="3"/>
+        </svg>
       </div>
-      <h3 class="text-lg font-bold font-editorial text-mistral-ink mb-1">Henüz Bir Tarama Başlatılmadı</h3>
-      <p class="text-xs text-mistral-slate max-w-md mx-auto">
-        Yukarıdaki alana bir alan adı (örn: <code class="font-mono text-stone-800">example.com</code>) girip "Taramayı Başlat" butonuna tıklayarak güvenlik denetimini gerçekleştirin.
+      <h3 class="text-lg font-bold font-editorial text-mistral-ink mb-1.5">Henüz Bir Tarama Başlatılmadı</h3>
+      <p class="text-xs sm:text-sm text-mistral-slate max-w-md mx-auto leading-relaxed">
+        Yukarıdaki komuta merkezine bir alan adı (örn: <code class="font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-800">example.com</code>) veya yerel proje klasörü girip <strong>Taramayı Başlat</strong> butonuna tıklayın.
       </p>
     </div>
 
-    <!-- Hata ve Teşhis Kartı (Kullanıcıya Çözüm Sunan) -->
+    <!-- Hata ve Teşhis Kartı -->
     <div id="scan-error-card" class="hidden rounded-2xl border-2 border-rose-300 bg-rose-50/60 p-5 text-xs text-rose-950 shadow-sm">
-      <div class="flex items-start gap-3">
-        <span class="text-2xl flex-shrink-0">⚠️</span>
-        <div class="flex-1 space-y-1">
+      <div class="flex items-start gap-3.5">
+        <div class="w-10 h-10 rounded-xl bg-rose-100 border border-rose-200 text-rose-700 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="flex-1 min-w-0 space-y-1.5">
           <h4 id="scan-error-title" class="font-bold text-sm text-rose-900">Tarama Sırasında Hata Oluştu</h4>
-          <p id="scan-error-message" class="text-rose-800 leading-relaxed"></p>
-          <div id="scan-error-advice" class="mt-2 p-2.5 rounded-lg bg-white/80 border border-rose-200 text-stone-700 text-[11px] space-y-1">
+          <p id="scan-error-message" class="text-rose-800 leading-relaxed break-words"></p>
+          <div id="scan-error-advice" class="mt-2 p-3 rounded-xl bg-white/90 border border-rose-200 text-stone-700 text-[11px] space-y-1">
             <strong>Nasıl Düzeltebilirsiniz?</strong>
             <ul id="scan-error-steps" class="list-disc list-inside space-y-0.5 text-stone-600">
               <li>Alan adının başında <code class="font-mono">https://</code> olduğundan emin olun.</li>
@@ -458,111 +563,133 @@
     <!-- Genel Skor & İstatistik Kartı -->
     <div id="scan-results-dashboard" class="hidden space-y-6">
       
-      <!-- Özet Metrikler Grid -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- Özet Metrikler Grid (Mobilde 2x2 Bento, Masaüstünde 4 Sütun) -->
+      <div class="kpi-bento-grid">
         
         <!-- Skor Kartı -->
-        <div class="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
-          <div>
-            <span class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Güvenlik Skoru</span>
-            <div id="dash-score-domain" class="text-xs font-mono text-stone-500 truncate max-w-[150px] mt-0.5"></div>
-            <div id="dash-score-points" class="text-xs font-medium text-stone-600 mt-0.5">-- / 100 Puan</div>
-          </div>
-          <div id="dash-score-badge" class="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-2xl font-black font-editorial">
-            --
+        <div class="kpi-card">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <span class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider block">Güvenlik Skoru</span>
+              <div id="dash-score-domain" class="text-xs font-mono text-stone-600 truncate max-w-[130px] sm:max-w-[160px] mt-0.5 font-semibold"></div>
+              <div id="dash-score-points" class="text-xs font-medium text-stone-500 mt-1">-- / 100 Puan</div>
+            </div>
+            <div id="dash-score-badge" class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-xl sm:text-2xl font-black font-editorial shrink-0">
+              --
+            </div>
           </div>
         </div>
 
         <!-- Kritik / Yüksek Bulgular -->
-        <div class="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs">
-          <span class="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Kritik & Yüksek Tehdit</span>
-          <div class="flex items-baseline gap-2 mt-1">
-            <span id="dash-critical-count" class="text-3xl font-extrabold text-rose-600">0</span>
-            <span class="text-xs text-mistral-slate font-medium">zafiyet tespit edildi</span>
+        <div class="kpi-card">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Kritik &amp; Yüksek</span>
+            <span class="kpi-icon-badge bg-rose-50 text-rose-600 border border-rose-200/80">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </span>
           </div>
-          <p class="text-[11px] text-stone-500 mt-1">Acil kapatılması gereken açıklar</p>
+          <div class="flex items-baseline gap-1.5">
+            <span id="dash-critical-count" class="text-2xl sm:text-3xl font-extrabold text-rose-600 font-mono">0</span>
+            <span class="text-[11px] text-mistral-slate font-medium">zafiyet</span>
+          </div>
+          <p class="text-[10px] text-stone-500 mt-1 truncate">Acil kapatılması gereken açıklar</p>
         </div>
 
         <!-- Orta / Düşük Uyarılar -->
-        <div class="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs">
-          <span class="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Orta & Düşük Risk</span>
-          <div class="flex items-baseline gap-2 mt-1">
-            <span id="dash-warning-count" class="text-3xl font-extrabold text-amber-600">0</span>
-            <span class="text-xs text-mistral-slate font-medium">uyarı / eksiklik</span>
+        <div class="kpi-card">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Orta &amp; Düşük Risk</span>
+            <span class="kpi-icon-badge bg-amber-50 text-amber-600 border border-amber-200/80">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </span>
           </div>
-          <p class="text-[11px] text-stone-500 mt-1">Yapılandırma ve başlık iyileştirmeleri</p>
+          <div class="flex items-baseline gap-1.5">
+            <span id="dash-warning-count" class="text-2xl sm:text-3xl font-extrabold text-amber-600 font-mono">0</span>
+            <span class="text-[11px] text-mistral-slate font-medium">uyarı</span>
+          </div>
+          <p class="text-[10px] text-stone-500 mt-1 truncate">Yapılandırma iyileştirmeleri</p>
         </div>
 
         <!-- Taranan İstek & Süre -->
-        <div class="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs">
-          <span class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Denetim Kapsamı</span>
-          <div class="flex items-baseline gap-2 mt-1">
-            <span id="dash-requests-count" class="text-3xl font-extrabold text-mistral-ink">0</span>
-            <span class="text-xs text-mistral-slate font-medium">istek gönderildi</span>
+        <div class="kpi-card">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="text-[10px] font-bold text-mistral-slate uppercase tracking-wider">Denetim Kapsamı</span>
+            <span class="kpi-icon-badge bg-orange-50 text-mistral-orange border border-orange-200/80">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </span>
           </div>
-          <div id="dash-time-elapsed" class="text-[11px] text-emerald-700 font-medium mt-1">Süre: 0.0s</div>
+          <div class="flex items-baseline gap-1.5">
+            <span id="dash-requests-count" class="text-2xl sm:text-3xl font-extrabold text-mistral-ink font-mono">0</span>
+            <span class="text-[11px] text-mistral-slate font-medium">istek</span>
+          </div>
+          <div id="dash-time-elapsed" class="text-[10px] text-emerald-700 font-mono font-semibold mt-1">Süre: 0.0s</div>
         </div>
 
       </div>
 
       <!-- Sonuç Detayları Sekmeleri -->
-      <div class="bg-white border border-stone-200 rounded-3xl overflow-hidden shadow-xs">
+      <div class="bg-white border border-stone-200 rounded-3xl overflow-hidden shadow-sm">
         
-        <!-- Sekme Başlıkları -->
-        <div class="flex items-center gap-1 border-b border-stone-200 px-4 pt-3 bg-stone-50/50 overflow-x-auto text-xs font-semibold">
-          <button type="button" onclick="switchDetailTab('tab-findings')" id="btn-tab-findings" class="detail-tab-btn active px-4 py-2.5 rounded-t-xl border-b-2 border-mistral-orange text-mistral-orange font-bold flex items-center gap-1.5 transition">
-            <span>🛡️</span>
-            <span>Tüm Zafiyetler & Bulgular</span>
-            <span id="badge-findings-count" class="px-1.5 py-0.2 rounded-full bg-orange-100 text-[10px] font-mono">0</span>
+        <!-- Modern Sekme Çubuğu (Yatay Kaydırılabilir, Vektörel İkonlu) -->
+        <nav class="modern-tabs-nav" aria-label="Denetim Sonuç Sekmeleri">
+          <button type="button" onclick="switchDetailTab('tab-findings')" id="btn-tab-findings" class="detail-tab-btn active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>Tüm Zafiyetler &amp; Bulgular</span>
+            <span id="badge-findings-count" class="px-1.5 py-0.2 rounded-full bg-orange-100 text-mistral-orange text-[10px] font-mono font-bold">0</span>
           </button>
           
-          <button type="button" onclick="switchDetailTab('tab-headers')" id="btn-tab-headers" class="detail-tab-btn px-4 py-2.5 rounded-t-xl text-mistral-slate hover:text-mistral-ink font-semibold flex items-center gap-1.5 transition">
-            <span>📜</span>
+          <button type="button" onclick="switchDetailTab('tab-headers')" id="btn-tab-headers" class="detail-tab-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
             <span>HTTP Başlıkları</span>
           </button>
 
-          <button type="button" onclick="switchDetailTab('tab-dns')" id="btn-tab-dns" class="detail-tab-btn px-4 py-2.5 rounded-t-xl text-mistral-slate hover:text-mistral-ink font-semibold flex items-center gap-1.5 transition">
-            <span>🌐</span>
-            <span>DNS & SSL Sağlığı</span>
+          <button type="button" onclick="switchDetailTab('tab-dns')" id="btn-tab-dns" class="detail-tab-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>DNS &amp; SSL Sağlığı</span>
           </button>
 
-          <button type="button" onclick="switchDetailTab('tab-deep')" id="btn-tab-deep" class="detail-tab-btn px-4 py-2.5 rounded-t-xl text-mistral-slate hover:text-mistral-ink font-semibold flex items-center gap-1.5 transition">
-            <span>🔍</span>
-            <span>Derin Pasif & Teknoloji</span>
+          <button type="button" onclick="switchDetailTab('tab-deep')" id="btn-tab-deep" class="detail-tab-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>Derin Pasif &amp; Teknoloji</span>
           </button>
 
-          <button type="button" onclick="switchDetailTab('tab-sast')" id="btn-tab-sast" class="detail-tab-btn px-4 py-2.5 rounded-t-xl text-mistral-slate hover:text-mistral-ink font-semibold flex items-center gap-1.5 transition">
-            <span>📂</span>
+          <button type="button" onclick="switchDetailTab('tab-sast')" id="btn-tab-sast" class="detail-tab-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
             <span>Kaynak Kod (SAST)</span>
           </button>
 
-          <button type="button" onclick="switchDetailTab('tab-active')" id="btn-tab-active" class="detail-tab-btn px-4 py-2.5 rounded-t-xl text-mistral-slate hover:text-mistral-ink font-semibold flex items-center gap-1.5 transition">
-            <span>⚡</span>
+          <button type="button" onclick="switchDetailTab('tab-active')" id="btn-tab-active" class="detail-tab-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
             <span>Aktif Test Raporu</span>
           </button>
 
-          <button type="button" onclick="switchDetailTab('tab-ai')" id="btn-tab-ai" class="detail-tab-btn px-4 py-2.5 rounded-t-xl text-mistral-slate hover:text-mistral-ink font-semibold flex items-center gap-1.5 transition">
-            <span>🤖</span>
-            <span>AI Düşünce Akışı (Log)</span>
+          <button type="button" onclick="switchDetailTab('tab-ai')" id="btn-tab-ai" class="detail-tab-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
+            <span>AI Düşünce Akışı</span>
           </button>
 
-          <button type="button" onclick="switchDetailTab('tab-strix')" id="btn-tab-strix" class="detail-tab-btn px-4 py-2.5 rounded-t-xl text-mistral-slate hover:text-mistral-ink font-semibold flex items-center gap-1.5 transition">
-            <span>⚔️</span>
+          <button type="button" onclick="switchDetailTab('tab-strix')" id="btn-tab-strix" class="detail-tab-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
             <span>Otonom Sızma Testi (Sandbox)</span>
           </button>
-        </div>
+        </nav>
 
         <!-- Sekme İçerikleri -->
-        <div class="p-5 sm:p-6">
+        <div class="p-4 sm:p-6">
           
-          <!-- SEKME 1: Tüm Zafiyetler & Bulgular (Cloudflare Audit Methodology %100) -->
+          <!-- SEKME 1: Tüm Zafiyetler & Bulgular -->
           <div id="tab-findings" class="detail-tab-content space-y-4">
             <!-- 10 Analiz Maddesi Sonuç, Durum, Yapılması Gerekenler ve Atlanan Testler Raporu -->
             <div id="analysis-items-report-card" class="p-4 sm:p-5 rounded-2xl border border-stone-200 bg-stone-50/70 space-y-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h4 class="text-sm font-bold font-editorial text-mistral-ink">📋 Analiz Maddeleri Sonuç, Durum ve Aksiyon Raporu (10/10 Analiz)</h4>
-                  <p class="text-[11px] text-mistral-slate">Çalıştırılan her analizin bulgu özeti, yapılması gerekenler ve seçilmeyen/atlanan/gerçekleştirilemeyen testlerin nedeni aşağıda açıkça listelenir.</p>
+                <div class="flex items-start gap-2.5">
+                  <span class="w-8 h-8 rounded-xl bg-orange-50 border border-orange-200 text-mistral-orange inline-flex items-center justify-center shrink-0 mt-0.5">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                  </span>
+                  <div>
+                    <h4 class="text-sm font-bold font-editorial text-mistral-ink">Analiz Maddeleri Sonuç, Durum ve Aksiyon Raporu (10/10 Analiz)</h4>
+                    <p class="text-[11px] text-mistral-slate">Çalıştırılan her analizin bulgu özeti, yapılması gerekenler ve seçilmeyen/atlanan testlerin nedeni aşağıda açıkça listelenir.</p>
+                  </div>
                 </div>
                 <span id="analysis-items-summary-pill" class="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-mono font-bold text-stone-700"></span>
               </div>
@@ -572,18 +699,18 @@
             <!-- Cloudflare Audit Skill: 4-Durumlu Bulgu Yaşam Döngüsü Filtresi -->
             <div id="unified-verdict-bar" class="hidden flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl border border-stone-200 bg-stone-50">
               <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
-                <button type="button" onclick="setUnifiedVerdictFilter('all')" id="vfilter-all" class="px-2.5 py-1 rounded-lg bg-mistral-orange text-white font-bold transition cursor-pointer">Tümü (<span id="vcount-all">0</span>)</button>
-                <button type="button" onclick="setUnifiedVerdictFilter('confirmed')" id="vfilter-confirmed" class="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-emerald-800 font-bold hover:bg-emerald-50 transition cursor-pointer">✅ Confirmed (<span id="vcount-confirmed">0</span>)</button>
-                <button type="button" onclick="setUnifiedVerdictFilter('needs_validation')" id="vfilter-needs_validation" class="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-amber-900 font-bold hover:bg-amber-50 transition cursor-pointer">⚠️ Needs Validation (<span id="vcount-needs">0</span>)</button>
-                <button type="button" onclick="setUnifiedVerdictFilter('hardening_note')" id="vfilter-hardening_note" class="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-sky-900 font-bold hover:bg-sky-50 transition cursor-pointer">🛡️ Hardening Notes (<span id="vcount-hardening">0</span>)</button>
-                <button type="button" onclick="setUnifiedVerdictFilter('rejected')" id="vfilter-rejected" class="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-stone-600 font-bold hover:bg-stone-100 transition cursor-pointer">🚫 Rejected / Disproved (<span id="vcount-rejected">0</span>)</button>
+                <button type="button" onclick="setUnifiedVerdictFilter('all')" id="vfilter-all" class="btn btn-xs btn-primary">Tümü (<span id="vcount-all">0</span>)</button>
+                <button type="button" onclick="setUnifiedVerdictFilter('confirmed')" id="vfilter-confirmed" class="btn btn-xs btn-secondary !text-emerald-800">Confirmed (<span id="vcount-confirmed">0</span>)</button>
+                <button type="button" onclick="setUnifiedVerdictFilter('needs_validation')" id="vfilter-needs_validation" class="btn btn-xs btn-secondary !text-amber-900">Needs Validation (<span id="vcount-needs">0</span>)</button>
+                <button type="button" onclick="setUnifiedVerdictFilter('hardening_note')" id="vfilter-hardening_note" class="btn btn-xs btn-secondary !text-sky-900">Hardening Notes (<span id="vcount-hardening">0</span>)</button>
+                <button type="button" onclick="setUnifiedVerdictFilter('rejected')" id="vfilter-rejected" class="btn btn-xs btn-secondary !text-stone-600">Rejected (<span id="vcount-rejected">0</span>)</button>
               </div>
               <span class="text-[10px] font-mono text-mistral-slate">Cloudflare Kanıt Yaşam Döngüsü</span>
             </div>
 
-            <!-- Cloudflare Audit Skill: Birleşik Denetim Kapsam Defteri (Unified Coverage Ledger) -->
+            <!-- Cloudflare Audit Skill: Birleşik Denetim Kapsam Defteri -->
             <details id="unified-coverage-panel" class="hidden p-4 rounded-2xl border border-stone-200 bg-white">
-              <summary class="text-xs font-bold text-mistral-ink cursor-pointer select-none">📋 Birleşik Denetim Kapsam Defteri (Unified Audit Coverage Ledger — Cloudflare Methodology)</summary>
+              <summary class="text-xs font-bold text-mistral-ink cursor-pointer select-none">Birleşik Denetim Kapsam Defteri (Unified Audit Coverage Ledger — Cloudflare Methodology)</summary>
               <p class="text-[11px] text-mistral-slate mt-1 mb-2">Hangi saldırı yüzeylerinin, güven sınırlarının ve modüllerin denetlendiğini, kanıt durumunu ve kapsam boşluklarını (gaps) gösterir.</p>
               <div id="unified-coverage-table" class="overflow-x-auto text-[11px]"></div>
             </details>
@@ -612,47 +739,47 @@
             </div>
           </div>
 
-          <!-- SEKME 4B: Yerel Dizin / Kaynak Kod Analizi (SAST — ersinkoc/security-check %100) -->
+          <!-- SEKME 4B: Yerel Dizin / Kaynak Kod Analizi (SAST) -->
           <div id="tab-sast" class="detail-tab-content hidden space-y-4">
-            <!-- security-check Denetim Kontrolleri (Profil, Kapsam/Diff, 4-Aşamalı AI Kod Denetimi & Artefakt İndirme) -->
             <div class="p-4 rounded-2xl border border-stone-200 bg-stone-50 space-y-3">
-              <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h4 class="text-sm font-bold font-editorial text-mistral-ink">📂 Kaynak Kod & Mimari Denetim Merkezi (<code class="font-mono text-xs">security-check</code> %100)</h4>
-                  <p class="text-[11px] text-mistral-slate">7-Dil Derin Tarayıcı • 8 Ekosistem OSV CVE • Git Diff Modu • 4-Aşamalı AI Semantik Denetim (Recon → Hunt → Verify → Report)</p>
+                  <h4 class="text-sm font-bold font-editorial text-mistral-ink">Kaynak Kod &amp; Mimari Denetim Merkezi (<code class="font-mono text-xs">security-check</code> %100)</h4>
+                  <p class="text-[11px] text-mistral-slate">7-Dil Derin Tarayıcı • 8 Ekosistem OSV CVE • Git Diff Modu • 4-Aşamalı AI Semantik Denetim</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
-                  <select id="sast-profile" class="p-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-mono outline-none" title="Denetim Profili">
+                  <select id="sast-profile" class="modern-field !w-auto font-mono" title="Denetim Profili">
                     <option value="quick">Profil: quick (hızlı)</option>
                     <option value="standard" selected>Profil: standard (önerilen)</option>
                     <option value="deep">Profil: deep (derin)</option>
                   </select>
-                  <select id="sast-scope-mode" class="p-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-mono outline-none" title="Kapsam Modu">
+                  <select id="sast-scope-mode" class="modern-field !w-auto font-mono" title="Kapsam Modu">
                     <option value="full" selected>Kapsam: Tüm Depo (full)</option>
                     <option value="diff">Kapsam: PR / Git Diff (sc-diff-report)</option>
                   </select>
-                  <input type="text" id="sast-diff-base" value="HEAD" placeholder="HEAD / origin/main" class="w-28 p-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-mono outline-none" title="Git Diff Base" />
-                  <button type="button" id="sast-ai-btn" onclick="startAISastAudit()" class="px-3 py-1.5 rounded-xl bg-mistral-orange hover:bg-[#e04406] text-white text-[11px] font-bold transition shadow-xs cursor-pointer">
-                    🤖 4-Aşamalı AI Kod Denetimi
+                  <input type="text" id="sast-diff-base" value="HEAD" placeholder="HEAD / origin/main" class="modern-field !w-28 font-mono" title="Git Diff Base" />
+                  <button type="button" id="sast-ai-btn" onclick="startAISastAudit()" class="btn btn-sm btn-primary">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
+                    <span>4-Aşamalı AI Kod Denetimi</span>
                   </button>
                 </div>
               </div>
               <!-- security-check 6'lı Çıktı Paketi İndirme Çubuğu -->
-              <div id="sast-sc-dl-bar" class="hidden pt-2 border-t border-stone-200 flex flex-wrap items-center gap-1.5">
-                <span class="text-[10px] font-bold text-mistral-slate uppercase mr-1">📦 security-check Çıktı Paketi:</span>
-                <button type="button" onclick="downloadSecurityCheckArtifact('security_report_md', 'SECURITY-REPORT.md')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-[10px] font-mono font-bold text-stone-700">⬇ SECURITY-REPORT.md</button>
-                <button type="button" onclick="downloadSecurityCheckArtifact('architecture_md', 'architecture.md')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-[10px] font-mono font-bold text-stone-700">⬇ architecture.md</button>
-                <button type="button" onclick="downloadSecurityCheckArtifact('coverage_ledger_md', 'coverage-ledger.md')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-[10px] font-mono font-bold text-stone-700">⬇ coverage-ledger.md</button>
-                <button type="button" onclick="downloadSecurityCheckArtifact('dependency_audit_md', 'dependency-audit.md')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-[10px] font-mono font-bold text-stone-700">⬇ dependency-audit.md</button>
-                <button type="button" onclick="downloadSecurityCheckArtifact('verified_findings_md', 'verified-findings.md')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-[10px] font-mono font-bold text-stone-700">⬇ verified-findings.md</button>
-                <button type="button" onclick="downloadSecurityCheckArtifact('findings_json', 'findings.json')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-[10px] font-mono font-bold text-stone-700">⬇ findings.json</button>
+              <div id="sast-sc-dl-bar" class="hidden pt-2.5 border-t border-stone-200 flex flex-wrap items-center gap-1.5">
+                <span class="text-[10px] font-bold text-mistral-slate uppercase mr-1">security-check Çıktı Paketi:</span>
+                <button type="button" onclick="downloadSecurityCheckArtifact('security_report_md', 'SECURITY-REPORT.md')" class="btn btn-xs btn-secondary font-mono">SECURITY-REPORT.md</button>
+                <button type="button" onclick="downloadSecurityCheckArtifact('architecture_md', 'architecture.md')" class="btn btn-xs btn-secondary font-mono">architecture.md</button>
+                <button type="button" onclick="downloadSecurityCheckArtifact('coverage_ledger_md', 'coverage-ledger.md')" class="btn btn-xs btn-secondary font-mono">coverage-ledger.md</button>
+                <button type="button" onclick="downloadSecurityCheckArtifact('dependency_audit_md', 'dependency-audit.md')" class="btn btn-xs btn-secondary font-mono">dependency-audit.md</button>
+                <button type="button" onclick="downloadSecurityCheckArtifact('verified_findings_md', 'verified-findings.md')" class="btn btn-xs btn-secondary font-mono">verified-findings.md</button>
+                <button type="button" onclick="downloadSecurityCheckArtifact('findings_json', 'findings.json')" class="btn btn-xs btn-secondary font-mono">findings.json</button>
               </div>
             </div>
 
-            <!-- 4-Aşamalı AI SAST Sonuç Kartı (Recon → Hunt → Verify → Report) -->
+            <!-- 4-Aşamalı AI SAST Sonuç Kartı -->
             <div id="sast-ai-card" class="hidden p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/50 space-y-2.5">
-              <div class="flex items-center justify-between gap-2">
-                <h4 class="text-sm font-bold font-editorial text-mistral-ink">🤖 4-Aşamalı AI Kaynak Kod Denetimi (Recon → Hunt → Verify → Report)</h4>
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h4 class="text-sm font-bold font-editorial text-mistral-ink">4-Aşamalı AI Kaynak Kod Denetimi (Recon → Hunt → Verify → Report)</h4>
                 <span id="sast-ai-meta" class="text-[10px] font-mono text-stone-500"></span>
               </div>
               <div id="sast-ai-phases" class="grid grid-cols-1 sm:grid-cols-4 gap-2"></div>
@@ -664,23 +791,23 @@
             </div>
             <div id="sast-severity-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
 
-            <!-- 3 Durumlu Kanıt Modeli Özeti (Confirmed / Needs Validation / Rejected) -->
+            <!-- 3 Durumlu Kanıt Modeli Özeti -->
             <div id="sast-verdict-summary" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3"></div>
 
-            <!-- Mimari Harita (architecture.md) ve Kapsam Defteri (coverage-ledger.md) -->
+            <!-- Mimari Harita ve Kapsam Defteri -->
             <div id="sast-sc-panels" class="hidden space-y-3">
               <details class="p-4 rounded-2xl border border-stone-200 bg-white">
-                <summary class="text-xs font-bold text-mistral-ink cursor-pointer">🏗️ Mimari Harita & Giriş Yüzeyleri (architecture.md)</summary>
+                <summary class="text-xs font-bold text-mistral-ink cursor-pointer">Mimari Harita &amp; Giriş Yüzeyleri (architecture.md)</summary>
                 <pre id="sast-arch-body" class="mt-2 p-3 rounded-xl bg-stone-50 border border-stone-200 text-[11px] font-mono text-stone-800 whitespace-pre-wrap max-h-[280px] overflow-y-auto"></pre>
               </details>
               <details class="p-4 rounded-2xl border border-stone-200 bg-white">
-                <summary class="text-xs font-bold text-mistral-ink cursor-pointer">📋 Denetim Kapsam Defteri (coverage-ledger.md)</summary>
+                <summary class="text-xs font-bold text-mistral-ink cursor-pointer">Denetim Kapsam Defteri (coverage-ledger.md)</summary>
                 <div id="sast-ledger-table" class="mt-2 overflow-x-auto text-[11px]"></div>
               </details>
             </div>
 
             <div id="sast-deps-card" class="hidden space-y-2">
-              <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">📦 8 Ekosistem Tedarik Zinciri CVE Denetimi (Google OSV)</h4>
+              <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">8 Ekosistem Tedarik Zinciri CVE Denetimi (Google OSV)</h4>
               <div id="sast-deps-container" class="space-y-2"></div>
             </div>
             <div id="sast-findings-list" class="space-y-2.5">
@@ -695,11 +822,11 @@
               <div id="active-severity-summary" class="grid grid-cols-2 sm:grid-cols-5 gap-2.5"></div>
               <div id="active-modules-status" class="grid grid-cols-1 sm:grid-cols-3 gap-2"></div>
               <div id="active-sitemap-card" class="hidden space-y-1.5">
-                <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">🗺️ Taranan Site Haritası</h4>
+                <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">Taranan Site Haritası</h4>
                 <div id="active-sitemap-list" class="space-y-1"></div>
               </div>
               <div id="active-chains-card" class="hidden space-y-1.5">
-                <h4 class="text-xs font-bold uppercase tracking-wider text-rose-700">🔗 Zincirleme Risk Korelasyonları</h4>
+                <h4 class="text-xs font-bold uppercase tracking-wider text-rose-700">Zincirleme Risk Korelasyonları</h4>
                 <div id="active-chains-list" class="space-y-2"></div>
               </div>
               <div id="active-findings-list" class="space-y-2.5">
@@ -710,31 +837,31 @@
 
           <!-- SEKME 6: AI Düşünce Akışı -->
           <div id="tab-ai" class="detail-tab-content hidden space-y-4">
-            <!-- AI Nihai Rapor (Scout→Strategist→Analyst→Reporter çıktısı) -->
-            <div id="ai-narrative-card" class="hidden p-4 sm:p-5 rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-50/70 to-white">
-              <div class="flex items-center justify-between gap-2 mb-2">
-                <h4 class="text-sm font-bold font-editorial text-mistral-ink">🤖 AI Red Team Nihai Raporu</h4>
+            <div id="ai-narrative-card" class="hidden p-4 sm:p-5 rounded-2xl border-2 border-amber-200 bg-amber-50/50">
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <h4 class="text-sm font-bold font-editorial text-mistral-ink">AI Red Team Nihai Raporu</h4>
                 <span id="ai-narrative-meta" class="text-[10px] font-mono text-mistral-slate"></span>
               </div>
               <div id="ai-narrative-body" class="text-xs text-stone-700 leading-relaxed space-y-2"></div>
             </div>
-            <!-- AI doğrulanmış bulgu özeti -->
             <div id="ai-findings-card" class="hidden space-y-2">
-              <h4 class="text-sm font-bold font-editorial text-mistral-ink">✅ Kanıtı Doğrulanmış AI Bulguları</h4>
+              <h4 class="text-sm font-bold font-editorial text-mistral-ink">Kanıtı Doğrulanmış AI Bulguları</h4>
               <div id="ai-findings-list" class="space-y-2"></div>
             </div>
-            <!-- Deterministik motor (AI context kaynağı) bulguları -->
             <div id="ai-baseline-card" class="hidden space-y-2">
-              <h4 class="text-sm font-bold font-editorial text-mistral-ink">🔎 Deterministik Motor Bulguları <span class="text-[10px] font-mono text-mistral-slate font-normal">(AI ajanlarının beslendiği gerçek tarama)</span></h4>
+              <h4 class="text-sm font-bold font-editorial text-mistral-ink">Deterministik Motor Bulguları <span class="text-[10px] font-mono text-mistral-slate font-normal">(AI ajanlarının beslendiği gerçek tarama)</span></h4>
               <div id="ai-baseline-list" class="space-y-2"></div>
             </div>
-            <div class="bg-stone-950 border border-stone-800 rounded-2xl p-4 shadow-xl">
-              <div class="flex items-center justify-between pb-2 mb-3 border-b border-stone-800 text-xs font-mono text-stone-400">
-                <span class="text-amber-400 font-bold">🤖 Virtual Red Team Thought Stream</span>
-                <button type="button" onclick="clearAILog()" class="text-stone-500 hover:text-stone-300">Temizle</button>
+            <div class="bg-stone-950 border border-stone-800 rounded-2xl p-4 shadow-md">
+              <div class="flex items-center justify-between pb-2.5 mb-3 border-b border-stone-800 text-xs font-mono text-stone-400">
+                <span class="text-amber-400 font-bold flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                  <span>Virtual Red Team Thought Stream</span>
+                </span>
+                <button type="button" onclick="clearAILog()" class="text-stone-400 hover:text-stone-200 text-[11px] px-2 py-0.5 rounded border border-stone-800">Temizle</button>
               </div>
               <div id="ai-thought-log" class="font-mono text-[11px] text-stone-300 bg-black/60 rounded-xl p-4 max-h-[400px] overflow-y-auto space-y-1.5">
-                <div class="text-stone-600">[Sistem] AI Red Team hazır. Taramada 'AI Red Team' seçildiğinde ajan akışı buraya yansıyacaktır.</div>
+                <div class="text-stone-500">[Sistem] AI Red Team hazır. Taramada 'AI Red Team' seçildiğinde ajan akışı buraya yansıyacaktır.</div>
               </div>
             </div>
           </div>
@@ -742,61 +869,64 @@
           <!-- SEKME 7: Strix AI Pentest -->
           <div id="tab-strix" class="detail-tab-content hidden space-y-4">
             <div class="p-4 rounded-2xl border border-stone-200 bg-stone-50">
-              <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <h4 class="text-sm font-bold font-editorial text-mistral-ink">⚔️ Strix Otonom AI Pentest (Gerçek Araç Entegrasyonu)</h4>
-                <div class="flex items-center gap-2">
-                  <select id="strix-mode" class="p-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-mono outline-none">
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                <h4 class="text-sm font-bold font-editorial text-mistral-ink flex items-center gap-2">
+                  <svg class="w-4 h-4 text-mistral-orange" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                  <span>Strix Otonom AI Pentest (Sandbox Motoru)</span>
+                </h4>
+                <div class="flex flex-wrap items-center gap-2">
+                  <select id="strix-mode" class="modern-field !w-auto font-mono">
                     <option value="quick">quick (hızlı)</option>
                     <option value="standard" selected>standard</option>
                     <option value="deep">deep (derin)</option>
                   </select>
-                  <button type="button" id="strix-start-btn" onclick="startStrixScan()" class="px-3 py-1.5 rounded-xl bg-mistral-orange hover:bg-[#e04406] text-white text-[11px] font-bold transition shadow-xs">Strix Taraması Başlat</button>
-                  <button type="button" id="strix-cancel-btn" onclick="cancelStrixScan()" class="hidden px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold transition">Durdur</button>
+                  <button type="button" id="strix-start-btn" onclick="startStrixScan()" class="btn btn-sm btn-primary">Strix Taraması Başlat</button>
+                  <button type="button" id="strix-cancel-btn" onclick="cancelStrixScan()" class="hidden btn btn-sm btn-danger">Durdur</button>
                 </div>
               </div>
               <div id="strix-capabilities" class="text-[11px] text-mistral-slate leading-relaxed">Strix kurulum durumu kontrol ediliyor…</div>
-              <p class="text-[10px] text-stone-400 mt-2">Strix, Docker sandbox içinde otonom ajanlarla gerçek istismar doğrulaması (PoC) üretir. AI Ayarları panelindeki LLM yapılandırması kullanılır; telemetri kapalıdır (STRIX_TELEMETRY=0).</p>
+              <p class="text-[10px] text-stone-500 mt-2">Strix, Docker sandbox içinde otonom ajanlarla gerçek istismar doğrulaması (PoC) üretir. AI Ayarları panelindeki LLM yapılandırması kullanılır; telemetri kapalıdır (STRIX_TELEMETRY=0).</p>
             </div>
 
-            <!-- Gelişmiş Seçenekler (tüm CLI özellikleri) -->
+            <!-- Gelişmiş Seçenekler -->
             <details class="p-4 rounded-2xl border border-stone-200 bg-stone-50/60">
-              <summary class="text-xs font-bold text-mistral-ink cursor-pointer select-none">⚙️ Gelişmiş Seçenekler (tüm Strix özellikleri)</summary>
-              <div class="grid sm:grid-cols-2 gap-3 mt-3">
-                <label class="text-[10px] font-bold text-mistral-slate uppercase">Maks. Tur<input type="number" id="strix-max-turns" value="120" min="1" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase">Maks. Bütçe (USD)<input type="number" id="strix-max-budget" placeholder="örn: 2.5" step="0.1" min="0" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+              <summary class="text-xs font-bold text-mistral-ink cursor-pointer select-none">Gelişmiş Seçenekler (Tüm Strix CLI Parametreleri)</summary>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Maks. Tur<input type="number" id="strix-max-turns" value="120" min="1" class="mt-1 modern-field font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Maks. Bütçe (USD)<input type="number" id="strix-max-budget" placeholder="örn: 2.5" step="0.1" min="0" class="mt-1 modern-field font-mono"></label>
                 <label class="text-[10px] font-bold text-mistral-slate uppercase">Fail-On Eşiği
-                  <select id="strix-fail-on" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"><option value="">(kapalı)</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select></label>
+                  <select id="strix-fail-on" class="mt-1 modern-field font-mono"><option value="">(kapalı)</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select></label>
                 <label class="text-[10px] font-bold text-mistral-slate uppercase">Kapsam Modu (kod hedefleri)
-                  <select id="strix-scope-mode" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"><option value="">(varsayılan)</option><option value="auto">auto</option><option value="diff">diff</option><option value="full">full</option></select></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase">Diff Base (scope=diff iken)<input type="text" id="strix-diff-base" placeholder="örn: origin/main" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase">Özel Talimat (instruction)<textarea id="strix-instruction" rows="2" placeholder="örn: IDOR ve auth testlerine odaklan; test hesabı admin:pass123" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">Ek Hedefler (satır başına URL/repo/dizin — beyaz-kutu çoklu hedef)<textarea id="strix-extra-targets" rows="2" placeholder="https://github.com/user/repo&#10;./kaynak-kod" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">Hedef Listesi (satır başına hedef — --target-list)<textarea id="strix-target-list" rows="2" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase">Sadece MCP Sunucuları (virgülle)<input type="text" id="strix-mcp-servers" placeholder="örn: burp,semgrep" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase">Hariç MCP Sunucuları (virgülle)<input type="text" id="strix-mcp-exclude" placeholder="örn: harici-api" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">MCP Config (JSON — --mcp-config)<textarea id="strix-mcp-config" rows="2" placeholder='{"mcpServers": {...}}' class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">Workspace Dosyaları (JSON dizisi: name/content/dest — --workspace-file)<textarea id="strix-workspace-files" rows="2" placeholder='[{"name":"wordlist.txt","content":"admin\nroot","dest":"lists/wordlist.txt"}]' class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">CLI Config (JSON — --config)<textarea id="strix-cli-config" rows="2" placeholder='{}' class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></textarea></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase">Postman API Key (POSTMAN_API_KEY)<input type="password" id="strix-postman-key" placeholder="PMAK-..." class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                  <select id="strix-scope-mode" class="mt-1 modern-field font-mono"><option value="">(varsayılan)</option><option value="auto">auto</option><option value="diff">diff</option><option value="full">full</option></select></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Diff Base (scope=diff iken)<input type="text" id="strix-diff-base" placeholder="örn: origin/main" class="mt-1 modern-field font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Özel Talimat (instruction)<textarea id="strix-instruction" rows="2" placeholder="örn: IDOR ve auth testlerine odaklan; test hesabı admin:pass123" class="mt-1 modern-field font-mono"></textarea></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">Ek Hedefler (satır başına URL/repo/dizin — beyaz-kutu çoklu hedef)<textarea id="strix-extra-targets" rows="2" placeholder="https://github.com/user/repo&#10;./kaynak-kod" class="mt-1 modern-field font-mono"></textarea></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">Hedef Listesi (satır başına hedef — --target-list)<textarea id="strix-target-list" rows="2" class="mt-1 modern-field font-mono"></textarea></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Sadece MCP Sunucuları (virgülle)<input type="text" id="strix-mcp-servers" placeholder="örn: burp,semgrep" class="mt-1 modern-field font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Hariç MCP Sunucuları (virgülle)<input type="text" id="strix-mcp-exclude" placeholder="örn: harici-api" class="mt-1 modern-field font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">MCP Config (JSON — --mcp-config)<textarea id="strix-mcp-config" rows="2" placeholder='{"mcpServers": {...}}' class="mt-1 modern-field font-mono"></textarea></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">Workspace Dosyaları (JSON dizisi: name/content/dest — --workspace-file)<textarea id="strix-workspace-files" rows="2" placeholder='[{"name":"wordlist.txt","content":"admin\nroot","dest":"lists/wordlist.txt"}]' class="mt-1 modern-field font-mono"></textarea></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase sm:col-span-2">CLI Config (JSON — --config)<textarea id="strix-cli-config" rows="2" placeholder='{}' class="mt-1 modern-field font-mono"></textarea></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Postman API Key (POSTMAN_API_KEY)<input type="password" id="strix-postman-key" placeholder="PMAK-..." class="mt-1 modern-field font-mono"></label>
                 <label class="text-[10px] font-bold text-mistral-slate uppercase">Web Arama Sağlayıcı (STRIX_WEB_SEARCH_PROVIDER)
-                  <select id="strix-search-provider" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"><option value="">(varsayılan)</option><option value="perplexity">perplexity</option><option value="exa">exa</option></select></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase">Perplexity API Key (PERPLEXITY_API_KEY)<input type="password" id="strix-perplexity-key" placeholder="pplx-..." class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase">Exa API Key (EXA_API_KEY)<input type="password" id="strix-exa-key" placeholder="exa-..." class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                  <select id="strix-search-provider" class="mt-1 modern-field font-mono"><option value="">(varsayılan)</option><option value="perplexity">perplexity</option><option value="exa">exa</option></select></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Perplexity API Key (PERPLEXITY_API_KEY)<input type="password" id="strix-perplexity-key" placeholder="pplx-..." class="mt-1 modern-field font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Exa API Key (EXA_API_KEY)<input type="password" id="strix-exa-key" placeholder="exa-..." class="mt-1 modern-field font-mono"></label>
                 <label class="text-[10px] font-bold text-mistral-slate uppercase">Reasoning Effort (STRIX_REASONING_EFFORT)
-                  <select id="strix-reasoning-effort" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"><option value="high" selected>high</option><option value="medium">medium</option><option value="low">low</option></select></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase">Dedupe Model (STRIX_DEDUPE_MODEL)<input type="text" id="strix-dedupe-model" placeholder="opsiyonel model" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase">Sandbox CPU Limiti (STRIX_SANDBOX_CPUS)<input type="text" id="strix-sandbox-cpus" placeholder="örn: 2" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
-                <label class="text-[10px] font-bold text-mistral-slate uppercase">Sandbox RAM Limiti (STRIX_SANDBOX_MEM_LIMIT)<input type="text" id="strix-sandbox-mem" placeholder="örn: 4g" class="mt-1 w-full p-2 bg-white border border-stone-200 rounded-lg text-xs font-mono"></label>
+                  <select id="strix-reasoning-effort" class="mt-1 modern-field font-mono"><option value="high" selected>high</option><option value="medium">medium</option><option value="low">low</option></select></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Dedupe Model (STRIX_DEDUPE_MODEL)<input type="text" id="strix-dedupe-model" placeholder="opsiyonel model" class="mt-1 modern-field font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Sandbox CPU Limiti (STRIX_SANDBOX_CPUS)<input type="text" id="strix-sandbox-cpus" placeholder="örn: 2" class="mt-1 modern-field font-mono"></label>
+                <label class="text-[10px] font-bold text-mistral-slate uppercase">Sandbox RAM Limiti (STRIX_SANDBOX_MEM_LIMIT)<input type="text" id="strix-sandbox-mem" placeholder="örn: 4g" class="mt-1 modern-field font-mono"></label>
               </div>
             </details>
 
             <!-- Geçmiş Taramalar (resume) -->
             <div class="p-4 rounded-2xl border border-stone-200 bg-white">
-              <div class="flex items-center justify-between gap-2 mb-2">
-                <h4 class="text-sm font-bold font-editorial text-mistral-ink">🗂️ Geçmiş Strix Taramaları (resume)</h4>
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                <h4 class="text-sm font-bold font-editorial text-mistral-ink">Geçmiş Strix Taramaları (Resume &amp; İnceleme)</h4>
                 <div class="flex gap-2">
-                  <button type="button" onclick="loadStrixPastRuns()" class="px-2.5 py-1 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[10px] font-bold">Yenile</button>
-                  <button type="button" onclick="strixUpdateCLI()" class="px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-[10px] font-bold text-amber-900">⬆ Strix'i Güncelle</button>
+                  <button type="button" onclick="loadStrixPastRuns()" class="btn btn-xs btn-secondary">Yenile</button>
+                  <button type="button" onclick="strixUpdateCLI()" class="btn btn-xs btn-ai">Strix'i Güncelle</button>
                 </div>
               </div>
               <div id="strix-past-runs" class="space-y-1.5 text-[11px] text-mistral-slate">Yükleniyor…</div>
@@ -811,36 +941,33 @@
             </div>
             <div id="strix-findings-card" class="hidden space-y-2">
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <h4 class="text-sm font-bold font-editorial text-mistral-ink">🛡️ Strix Doğrulanmış Bulguları (PoC + CVSS + PR Fix)</h4>
-                <div id="strix-artifact-dl-bar" class="hidden flex items-center gap-1.5">
-                  <button type="button" onclick="downloadStrixArtifact('sarif')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-[10px] font-mono font-bold text-stone-700">⬇ SARIF 2.1.0</button>
-                  <button type="button" onclick="downloadStrixArtifact('csv')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-[10px] font-mono font-bold text-stone-700">⬇ CSV</button>
-                  <button type="button" onclick="downloadStrixArtifact('md')" class="px-2 py-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-[10px] font-mono font-bold text-stone-700">⬇ Pentest MD</button>
+                <h4 class="text-sm font-bold font-editorial text-mistral-ink">Strix Doğrulanmış Bulguları (PoC + CVSS + PR Fix)</h4>
+                <div id="strix-artifact-dl-bar" class="hidden flex flex-wrap items-center gap-1.5">
+                  <button type="button" onclick="downloadStrixArtifact('sarif')" class="btn btn-xs btn-secondary font-mono">SARIF 2.1.0</button>
+                  <button type="button" onclick="downloadStrixArtifact('csv')" class="btn btn-xs btn-secondary font-mono">CSV</button>
+                  <button type="button" onclick="downloadStrixArtifact('md')" class="btn btn-xs btn-secondary font-mono">Pentest MD</button>
                 </div>
               </div>
               <div id="strix-findings-list" class="space-y-2"></div>
             </div>
 
-            <!-- Strix Alt-Ajan Ağacı, Kapsam Defteri (coverage.json) & Yönetici Raporu -->
+            <!-- Strix Alt-Ajan Ağacı, Kapsam Defteri & Yönetici Raporu -->
             <div id="strix-artifacts-card" class="hidden space-y-3">
-              <!-- Alt-Ajan Topolojisi -->
               <div id="strix-agents-panel" class="hidden p-4 rounded-2xl border border-stone-200 bg-white space-y-2">
-                <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">🕸️ Strix Otonom Alt-Ajan Topolojisi (.state/agents.json & agents.db)</h4>
+                <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">Strix Otonom Alt-Ajan Topolojisi (.state/agents.json &amp; agents.db)</h4>
                 <div id="strix-agents-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
               </div>
-              <!-- Kapsam Defteri (coverage.json) -->
               <div id="strix-coverage-panel" class="hidden p-4 rounded-2xl border border-stone-200 bg-white space-y-2">
-                <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">📋 Strix Kapsam Defteri & Boşluk Analizi (coverage.json)</h4>
+                <h4 class="text-xs font-bold uppercase tracking-wider text-mistral-slate">Strix Kapsam Defteri &amp; Boşluk Analizi (coverage.json)</h4>
                 <div id="strix-coverage-list" class="space-y-2 text-[11px]"></div>
               </div>
-              <!-- Strix Yerel Yönetici Raporu (penetration_test_report.md) -->
               <details id="strix-native-md-panel" class="hidden p-4 rounded-2xl border border-stone-200 bg-white">
-                <summary class="text-xs font-bold text-mistral-ink cursor-pointer">📄 Strix Yerel Yönetici Raporu (penetration_test_report.md)</summary>
+                <summary class="text-xs font-bold text-mistral-ink cursor-pointer">Strix Yerel Yönetici Raporu (penetration_test_report.md)</summary>
                 <pre id="strix-native-md-body" class="mt-2 p-3 rounded-xl bg-stone-50 border border-stone-200 text-[11px] font-mono text-stone-800 whitespace-pre-wrap max-h-[320px] overflow-y-auto"></pre>
               </details>
             </div>
             <div class="bg-stone-950 border border-stone-800 rounded-2xl p-4">
-              <div class="text-[11px] font-mono text-stone-500 mb-2">strix_output.log (canlı)</div>
+              <div class="text-[11px] font-mono text-stone-400 mb-2">strix_output.log (canlı)</div>
               <div id="strix-log" class="font-mono text-[10px] text-emerald-300/90 bg-black/60 rounded-xl p-3 max-h-[280px] overflow-y-auto whitespace-pre-wrap"></div>
             </div>
           </div>
@@ -853,21 +980,24 @@
 
   </main>
 
-  <!-- Alt Bilgi / Footer -->
-  <footer class="border-t border-mistral-hairline bg-white mt-12 py-6 text-center text-xs text-mistral-slate">
-    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-      <div class="flex items-center gap-2">
-        <span class="font-bold text-mistral-ink font-editorial">Web Security Scanner</span>
-        <span>• Sıfır WAF Riski • %100 Yerel Güvenlik Suite</span>
+  <!-- Mistral Signature Sunset Stripe & Alt Bilgi / Footer -->
+  <div class="mt-12">
+    <div class="sunset-stripe"></div>
+    <footer class="border-t border-mistral-hairline bg-white py-6 text-center text-xs text-mistral-slate">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-mistral-ink font-editorial">Web Security Scanner</span>
+          <span>• Sıfır WAF Riski • %100 Yerel Güvenlik Denetim Paketi</span>
+        </div>
+        <div>
+          <span>Geliştirici: </span>
+          <a href="https://github.com/melihkarasu" target="_blank" rel="noopener" class="font-semibold text-mistral-ink hover:underline">Melih Karasu</a>
+        </div>
       </div>
-      <div>
-        <span>Geliştirici: </span>
-        <a href="https://github.com/melihkarasu" target="_blank" class="font-semibold text-mistral-ink hover:underline">Melih Karasu</a>
-      </div>
-    </div>
-  </footer>
+    </footer>
+  </div>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261014m"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261015a"></script>
 </body>
 </html>

@@ -508,38 +508,40 @@ async function detectScannerMode() {
         const srvEdition = (data.edition || '').toLowerCase() === 'lite' ? 'lite' : (localStorage.getItem('wss_edition') || 'full');
         setScannerEdition(srvEdition, false);
         if (modePillEl) {
-          modePillEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-[11px] font-mono text-emerald-800 font-semibold';
-          modePillEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span>🟢 Yerel Mod & Derin Tarama Aktif</span>';
+          modePillEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-[11px] font-mono text-emerald-800 font-semibold';
+          modePillEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span><span class="truncate">Yerel Mod & Derin Tarama Aktif</span>';
         }
         if (statusLocalBadge) {
-          statusLocalBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold';
-          statusLocalBadge.innerHTML = '<span>🟢</span><span>Yerel Mod: Aktif</span>';
+          statusLocalBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold';
+          statusLocalBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span><span>Yerel Mod: Aktif</span>';
         }
         if (statusDeepBadge) {
-          statusDeepBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold';
-          statusDeepBadge.innerHTML = '<span>🔍</span><span>Derin Tarama & SAST: Aktif</span>';
+          statusDeepBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold';
+          statusDeepBadge.innerHTML = '<svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span>Derin Tarama & SAST: Aktif</span>';
         }
         if (modDeepPill) {
-          modDeepPill.className = 'px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-100 text-emerald-800';
+          modDeepPill.className = 'px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-100 text-emerald-800 border border-emerald-200';
           modDeepPill.innerText = 'Aktif';
         }
         if (localDirRow) {
           localDirRow.classList.remove('hidden');
         }
         if (modeBadgeEl) {
-          modeBadgeEl.innerHTML = '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[11px] font-mono shadow-xs">🟢 Lokal Mod (Tam Başlık & Dizin Taraması Aktif)</span>';
+          modeBadgeEl.innerHTML = '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[11px] font-mono shadow-xs"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>Lokal Mod (Tam Başlık & Dizin Taraması Aktif)</span></span>';
         }
         if (modeNoticeEl) {
-          modeNoticeEl.className = 'p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-300 text-xs text-emerald-950 mb-4 flex items-center justify-between gap-3 shadow-xs';
+          modeNoticeEl.className = 'p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-200 text-xs text-emerald-950 mb-5 flex items-center justify-between gap-3 shadow-xs';
           modeNoticeEl.innerHTML = `
-            <div class="flex items-center gap-2.5">
-              <span class="text-lg">🚀</span>
-              <div>
+            <div class="flex items-start sm:items-center gap-3 min-w-0">
+              <span class="w-8 h-8 rounded-xl bg-emerald-100 border border-emerald-200 text-emerald-700 inline-flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+              </span>
+              <div class="min-w-0 leading-relaxed">
                 <strong class="font-bold text-emerald-900">Yerel Sunucu & Derin Tarama Aktif (127.0.0.1:8765):</strong>
-                <span class="text-emerald-800 text-[11px] block sm:inline">Alan adı + alt dizin (<code class="font-mono">site.com/dizin</code>), yerel proje dizini (SAST), derin pasif analiz, etik onaylı aktif testler, AI Red Team ve Strix hazır.</span>
+                <span class="text-emerald-800 text-[11px] block sm:inline"> Alan adı + alt dizin (<code class="font-mono">site.com/dizin</code>), yerel proje dizini (SAST), derin pasif analiz, etik onaylı aktif testler, AI Red Team ve Strix hazır.</span>
               </div>
             </div>
-            <span class="hidden md:inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold border border-emerald-300 shrink-0">TAM YETKİ</span>
+            <span class="hidden md:inline-flex items-center px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold border border-emerald-300 shrink-0">TAM YETKİ</span>
           `;
         }
         loadStrixCapabilities();
@@ -552,36 +554,38 @@ async function detectScannerMode() {
   // GitHub Pages veya Statik Barındırma Modu
   STATE.mode = 'github_pages';
   if (modePillEl) {
-    modePillEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 text-[11px] font-mono text-amber-900 font-semibold';
-    modePillEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span><span>🟡 Statik Mod (Derin Tarama Pasif)</span>';
+    modePillEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-amber-300 bg-amber-50 text-[11px] font-mono text-amber-900 font-semibold';
+    modePillEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span><span class="truncate">Statik Mod (Pasif Önizleme)</span>';
   }
   if (statusLocalBadge) {
-    statusLocalBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100 border border-amber-300 text-amber-900 font-bold';
-    statusLocalBadge.innerHTML = '<span>🟡</span><span>Yerel Mod: Pasif (GitHub Pages)</span>';
+    statusLocalBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 font-bold';
+    statusLocalBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span><span>Yerel Mod: Pasif (GitHub Pages)</span>';
   }
   if (statusDeepBadge) {
-    statusDeepBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-200/70 border border-stone-300 text-stone-700 font-bold';
-    statusDeepBadge.innerHTML = '<span>⚪</span><span>Derin Tarama: Pasif (Lokal Sunucu Gerekli)</span>';
+    statusDeepBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-100 border border-stone-200 text-stone-600 font-bold';
+    statusDeepBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-stone-400 shrink-0"></span><span>Derin Tarama: Pasif (Lokal Sunucu Gerekli)</span>';
   }
   if (modDeepPill) {
-    modDeepPill.className = 'px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-100 text-amber-800';
+    modDeepPill.className = 'px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-100 text-amber-800 border border-amber-200';
     modDeepPill.innerText = 'Lokal Mod';
   }
   if (modeNoticeEl) {
-    modeNoticeEl.className = 'p-3.5 rounded-2xl bg-amber-50/70 border border-amber-300 text-xs text-amber-950 mb-4 flex items-center justify-between gap-3 shadow-xs';
+    modeNoticeEl.className = 'p-3.5 rounded-2xl bg-amber-50/70 border border-amber-300 text-xs text-amber-950 mb-5 flex items-center justify-between gap-3 shadow-xs';
     modeNoticeEl.innerHTML = `
-      <div class="flex items-center gap-2.5">
-        <span class="text-lg">ℹ️</span>
-        <div>
+      <div class="flex items-start sm:items-center gap-3 min-w-0">
+        <span class="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 inline-flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </span>
+        <div class="min-w-0 leading-relaxed">
           <strong class="font-bold text-amber-900">Tarayıcı Önizleme Modu (Yerel Mod Pasif):</strong>
-          <span class="text-amber-800 text-[11px] block sm:inline">Şu an yalnızca DoH üzerinden pasif DNS denetimi aktiftir. Derin pasif tarama, yerel dizin (SAST), aktif testler ve AI/Strix için yerel sunucuyu (<code class="font-mono">python3 server.py</code>) çalıştırın.</span>
+          <span class="text-amber-800 text-[11px] block sm:inline"> Şu an yalnızca DoH üzerinden pasif DNS denetimi aktiftir. Derin pasif tarama, yerel dizin (SAST), aktif testler ve AI/Strix için yerel sunucuyu (<code class="font-mono">python3 server.py</code>) çalıştırın.</span>
         </div>
       </div>
-      <span class="hidden md:inline-flex items-center px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-mono text-[10px] font-bold border border-amber-300 shrink-0">PASİF ÖNİZLEME</span>
+      <span class="hidden md:inline-flex items-center px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 font-mono text-[10px] font-bold border border-amber-300 shrink-0">PASİF ÖNİZLEME</span>
     `;
   }
   if (modeBadgeEl) {
-    modeBadgeEl.innerHTML = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[11px] font-mono shadow-xs">🟡 GitHub Pages Modu (Pasif DoH Önizlemesi)</span>';
+    modeBadgeEl.innerHTML = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[11px] font-mono shadow-xs"><span class="w-2 h-2 rounded-full bg-amber-500"></span><span>GitHub Pages Modu (Pasif DoH Önizlemesi)</span></span>';
   }
 }
 
@@ -616,16 +620,16 @@ function renderHeaderResults(headerEval) {
     }`;
 
     const statusBadge = item.pass
-      ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">✅ Güvenli (' + item.score + '/' + item.maxScore + ')</span>'
-      : '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800">❌ Eksik / Zayıf (0/' + item.maxScore + ')</span>';
+      ? '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">✓ Güvenli (' + item.score + '/' + item.maxScore + ')</span>'
+      : '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200">✕ Eksik / Zayıf (0/' + item.maxScore + ')</span>';
 
     const fixSnippet = !item.pass ? `
       <div class="mt-3 pt-3 border-t border-rose-100">
-        <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center justify-between mb-1.5">
           <span class="text-[11px] font-semibold text-mistral-slate uppercase tracking-wider">Önerilen Nginx Çözümü:</span>
-          <button onclick="copyToClipboard('${escapeAttr(item.fix.nginx)}')" class="text-[11px] text-mistral-orange hover:underline font-medium">📋 Kopyala</button>
+          <button type="button" onclick="copyToClipboard('${escapeAttr(item.fix.nginx)}')" class="btn btn-xs btn-secondary !py-1 !px-2 text-mistral-orange">Kopyala</button>
         </div>
-        <pre class="bg-stone-900 text-stone-100 p-2.5 rounded-lg text-xs font-mono overflow-x-auto select-all"><code>${escapeHtml(item.fix.nginx)}</code></pre>
+        <pre class="bg-stone-900 text-stone-100 p-2.5 rounded-xl text-xs font-mono overflow-x-auto select-all"><code>${escapeHtml(item.fix.nginx)}</code></pre>
       </div>
     ` : '';
 
@@ -693,24 +697,24 @@ function renderDnsResults(dns) {
     const isWarn = item.status === 'warn';
 
     const badge = isPass
-      ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">✅ Doğrulandı</span>'
+      ? '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">✓ Doğrulandı</span>'
       : isWarn
-      ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800">⚠️ İyileştirilmeli</span>'
-      : '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800">❌ Eksik</span>';
+      ? '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">! İyileştirilmeli</span>'
+      : '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200">✕ Eksik</span>';
 
     card.className = `p-4 rounded-xl border ${isPass ? 'bg-white border-stone-200' : 'bg-stone-50 border-stone-200'}`;
     card.innerHTML = `
-      <div class="flex items-center justify-between gap-2 mb-1">
+      <div class="flex items-center justify-between gap-2 mb-1.5">
         <h4 class="font-bold text-sm text-mistral-ink">${escapeHtml(item.title)}</h4>
         ${badge}
       </div>
-      <div class="text-xs font-mono p-2 rounded bg-white border border-stone-200/80 break-all mb-1 text-stone-700">
+      <div class="text-xs font-mono p-2 rounded-lg bg-white border border-stone-200/80 break-all mb-1.5 text-stone-700">
         ${escapeHtml(item.value)}
       </div>
       <p class="text-xs text-mistral-slate">${escapeHtml(item.note)}</p>
       ${item.fix ? `
         <div class="mt-2 text-right">
-          <button onclick="copyToClipboard('${escapeAttr(item.fix)}')" class="text-[11px] text-mistral-orange hover:underline font-medium">📋 Örnek TXT Kopyala</button>
+          <button type="button" onclick="copyToClipboard('${escapeAttr(item.fix)}')" class="btn btn-xs btn-secondary !py-1 !px-2 text-mistral-orange">Örnek TXT Kopyala</button>
         </div>
       ` : ''}
     `;
@@ -906,17 +910,16 @@ function renderSastStats(data) {
 
   const st = data.stats || {};
   const cards = [
-    { label: 'Taranan Dosya', value: st.files_scanned || 0, icon: '📄' },
-    { label: 'Toplam Satır', value: (st.total_lines || 0).toLocaleString('tr-TR'), icon: '📝' },
-    { label: 'Aktif Kural', value: st.deep_rules_active || st.rules_active || 0, icon: '📏', title: 'Regex + yapısal (AST/taint/entropy) kuralları' },
-    { label: 'Süre', value: ((st.duration_ms || 0) / 1000).toFixed(1) + ' sn', icon: '⚡' }
+    { label: 'Taranan Dosya', value: st.files_scanned || 0 },
+    { label: 'Toplam Satır', value: (st.total_lines || 0).toLocaleString('tr-TR') },
+    { label: 'Aktif Kural', value: st.deep_rules_active || st.rules_active || 0, title: 'Regex + yapısal (AST/taint/entropy) kuralları' },
+    { label: 'Süre', value: ((st.duration_ms || 0) / 1000).toFixed(1) + ' sn' }
   ];
 
   grid.innerHTML = cards.map(c => `
-    <div class="p-3 rounded-xl bg-stone-50 border border-stone-200 text-center">
-      <div class="text-xl mb-0.5">${c.icon}</div>
-      <div class="text-lg font-bold font-mono text-mistral-ink">${escapeHtml(String(c.value))}</div>
-      <div class="text-[10px] text-mistral-slate font-medium">${c.label}</div>
+    <div class="p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-center">
+      <div class="text-lg font-extrabold font-mono text-mistral-ink">${escapeHtml(String(c.value))}</div>
+      <div class="text-[10px] text-mistral-slate font-semibold uppercase tracking-wider mt-0.5">${c.label}</div>
     </div>
   `).join('');
 
@@ -1381,13 +1384,13 @@ function renderActiveResults(data) {
   const statsGrid = document.getElementById('active-stats-grid');
   if (statsGrid) {
     const cards = [
-      { label: 'Gönderilen İstek', value: data.requests_sent || 0, icon: '📡' },
-      { label: 'Rate Limit', value: (data.rate_limit_seconds || 1.5) + ' sn', icon: '⏱️' },
-      { label: 'Toplam Bulgu', value: data.findings.length, icon: '🔍' },
-      { label: 'Süre', value: ((data.duration_ms || 0) / 1000).toFixed(1) + ' sn', icon: '⚡' },
-      { label: 'Modül', value: Object.keys(data.modules || {}).length, icon: '🧩' }
+      { label: 'Gönderilen İstek', value: data.requests_sent || 0 },
+      { label: 'Rate Limit', value: (data.rate_limit_seconds || 1.5) + ' sn' },
+      { label: 'Toplam Bulgu', value: data.findings.length },
+      { label: 'Süre', value: ((data.duration_ms || 0) / 1000).toFixed(1) + ' sn' },
+      { label: 'Modül', value: Object.keys(data.modules || {}).length }
     ];
-    statsGrid.innerHTML = cards.map(c => '<div class="p-3 rounded-xl bg-stone-50 border border-stone-200 text-center"><div class="text-xl mb-0.5">' + c.icon + '</div><div class="text-lg font-bold font-mono text-mistral-ink">' + escapeHtml(String(c.value)) + '</div><div class="text-[10px] text-mistral-slate font-medium">' + c.label + '</div></div>').join('');
+    statsGrid.innerHTML = cards.map(c => '<div class="p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-center"><div class="text-lg font-extrabold font-mono text-mistral-ink">' + escapeHtml(String(c.value)) + '</div><div class="text-[10px] text-mistral-slate font-semibold uppercase tracking-wider mt-0.5">' + c.label + '</div></div>').join('');
   }
 
   // Şiddet özeti
@@ -1975,8 +1978,6 @@ function toggleAIConfig() {
   if (!panel) return;
   const isHidden = panel.classList.contains('hidden');
   panel.classList.toggle('hidden', !isHidden);
-  const btn = panel.querySelector('button[onclick="toggleAIConfig()"]');
-  if (btn) btn.innerText = isHidden ? '✕ Paneli Kapat' : '🤖 AI Panelini Aç';
   if (isHidden) {
     updateAIStatusUI();
   }
@@ -2194,7 +2195,7 @@ async function testAIConnection() {
   } finally {
     if (btn) btn.disabled = false;
     spinner?.classList.add('hidden');
-    if (btnText) btnText.innerText = '⚡ Bağlantıyı Test Et';
+    if (btnText) btnText.innerText = 'Bağlantıyı Test Et';
   }
 }
 
@@ -2371,10 +2372,10 @@ function setScannerEdition(edition, save = true) {
   if (ed === 'lite') {
     if (badge) {
       badge.innerText = 'v2.0 Lite';
-      badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold';
+      badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold';
     }
-    if (btnLite) btnLite.className = 'px-2.5 py-1 rounded-lg bg-emerald-600 text-white transition cursor-pointer';
-    if (btnFull) btnFull.className = 'px-2.5 py-1 rounded-lg text-stone-600 hover:text-mistral-ink transition cursor-pointer';
+    if (btnLite) btnLite.className = 'segmented-item is-active-emerald';
+    if (btnFull) btnFull.className = 'segmented-item';
     headerAiBtn?.classList.add('hidden');
     aiPanel?.classList.add('hidden');
     aiGroupBox?.classList.add('hidden');
@@ -2385,10 +2386,10 @@ function setScannerEdition(edition, save = true) {
   } else {
     if (badge) {
       badge.innerText = 'v2.0 Full';
-      badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-orange-100 text-mistral-orange font-bold';
+      badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-orange-100 text-mistral-orange border border-orange-200 font-bold';
     }
-    if (btnFull) btnFull.className = 'px-2.5 py-1 rounded-lg bg-mistral-orange text-white transition cursor-pointer';
-    if (btnLite) btnLite.className = 'px-2.5 py-1 rounded-lg text-stone-600 hover:text-mistral-ink transition cursor-pointer';
+    if (btnFull) btnFull.className = 'segmented-item is-active-orange';
+    if (btnLite) btnLite.className = 'segmented-item';
     headerAiBtn?.classList.remove('hidden');
     aiGroupBox?.classList.remove('hidden');
     tabAiBtn?.classList.remove('hidden');
@@ -2422,6 +2423,11 @@ function syncLegacyModuleFlags() {
   setChk('mod-active', cActInj || cActAcc || cActCrawl);
   setChk('mod-ai', cAiRed || cAiSast || cAiPen);
 
+  document.querySelectorAll('.module-card').forEach(card => {
+    const chk = card.querySelector('input[type="checkbox"]');
+    if (chk) card.classList.toggle('is-checked', chk.checked);
+  });
+
   onActiveModuleToggle();
 }
 
@@ -2452,8 +2458,7 @@ function onAIModuleToggle() {
 function switchDetailTab(tabId) {
   document.querySelectorAll('.detail-tab-content').forEach(el => el.classList.add('hidden'));
   document.querySelectorAll('.detail-tab-btn').forEach(btn => {
-    btn.classList.remove('border-b-2', 'border-mistral-orange', 'text-mistral-orange', 'font-bold');
-    btn.classList.add('text-mistral-slate');
+    btn.classList.remove('active');
   });
 
   const target = document.getElementById(tabId);
@@ -2461,8 +2466,7 @@ function switchDetailTab(tabId) {
 
   const btn = document.getElementById('btn-' + tabId);
   if (btn) {
-    btn.classList.add('border-b-2', 'border-mistral-orange', 'text-mistral-orange', 'font-bold');
-    btn.classList.remove('text-mistral-slate');
+    btn.classList.add('active');
   }
 }
 
@@ -2606,9 +2610,9 @@ function setUnifiedVerdictFilter(filter) {
     const btn = document.getElementById('vfilter-' + k);
     if (!btn) return;
     if (k === STATE.unifiedVerdictFilter) {
-      btn.className = 'px-2.5 py-1 rounded-lg bg-mistral-orange text-white font-bold transition cursor-pointer';
+      btn.className = 'btn btn-xs btn-primary';
     } else {
-      btn.className = 'px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-stone-700 font-bold hover:bg-stone-100 transition cursor-pointer';
+      btn.className = 'btn btn-xs btn-secondary';
     }
   });
   renderFilteredUnifiedFindings();
@@ -3051,12 +3055,14 @@ async function startUnifiedScan() {
       if (chkHeaders) {
         let headerMap = {};
         try {
-          const hRes = await fetchLocalApiHeaders(cleanUrl);
-          totalRequests++;
-          if (hRes.success) {
-            headerMap = hRes.headers;
+          if (STATE.mode === 'local_api') {
+            headerMap = await fetchLocalApiHeaders(cleanUrl);
             STATE.results.headersSource = 'local_live';
+          } else {
+            headerMap = await probePublicHeadersFallback(cleanDomain);
+            STATE.results.headersSource = 'doh_fallback';
           }
+          totalRequests++;
           headerEval = evaluateHeaders(headerMap);
           STATE.results.headers = headerEval;
           renderHeaderResults(headerEval);
@@ -3121,8 +3127,8 @@ async function startUnifiedScan() {
       }
 
       const finalGrade = calculateFinalGrade(headerEval.score || 0, headerEval.maxScore || 100, dnsReport);
-      STATE.score = finalGrade.finalScore ?? 0;
-      STATE.grade = finalGrade.letter || 'B';
+      STATE.score = finalGrade.score ?? finalGrade.finalScore ?? 0;
+      STATE.grade = finalGrade.grade || finalGrade.letter || 'B';
     }
 
     // -------------------------------------------------------------
@@ -3509,7 +3515,7 @@ async function startUnifiedScan() {
   } finally {
     if (btn) btn.disabled = false;
     if (spinner) spinner.classList.add('hidden');
-    if (btnText) btnText.innerText = '🚀 Taramayı Başlat';
+    if (btnText) btnText.innerText = 'Taramayı Başlat';
   }
 }
 
