@@ -86,6 +86,10 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_sast_ai()
             return
 
+        if parsed.path == "/api/php-fix-remediate":
+            self.handle_api_php_fix_remediate()
+            return
+
         self.send_json({"success": False, "error": "Bilinmeyen POST ucu"}, status=404)
 
     def do_GET(self):
@@ -607,6 +611,35 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
 
         except Exception as e:
             self.send_json({"success": False, "error": f"SAST taraması başarısız: {str(e)}"}, status=500)
+
+
+    def handle_api_php_fix_remediate(self):
+        """Proje dizinindeki PHP yapılandırmalarına CVE-2026-109618 / CVE-2026-109619 otomatik düzeltmelerini uygular."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length > 0 else b"{}"
+            data = json.loads(body.decode("utf-8") or "{}")
+        except (ValueError, json.JSONDecodeError):
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+
+        raw_path = (data.get("path") or "").strip()
+        apply_fixes = data.get("apply") is not False
+        if not raw_path:
+            self.send_json({"success": False, "error": "path alanı gereklidir"}, status=400)
+            return
+
+        resolved_path, available = self._resolve_sast_path(raw_path)
+        if not resolved_path:
+            self.send_json({"success": False, "error": f"Dizin bulunamadı: {raw_path}", "available_dirs": available}, status=404)
+            return
+
+        try:
+            from sast_engine import remediate_php_fix_directory
+            res = remediate_php_fix_directory(resolved_path, apply_fixes=apply_fixes)
+            self.send_json(res)
+        except Exception as e:
+            self.send_json({"success": False, "error": f"PHP otomatik düzeltme hatası: {str(e)}"}, status=500)
 
     def handle_api_sast_ai(self):
         """ersinkoc/security-check 4-Aşamalı AI Kaynak Kod Denetimi (Recon -> Hunt -> Verify -> Report)."""

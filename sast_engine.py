@@ -1142,3 +1142,127 @@ def run_ai_sast_audit(root_path, ai_config, profile="standard", scope_mode="full
         "sast": sast_res,
         "dependencies": deps_res,
     }
+
+
+# =============================================================
+# ersinkoc/php-fix v1.6.0 & PHP 21 Oct 2026 Advisory Otomatik Çözüm Motoru
+# =============================================================
+PHP_PATCHED_VERSIONS = {
+    "8.5": "8.5.12",
+    "8.4": "8.4.27",
+    "8.3": "8.3.36",
+    "8.2": "8.2.35",
+}
+
+def remediate_php_fix_directory(root_path, apply_fixes=True):
+    """
+    Hedef proje dizinindeki php.ini, .user.ini, conf.d/*.ini, PHP-FPM havuz (*.conf),
+    Apache .htaccess ve Dockerfile dosyalarını tarar; CVE-2026-109618 (OOM RCE) ve
+    CVE-2026-109619 (Stale Global State RCE) için otomatik düzeltmeleri (.bak yedekli) uygular.
+    """
+    import shutil
+    actions = []
+    ts = time.strftime("%Y%m%d-%H%M%S")
+
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        dirnames[:] = [d for d in dirnames if d not in SAST_SKIP_DIRS]
+        for fn in filenames:
+            low = fn.lower()
+            fpath = os.path.join(dirpath, fn)
+            rel_path = os.path.relpath(fpath, root_path)
+
+            # 1) php.ini / .user.ini / *.ini
+            if low in ("php.ini", ".user.ini") or low.endswith(".ini"):
+                try:
+                    content = open(fpath, "r", encoding="utf-8", errors="replace").read()
+                except OSError:
+                    continue
+                new_content = content
+                changes = []
+                if re.search(r"(?im)^\s*;?\s*session\.upload_progress\.enabled\s*=\s*["']?(?:on|1|true|yes)["']?", new_content):
+                    new_content = re.sub(
+                        r"(?im)^\s*;?\s*session\.upload_progress\.enabled\s*=.*$",
+                        "session.upload_progress.enabled = Off",
+                        new_content
+                    )
+                    changes.append("session.upload_progress.enabled = Off yapıldı (CVE-2026-109619)")
+                elif "session.upload_progress.enabled" not in new_content and low in ("php.ini", ".user.ini"):
+                    new_content = new_content.rstrip() + "\n[Session]\nsession.upload_progress.enabled = Off\n"
+                    changes.append("session.upload_progress.enabled = Off eklendi (CVE-2026-109619)")
+
+                if re.search(r"(?im)^\s*;?\s*fatal_error_backtraces\s*=\s*["']?(?:on|1|true|yes)["']?", new_content):
+                    new_content = re.sub(
+                        r"(?im)^\s*;?\s*fatal_error_backtraces\s*=.*$",
+                        "fatal_error_backtraces = Off",
+                        new_content
+                    )
+                    changes.append("fatal_error_backtraces = Off yapıldı (PHP 8.5 CVE-2026-109619 producer)")
+
+                if changes and new_content != content:
+                    if apply_fixes:
+                        shutil.copy2(fpath, f"{fpath}.bak-{ts}")
+                        open(fpath, "w", encoding="utf-8").write(new_content)
+                    actions.append({"file": rel_path, "applied": apply_fixes, "changes": changes})
+
+            # 2) PHP-FPM pool *.conf
+            elif low.endswith(".conf"):
+                try:
+                    content = open(fpath, "r", encoding="utf-8", errors="replace").read()
+                except OSError:
+                    continue
+                if re.search(r"(?m)^\s*\[.+\]\s*$", content) and re.search(r"(?m)^\s*listen\s*=", content):
+                    new_content = content
+                    changes = []
+                    if re.search(r"(?im)^\s*;?\s*php_(?:admin_)?(?:value|flag)\[\s*session\.upload_progress\.enabled\s*\]", new_content):
+                        new_content = re.sub(
+                            r"(?im)^\s*;?\s*php_(?:admin_)?(?:value|flag)\[\s*session\.upload_progress\.enabled\s*\].*$",
+                            "php_admin_flag[session.upload_progress.enabled] = off",
+                            new_content
+                        )
+                        changes.append("FPM havuzunda php_admin_flag[session.upload_progress.enabled] = off kilitlendi")
+                    elif "session.upload_progress.enabled" not in new_content:
+                        new_content = new_content.rstrip() + "\nphp_admin_flag[session.upload_progress.enabled] = off\n"
+                        changes.append("FPM havuzuna php_admin_flag[session.upload_progress.enabled] = off eklendi")
+                    if changes and new_content != content:
+                        if apply_fixes:
+                            shutil.copy2(fpath, f"{fpath}.bak-{ts}")
+                            open(fpath, "w", encoding="utf-8").write(new_content)
+                        actions.append({"file": rel_path, "applied": apply_fixes, "changes": changes})
+
+            # 3) Dockerfile (PHP imaj sürümü yükseltme + zz-php2shell.ini)
+            elif low in SAST_DOCKERFILE_NAMES or low.startswith("dockerfile."):
+                try:
+                    content = open(fpath, "r", encoding="utf-8", errors="replace").read()
+                except OSError:
+                    continue
+                if re.search(r"(?im)^FROM\s+php:", content):
+                    new_content = content
+                    changes = []
+                    for branch, fixed_ver in PHP_PATCHED_VERSIONS.items():
+                        pat = rf"(?im)^(FROM\s+php:){re.escape(branch)}(?:\.[0-9]+)?(-[^\s]+)?$"
+                        if re.search(pat, new_content):
+                            new_content = re.sub(pat, rf"\g<1>{fixed_ver}\2", new_content)
+                            changes.append(f"PHP imajı yamalı {fixed_ver} sürümüne yükseltildi (CVE-2026-109618/109619)")
+                    if "zz-php2shell.ini" not in new_content:
+                        dropin = (
+                            "\n# php2shell (CVE-2026-109618 / CVE-2026-109619) mitigation\n"
+                            "RUN printf 'session.upload_progress.enabled=Off\\nfatal_error_backtraces=Off\\npost_max_size=8M\\n' "
+                            "> /usr/local/etc/php/conf.d/zz-php2shell.ini\n"
+                        )
+                        new_content = new_content.rstrip() + dropin
+                        changes.append("Dockerfile içine /usr/local/etc/php/conf.d/zz-php2shell.ini katmanı eklendi")
+                    if changes and new_content != content:
+                        if apply_fixes:
+                            shutil.copy2(fpath, f"{fpath}.bak-{ts}")
+                            open(fpath, "w", encoding="utf-8").write(new_content)
+                        actions.append({"file": rel_path, "applied": apply_fixes, "changes": changes})
+
+    return {
+        "success": True,
+        "root": root_path,
+        "applied": apply_fixes,
+        "patched_versions": PHP_PATCHED_VERSIONS,
+        "modified_files_count": len(actions),
+        "actions": actions,
+        "host_command": "curl -fsSL https://raw.githubusercontent.com/ersinkoc/php-fix/main/install.sh | sudo bash",
+    }
