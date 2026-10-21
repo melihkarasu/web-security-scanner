@@ -1198,6 +1198,22 @@ def remediate_php_fix_directory(root_path, apply_fixes=True):
                     )
                     changes.append("fatal_error_backtraces = Off yapıldı (PHP 8.5 CVE-2026-109619 producer)")
 
+                if re.search(r"(?im)^\s*;?\s*phar\.readonly\s*=\s*[\"']?(?:off|0|false|no)[\"']?", new_content):
+                    new_content = re.sub(
+                        r"(?im)^\s*;?\s*phar\.readonly\s*=.*$",
+                        "phar.readonly = On",
+                        new_content
+                    )
+                    changes.append("phar.readonly = On yapıldı (CVE-2026-6103 / CVE-2026-7260 Phar koruması)")
+
+                if re.search(r"(?im)^\s*post_max_size\s*=\s*(?:[4-9][0-9]|[1-9][0-9]{2,})\s*[MG]\b", new_content):
+                    new_content = re.sub(
+                        r"(?im)^\s*post_max_size\s*=.*$",
+                        "post_max_size = 32M",
+                        new_content
+                    )
+                    changes.append("post_max_size = 32M olarak sınırlandırıldı (CVE-2026-109618 OOM koruması)")
+
                 if changes and new_content != content:
                     if apply_fixes:
                         shutil.copy2(fpath, f"{fpath}.bak-{ts}")

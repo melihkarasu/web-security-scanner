@@ -7,9 +7,11 @@ services:
     container_name: web-security-scanner
     restart: unless-stopped
     ports:
-      - "8765:8765"
+      - "127.0.0.1:8765:8765"
     volumes:
       - /www/wwwroot:/www/wwwroot:ro
+      - /home/uzem/.openclaw/workspace:/home/uzem/.openclaw/workspace
+      - /home/uzem/.config/gcloud:/home/uzem/.config/gcloud:ro
     environment:
       - HOST=0.0.0.0
       - PORT=8765

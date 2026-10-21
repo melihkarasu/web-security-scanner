@@ -577,6 +577,38 @@ EXTRA_RULES = [
      "CVE-2026-109618: Tehlikeli RLIMIT_AS / RLIMIT_DATA (ulimit -v) veya Aşırı Girdi Sınırları",
      re.compile(r"(?i)\b(?:RLIMIT_AS|RLIMIT_DATA|LimitAS|ulimit\s+-v)\b|^\s*max_input_vars\s*=\s*[0-9]{5,}|^\s*max_input_nesting_level\s*=\s*[0-9]{3,}"),
      "PHP 21 Ekim 2026 Bülteni Uyarısı: RLIMIT_AS / RLIMIT_DATA (ulimit -v) kullanımı PHP'de CVE-2026-109618 zafiyetli bellek ayırma hatasını doğrudan tetikler! Bunun yerine container/cgroup bellek sınırı kullanın ve max_input_vars / max_file_uploads / max_input_nesting_level sınırlarını daraltın."),
+    ("PHP-FIX-013", "PHP Güvenliği (2026 Advisories)", "YÜKSEK", "CWE-284",
+     "CVE-2026-91768 (GHSA-62xp-839h-2637): PHP-FPM listen.allowed_clients IPv6 ACL Atlatma (24 Eylül 2026)",
+     re.compile(r"(?i)^\s*listen\.allowed_clients\s*=.*:"),
+     "PHP 8.4.26 / 8.3.35 / 8.2.34 öncesi sürümlerde PHP-FPM FastCGI listen.allowed_clients içinde IPv6 adres karşılaştırması kısmi yapılır ve ACL atlatılabilir (CVE-2026-91768). PHP'yi 8.4.27/8.3.36/8.2.35 sürümüne yükseltin veya Unix domain socket (listen = /run/php/php-fpm.sock) kullanın."),
+    ("PHP-FIX-014", "PHP Güvenliği (2026 Advisories)", "YÜKSEK", "CWE-79",
+     "CVE-2026-6735 (GHSA-7qg2-v9fj-4mwv): PHP-FPM pm.status_path Üzerinde XSS Açığı (07 Mayıs 2026)",
+     re.compile(r"(?i)^\s*pm\.status_path\s*=\s*\S+"),
+     "PHP 8.5.6 / 8.4.21 / 8.3.31 / 8.2.31 öncesi sürümlerde PHP-FPM durum sayfası (pm.status_path) XSS zafiyeti barındırır (CVE-2026-6735). Üretimde pm.status_path direktifini kapatın veya yalnızca dahili IP'lere kısıtlayın."),
+    ("PHP-FIX-015", "PHP Güvenliği (2026 Advisories)", "KRİTİK", "CWE-89",
+     "CVE-2026-17543 (GHSA-7qpv-r5mr-78m4): PostgreSQL E'...' Backslash Breakout SQL Injection (30 Temmuz 2026)",
+     re.compile(r"(?i)\bpg_(?:query|send_query|execute)\s*\([^;]*E'[\s\S]*?\$|\bpg_escape_(?:string|literal|identifier)\s*\("),
+     "PHP 8.4.24 / 8.3.33 / 8.2.33 öncesi sürümlerde PostgreSQL E'...' kaçış dizilerinde ters eğik çizgi (backslash) ile SQL enjeksiyonu mümkündür (CVE-2026-17543). Dize birleştirme ve pg_escape_* yerine parametreli pg_query_params() veya PDO prepared statement kullanın."),
+    ("PHP-FIX-016", "PHP Güvenliği (2026 Advisories)", "YÜKSEK", "CWE-787",
+     "CVE-2026-17544 (GHSA-x692-q9x7-8c3f): BCMath bccomp() / bcround() Sınır Dışı Yazma & Taşma (30 Temmuz & 24 Eylül 2026)",
+     re.compile(r"(?i)\b(?:bccomp|bcround|BcMath\\Number::round)\s*\([^)]*\$_(?:GET|POST|REQUEST|COOKIE)"),
+     "PHP 8.5.11 / 8.4.26 öncesi sürümlerde bccomp(), bcround() ve bc_is_zero_for_scale() fonksiyonlarında kullanıcı kontrollü scale/girdi ile Out-of-Bounds Write/Read (CVE-2026-17544) oluşur. PHP'yi güncelleyin ve scale parametresini tam sayı aralığında (0..64) doğrulayın."),
+    ("PHP-FIX-017", "PHP Güvenliği (2026 Advisories)", "KRİTİK", "CWE-787",
+     "CVE-2026-14355 (GH-22187): openssl_encrypt() AES-WRAP-PAD Bellek Bozulması (02 Temmuz 2026)",
+     re.compile(r"(?i)\bopenssl_encrypt\s*\([^;]*aes[0-9-]*-wrap-pad"),
+     "PHP 8.5.8 / 8.4.23 / 8.3.32 / 8.2.32 öncesi sürümlerde openssl_encrypt() içinde AES-WRAP-PAD şifreleme modu zend_mm_heap bellek bozulmasına (CVE-2026-14355) yol açar. AES-256-GCM kullanın ve PHP'yi güncelleyin."),
+    ("PHP-FIX-018", "PHP Güvenliği (2026 Advisories)", "YÜKSEK", "CWE-502",
+     "CVE-2026-6103 & CVE-2026-7260: Phar/PharData TAR Arşiv Enjeksiyonu & phar.readonly=Off (24 Eylül & 30 Temmuz 2026)",
+     re.compile(r"(?i)^\s*;?\s*phar\.readonly\s*=\s*[\"']?(?:off|0|false|no)[\"']?\b|\bnew\s+Phar(?:Data)?\s*\(\s*\$"),
+     "PHP 8.4.26 / 8.3.35 / 8.2.34 öncesi sürümlerde Phar TAR ayrıştırıcısında tamsayı taşmasıyla arşiv girdisi enjeksiyonu (CVE-2026-6103) ve özyinelemeli sembolik bağ çökmesi (CVE-2026-7260) mevcuttur. php.ini içinde phar.readonly = On yapın ve güvenilmeyen arşivleri PharData ile açmayın."),
+    ("PHP-FIX-019", "PHP Güvenliği (2026 Advisories)", "KRİTİK", "CWE-416",
+     "CVE-2026-7261 & CVE-2026-6722: SoapServer SOAP_PERSISTENCE_SESSION Use-After-Free & Sonsuz Özyineleme (Mayıs & Eylül 2026)",
+     re.compile(r"(?i)\bSOAP_PERSISTENCE_SESSION\b|->setPersistence\s*\("),
+     "PHP 8.4.26 / 8.3.35 / 8.2.34 öncesi sürümlerde SoapServer SOAP_PERSISTENCE_SESSION kullanımı Use-After-Free (CVE-2026-7261), Stale Pointer (CVE-2026-6722) ve sınırsız özyineleme (GHSA-rgrp-mwpx-f6rm) zafiyetlerine yol açar."),
+    ("PHP-FIX-020", "PHP Güvenliği (2026 Advisories)", "ORTA", "CWE-116",
+     "GHSA-ch8v-r6jh-4vvr & CVE-2026-91769: FILTER_SANITIZE_ENCODED 0xFF Atlatma & OpenSSL Wildcard/CN Doğrulama Hatası (24 Eylül 2026)",
+     re.compile(r"(?i)\bFILTER_SANITIZE_ENCODED\b|verify_peer_name['\"]?\s*=>\s*false"),
+     "PHP 8.3.35 / 8.2.34 öncesi sürümlerde FILTER_SANITIZE_ENCODED 0xFF baytını kodlamaz (GHSA-ch8v-r6jh-4vvr) ve OpenSSL SAN uyuşmazlığında CN'ye geri düşer (CVE-2026-91769 / CVE-2026-91767). rawurlencode() kullanın ve PHP'yi 8.5.12/8.4.27/8.3.36/8.2.35 sürümüne yükseltin."),
     ("PHP-FIX-012", "PHP Güvenliği (php2shell)", "ORTA", "CWE-1104",
      "CVE-2026-109618/109619: Remi Repo Gecikme Riski veya İstek Başına Hatalı INI (Diagnostics Producer)",
      re.compile(r"(?i)rpms\.remirepo\.net|ini_set\s*\(\s*[\"'](?:error_reporting|display_errors)[\"']"),
@@ -648,7 +680,7 @@ def run_deep_analysis(fpath, rel_path):
             continue
         is_comment = stripped.startswith(("//", "#", "*", "/*"))
         for rule_id, category, severity, cwe, title, rx, desc in EXTRA_RULES:
-            if is_comment and rule_id not in ("PHP-FIX-001", "PHP-FIX-009"):
+            if is_comment and rule_id not in ("PHP-FIX-001", "PHP-FIX-009", "PHP-FIX-018"):
                 continue
             m = rx.search(line)
             if m:
