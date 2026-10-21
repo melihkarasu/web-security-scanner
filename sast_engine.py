@@ -32,9 +32,12 @@ SAST_SKIP_FILES = {
 SAST_CODE_EXTS = {
     ".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs",
     ".py", ".php", ".java", ".go", ".rb", ".rs", ".cs", ".sh",
-    ".env", ".yml", ".yaml", ".tf", ".json"
+    ".env", ".yml", ".yaml", ".tf", ".json", ".ini", ".conf", ".htaccess"
 }
-SAST_DOCKERFILE_NAMES = {"dockerfile", "dockerfile.dev", "dockerfile.prod", "dockerfile.local"}
+SAST_DOCKERFILE_NAMES = {
+    "dockerfile", "dockerfile.dev", "dockerfile.prod", "dockerfile.local",
+    "php.ini", ".user.ini", ".htaccess"
+}
 
 SAST_MAX_FILE_SIZE = 1024 * 1024   # 1 MB
 SAST_MAX_FILES = 800               # tarama başına üst sınır

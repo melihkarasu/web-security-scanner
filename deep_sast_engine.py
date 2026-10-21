@@ -531,6 +531,40 @@ EXTRA_RULES = [
     ("LANG-PHP-002", "PHP Güvenliği", "KRİTİK", "CWE-502", "PHP Güvensiz unserialize()",
      re.compile(r"\bunserialize\s*\(\s*\$"),
      "PHP unserialize() kullanıcı girdisiyle çağrıldığında PHP Object Injection / RCE yol açar; json_decode kullanın."),
+
+    # --- ersinkoc/php-fix: php2shell (CVE-2026-109618 / CVE-2026-109619, CVSS v4.0 9.2) ---
+    ("PHP-FIX-001", "PHP Güvenliği (php2shell)", "KRİTİK", "CWE-416",
+     "php2shell (CVE-2026-109618): session.upload_progress.enabled Açık (Heap UAF RCE)",
+     re.compile(r"(?i)^\s*;?\s*session\.upload_progress\.enabled\s*=\s*[\"']?(?:on|1|true|yes)[\"']?\b"),
+     "CVE-2026-109618 (CVSS 9.2): php_session_rfc1867_callback (ext/session/session.c) içindeki Heap Use-After-Free zafiyeti nedeniyle session.upload_progress.enabled = Off yapılmalı, PHP güncellenmeli ve ersinkoc/php-fix uygulanmalıdır."),
+    ("PHP-FIX-002", "PHP Güvenliği (php2shell)", "KRİTİK", "CWE-416",
+     "php2shell (CVE-2026-109618): PHP-FPM Havuzunda session.upload_progress Kilitsiz veya Açık",
+     re.compile(r"(?i)php_(?:admin_)?(?:value|flag)\[\s*session\.upload_progress\.enabled\s*\]\s*=\s*[\"']?(?:on|1|true|yes)[\"']?|php_(?:value|flag)\[\s*session\.upload_progress\.enabled\s*\]"),
+     "PHP-FPM havuzunda .user.ini ile ezilmemesi için php_admin_flag[session.upload_progress.enabled] = off zorunludur (php_value/php_flag yeterli değildir)."),
+    ("PHP-FIX-003", "PHP Güvenliği (php2shell)", "KRİTİK", "CWE-416",
+     "php2shell (CVE-2026-109618): Apache/.htaccess üzerinde session.upload_progress Açık",
+     re.compile(r"(?i)php_(?:admin_)?(?:flag|value)\s+session\.upload_progress\.enabled\s+[\"']?(?:on|1|true|yes)[\"']?"),
+     "Apache mod_php veya .htaccess içinde session.upload_progress.enabled açık bırakılmış; sunucu genelinde php_admin_flag session.upload_progress.enabled off tanımlayın."),
+    ("PHP-FIX-004", "PHP Güvenliği (php2shell)", "YÜKSEK", "CWE-416",
+     "php2shell (CVE-2026-109618): Etkisiz ini_set('session.upload_progress.enabled') Kullanımı",
+     re.compile(r"(?i)ini_set\s*\(\s*[\"']session\.upload_progress\.enabled[\"']"),
+     "session.upload_progress.enabled direktifi PHP_INI_PERDIR seviyesindedir ve multipart gövdesi PHP kodu çalışmadan ÖNCE ayrıştırılır; ini_set() CVE-2026-109618'i engellemez! php.ini ve FPM havuzunda kapatın."),
+    ("PHP-FIX-005", "PHP Güvenliği (php2shell)", "YÜKSEK", "CWE-416",
+     "php2shell (CVE-2026-109618): PHP_SESSION_UPLOAD_PROGRESS / upload_progress Oturum Kullanımı",
+     re.compile(r"PHP_SESSION_UPLOAD_PROGRESS|\$_SESSION\s*\[\s*[\"']upload_progress_"),
+     "Uygulama RFC1867 session upload progress mekanizmasını kullanıyor (CVE-2026-109618 hedef yüzeyi). PHP yamalanana kadar session.upload_progress.enabled = Off yapın ve ModSecurity/WAF üzerinde PHP_SESSION_UPLOAD_PROGRESS alanını engelleyin."),
+    ("PHP-FIX-006", "PHP Güvenliği (php2shell)", "YÜKSEK", "CWE-416",
+     "php2shell (CVE-2026-109619): PHP 8.4 request_parse_body() Multipart PUT/PATCH Yüzeyi",
+     re.compile(r"\brequest_parse_body\s*\("),
+     "CVE-2026-109619: PHP 8.4 request_parse_body() fonksiyonu PUT ve PATCH isteklerinde de multipart/form-data ayrıştırır. Yalnızca POST değil tüm HTTP metotlarında WAF/Edge multipart kısıtlaması uygulayın."),
+    ("PHP-FIX-007", "PHP Güvenliği (php2shell)", "YÜKSEK", "CWE-1104",
+     "php2shell (CVE-2026-109618/109619): EOL PHP Sürümü (< 8.2) veya Korunmasız PHP Container İmajı",
+     re.compile(r"(?i)^FROM\s+php:(?:[57]\.|8\.[01]\b)|\"php\"\s*:\s*\"[\^~>=<]*\s*(?:5\.|7\.|8\.[01]\b)"),
+     "PHP < 8.2 (EOL) sürümleri resmi php2shell yaması almayabilir; PHP < 5.4'te ise upload_progress ayarı dahi yoktur. Desteklenen yamalı PHP sürümüne yükseltin ve imaja zz-php2shell.ini (session.upload_progress.enabled=Off) ekleyin."),
+    ("PHP-FIX-008", "PHP Güvenliği (php2shell)", "KRİTİK", "CWE-94",
+     "php2shell (CVE-2026-109618/109619): Webshell / Uzaktan Komut Yürütme IOC Kalıbı",
+     re.compile(r"(?i)(?:eval|assert)\s*\(\s*(?:base64_decode|gzinflate|str_rot13|gzuncompress)\s*\(|(?:system|passthru|shell_exec|popen|proc_open)\s*\(\s*\$_(?:POST|GET|REQUEST|COOKIE)"),
+     "ersinkoc/php-fix --audit IOC tespiti: PHP dosyasında gizlenmiş webshell veya doğrudan süper-global komut yürütme kalıbı bulundu. Dosyayı izole edin, sunucu süreçlerini ve son 48 saatlik multipart 500/502/SIGSEGV loglarını denetleyin."),
     ("LANG-JAVA-001", "Java Güvenliği", "KRİTİK", "CWE-502", "Java ObjectInputStream.readObject Deserialization",
      re.compile(r"\bObjectInputStream\b[^;]*\.readObject\s*\("),
      "Java ObjectInputStream.readObject güvensiz serileştirme çözümü RCE riski taşır."),
@@ -594,9 +628,12 @@ def run_deep_analysis(fpath, rel_path):
 
     for lineno, line in enumerate(lines, 1):
         stripped = line.strip()
-        if not stripped or stripped.startswith(("//", "#", "*", "/*")):
+        if not stripped:
             continue
+        is_comment = stripped.startswith(("//", "#", "*", "/*"))
         for rule_id, category, severity, cwe, title, rx, desc in EXTRA_RULES:
+            if is_comment and rule_id != "PHP-FIX-001":
+                continue
             m = rx.search(line)
             if m:
                 # ENT blocklist kontrolü CMD için değil; genel
