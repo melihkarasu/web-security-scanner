@@ -112,11 +112,14 @@ class VertexAIConnector(AIConnector):
     Hem API Key hem de Service Account (JSON içerik veya dosya) destekler.
     """
     def __init__(self, project_id: str, region: str = "global", 
-                 model_name: str = "gemini-3.1-pro", 
+                 model_name: str = "gemini-3.8-flash", 
                  auth_config: dict = None):
         self.project_id = (project_id or "").strip()
         self.region = (region or "global").strip().lower()
-        self.model_name = (model_name or "gemini-3.1-pro").strip()
+        raw_model = (model_name or "gemini-3.8-flash").strip()
+        if raw_model == "gemini-3.1-pro":
+            raw_model = "gemini-3.1-pro-preview"
+        self.model_name = raw_model
         self.auth_config = auth_config or {}
         self._token = None
         self._token_expiry = 0
@@ -243,7 +246,10 @@ class GeminiAPIConnector(AIConnector):
     """
     def __init__(self, api_key: str, model_name: str = "gemini-3.1-pro"):
         self.api_key = (api_key or "").strip()
-        self.model_name = (model_name or "gemini-3.1-pro").strip()
+        m_clean = (model_name or "gemini-3.8-flash").strip()
+        if m_clean == "gemini-3.1-pro":
+            m_clean = "gemini-3.1-pro-preview"
+        self.model_name = m_clean
 
     def chat(self, prompt: str, system_prompt: str = "") -> str:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"

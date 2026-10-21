@@ -456,7 +456,7 @@ EXTRA_RULES = [
 
     # --- Protokol / Ağ ---
     ("NET-001", "Ağ Güvenliği", "ORTA", "CWE-319", "Düz HTTP Kullanımı (Kritik URL'ler)",
-     re.compile(r"http://(?!localhost|127\.0\.0\.1|0\.0\.0\.0)[a-z0-9.-]+"),
+     re.compile(r"http://(?!localhost|127\.0\.0\.1|0\.0\.0\.0|www\.w3\.org|vibe-|supabase)[a-z0-9.-]+"),
      "Düz HTTP bağlantısı — veri transitte şifresiz."),
     ("NET-002", "Ağ Güvenliği", "ORTA", "CWE-1188", "Sunucu 0.0.0.0 Dinlemesi (debug)",
      re.compile(r"(?:host|bind|listen)[^\n]*0\.0\.0\.0"),

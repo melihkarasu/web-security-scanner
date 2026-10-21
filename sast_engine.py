@@ -676,38 +676,44 @@ def _osv_query(name, ecosystem, version):
         return json.loads(resp.read().decode("utf-8"))
 
 def _parse_npm_deps(root_path):
-    """package.json (+ varsa package-lock.json) bağımlılıklarını çıkarır."""
+    """package.json (+ varsa package-lock.json) bağımlılıklarını çıkarır (alt dizinler dahil)."""
     deps = []
-    lock_path = os.path.join(root_path, "package-lock.json")
-    if os.path.isfile(lock_path):
-        try:
-            with open(lock_path, "r", encoding="utf-8") as f:
-                lock = json.load(f)
-            pkgs = lock.get("packages") or {}
-            for key, meta in pkgs.items():
-                if not key.startswith("node_modules/"):
-                    continue
-                name = key[len("node_modules/"):]
-                if not name or "/" in name.replace("@", "", 1) and not name.startswith("@"):
-                    pass
-                ver = meta.get("version")
-                if name and ver:
-                    deps.append((name, ver))
-            if deps:
-                return deps[:SAST_DEPS_MAX_PACKAGES], True
-        except (OSError, ValueError):
-            pass
-    pkg_path = os.path.join(root_path, "package.json")
-    if os.path.isfile(pkg_path):
-        try:
-            with open(pkg_path, "r", encoding="utf-8") as f:
-                pkg = json.load(f)
-            for section in ("dependencies", "devDependencies"):
-                for name, spec in (pkg.get(section) or {}).items():
-                    ver = spec.lstrip("^~><= ") if isinstance(spec, str) else ""
-                    deps.append((name, ver))
-        except (OSError, ValueError):
-            pass
+    candidate_dirs = [root_path]
+    for sub in ("web", "frontend", "backend", "server", "app"):
+        sp = os.path.join(root_path, sub)
+        if os.path.isdir(sp):
+            candidate_dirs.append(sp)
+    for cdir in candidate_dirs:
+        lock_path = os.path.join(cdir, "package-lock.json")
+        if os.path.isfile(lock_path):
+            try:
+                with open(lock_path, "r", encoding="utf-8") as f:
+                    lock = json.load(f)
+                pkgs = lock.get("packages") or {}
+                for key, meta in pkgs.items():
+                    if not key.startswith("node_modules/"):
+                        continue
+                    name = key[len("node_modules/"):]
+                    ver = meta.get("version")
+                    if name and ver:
+                        deps.append((name, ver))
+                if deps:
+                    return deps[:SAST_DEPS_MAX_PACKAGES], True
+            except (OSError, ValueError):
+                pass
+        pkg_path = os.path.join(cdir, "package.json")
+        if os.path.isfile(pkg_path):
+            try:
+                with open(pkg_path, "r", encoding="utf-8") as f:
+                    pkg = json.load(f)
+                for section in ("dependencies", "devDependencies"):
+                    for name, spec in (pkg.get(section) or {}).items():
+                        ver = spec.lstrip("^~><= ") if isinstance(spec, str) else ""
+                        deps.append((name, ver))
+                if deps:
+                    return deps[:SAST_DEPS_MAX_PACKAGES], False
+            except (OSError, ValueError):
+                pass
     return deps[:SAST_DEPS_MAX_PACKAGES], False
 
 def _parse_pip_deps(root_path):
