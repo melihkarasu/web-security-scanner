@@ -1179,7 +1179,7 @@ def remediate_php_fix_directory(root_path, apply_fixes=True):
                     continue
                 new_content = content
                 changes = []
-                if re.search(r"(?im)^\s*;?\s*session\.upload_progress\.enabled\s*=\s*["']?(?:on|1|true|yes)["']?", new_content):
+                if re.search(r"(?im)^\s*;?\s*session\.upload_progress\.enabled\s*=\s*[\"']?(?:on|1|true|yes)[\"']?", new_content):
                     new_content = re.sub(
                         r"(?im)^\s*;?\s*session\.upload_progress\.enabled\s*=.*$",
                         "session.upload_progress.enabled = Off",
@@ -1190,7 +1190,7 @@ def remediate_php_fix_directory(root_path, apply_fixes=True):
                     new_content = new_content.rstrip() + "\n[Session]\nsession.upload_progress.enabled = Off\n"
                     changes.append("session.upload_progress.enabled = Off eklendi (CVE-2026-109619)")
 
-                if re.search(r"(?im)^\s*;?\s*fatal_error_backtraces\s*=\s*["']?(?:on|1|true|yes)["']?", new_content):
+                if re.search(r"(?im)^\s*;?\s*fatal_error_backtraces\s*=\s*[\"']?(?:on|1|true|yes)[\"']?", new_content):
                     new_content = re.sub(
                         r"(?im)^\s*;?\s*fatal_error_backtraces\s*=.*$",
                         "fatal_error_backtraces = Off",
@@ -1239,7 +1239,7 @@ def remediate_php_fix_directory(root_path, apply_fixes=True):
                     new_content = content
                     changes = []
                     for branch, fixed_ver in PHP_PATCHED_VERSIONS.items():
-                        pat = rf"(?im)^(FROM\s+php:){re.escape(branch)}(?:\.[0-9]+)?(-[^\s]+)?$"
+                        pat = rf"(?im)^(FROM\s+php:){re.escape(branch)}(?:\.[0-9]+)?(-\S+)?$"
                         if re.search(pat, new_content):
                             new_content = re.sub(pat, rf"\g<1>{fixed_ver}\2", new_content)
                             changes.append(f"PHP imajı yamalı {fixed_ver} sürümüne yükseltildi (CVE-2026-109618/109619)")
