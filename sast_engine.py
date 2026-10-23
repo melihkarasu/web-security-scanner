@@ -1145,7 +1145,7 @@ def run_ai_sast_audit(root_path, ai_config, profile="standard", scope_mode="full
 
 
 # =============================================================
-# ersinkoc/php-fix v1.6.0 & PHP 21 Oct 2026 Advisory Otomatik Çözüm Motoru
+# Resmi PHP 2026 Güvenlik Bülteni (https://www.php.net/archive/2026.php) Çözüm & Yapılandırma Motoru
 # =============================================================
 PHP_PATCHED_VERSIONS = {
     "8.5": "8.5.12",
@@ -1154,11 +1154,14 @@ PHP_PATCHED_VERSIONS = {
     "8.2": "8.2.35",
 }
 
-def remediate_php_fix_directory(root_path, apply_fixes=True):
+PHP_OFFICIAL_ADVISORY_URL = "https://www.php.net/archive/2026.php"
+
+def remediate_php_advisory_directory(root_path, apply_fixes=True):
     """
-    Hedef proje dizinindeki php.ini, .user.ini, conf.d/*.ini, PHP-FPM havuz (*.conf),
-    Apache .htaccess ve Dockerfile dosyalarını tarar; CVE-2026-109618 (OOM RCE) ve
-    CVE-2026-109619 (Stale Global State RCE) için otomatik düzeltmeleri (.bak yedekli) uygular.
+    https://www.php.net/archive/2026.php resmi güvenlik bültenine dayanarak hedef proje dizinindeki
+    Dockerfile (resmi yamalı PHP 8.5.12 / 8.4.27 / 8.3.36 / 8.2.35 sürümüne yükseltme — birincil çözüm)
+    ve php.ini / .user.ini / PHP-FPM havuz (*.conf) dosyalarını (geçici bülten önlemleri) denetler,
+    isteğe bağlı olarak .bak yedekli düzeltmeleri uygular.
     """
     import shutil
     actions = []
@@ -1171,8 +1174,30 @@ def remediate_php_fix_directory(root_path, apply_fixes=True):
             fpath = os.path.join(dirpath, fn)
             rel_path = os.path.relpath(fpath, root_path)
 
-            # 1) php.ini / .user.ini / *.ini
-            if low in ("php.ini", ".user.ini") or low.endswith(".ini"):
+            # 1) Birincil Çözüm: Dockerfile içinde resmi PHP imaj sürümü yükseltme (8.5.12 / 8.4.27 / 8.3.36 / 8.2.35)
+            if low in SAST_DOCKERFILE_NAMES or low.startswith("dockerfile."):
+                try:
+                    content = open(fpath, "r", encoding="utf-8", errors="replace").read()
+                except OSError:
+                    continue
+                if re.search(r"(?im)^FROM\s+php:", content):
+                    new_content = content
+                    changes = []
+                    for branch, fixed_ver in PHP_PATCHED_VERSIONS.items():
+                        pat = rf"(?im)^(FROM\s+php:){re.escape(branch)}(?:\.[0-9]+)?(-\S+)?$"
+                        if re.search(pat, new_content):
+                            new_content = re.sub(pat, rf"\g<1>{fixed_ver}\2", new_content)
+                            changes.append(
+                                f"Birincil Çözüm ({PHP_OFFICIAL_ADVISORY_URL}): PHP imajı resmi yamalı {fixed_ver} sürümüne yükseltildi (CVE-2026-109618 / CVE-2026-109619)"
+                            )
+                    if changes and new_content != content:
+                        if apply_fixes:
+                            shutil.copy2(fpath, f"{fpath}.bak-{ts}")
+                            open(fpath, "w", encoding="utf-8").write(new_content)
+                        actions.append({"file": rel_path, "applied": apply_fixes, "changes": changes})
+
+            # 2) php.ini / .user.ini / *.ini (Resmi bülten yapılandırma önlemleri)
+            elif low in ("php.ini", ".user.ini") or low.endswith(".ini"):
                 try:
                     content = open(fpath, "r", encoding="utf-8", errors="replace").read()
                 except OSError:
@@ -1185,10 +1210,7 @@ def remediate_php_fix_directory(root_path, apply_fixes=True):
                         "session.upload_progress.enabled = Off",
                         new_content
                     )
-                    changes.append("session.upload_progress.enabled = Off yapıldı (CVE-2026-109619)")
-                elif "session.upload_progress.enabled" not in new_content and low in ("php.ini", ".user.ini"):
-                    new_content = new_content.rstrip() + "\n[Session]\nsession.upload_progress.enabled = Off\n"
-                    changes.append("session.upload_progress.enabled = Off eklendi (CVE-2026-109619)")
+                    changes.append("Resmi Bülten Önlemi (CVE-2026-109619): session.upload_progress.enabled = Off yapıldı")
 
                 if re.search(r"(?im)^\s*;?\s*fatal_error_backtraces\s*=\s*[\"']?(?:on|1|true|yes)[\"']?", new_content):
                     new_content = re.sub(
@@ -1196,7 +1218,7 @@ def remediate_php_fix_directory(root_path, apply_fixes=True):
                         "fatal_error_backtraces = Off",
                         new_content
                     )
-                    changes.append("fatal_error_backtraces = Off yapıldı (PHP 8.5 CVE-2026-109619 producer)")
+                    changes.append("Resmi Bülten Önlemi (PHP 8.5 CVE-2026-109619 producer): fatal_error_backtraces = Off yapıldı")
 
                 if re.search(r"(?im)^\s*;?\s*phar\.readonly\s*=\s*[\"']?(?:off|0|false|no)[\"']?", new_content):
                     new_content = re.sub(
@@ -1204,7 +1226,7 @@ def remediate_php_fix_directory(root_path, apply_fixes=True):
                         "phar.readonly = On",
                         new_content
                     )
-                    changes.append("phar.readonly = On yapıldı (CVE-2026-6103 / CVE-2026-7260 Phar koruması)")
+                    changes.append("Resmi Bülten Önlemi (CVE-2026-6103 / CVE-2026-7260): phar.readonly = On yapıldı")
 
                 if re.search(r"(?im)^\s*post_max_size\s*=\s*(?:[4-9][0-9]|[1-9][0-9]{2,})\s*[MG]\b", new_content):
                     new_content = re.sub(
@@ -1212,7 +1234,7 @@ def remediate_php_fix_directory(root_path, apply_fixes=True):
                         "post_max_size = 32M",
                         new_content
                     )
-                    changes.append("post_max_size = 32M olarak sınırlandırıldı (CVE-2026-109618 OOM koruması)")
+                    changes.append("Resmi Bülten Önlemi (CVE-2026-109618 OOM RCE): post_max_size = 32M olarak sınırlandırıldı")
 
                 if changes and new_content != content:
                     if apply_fixes:
@@ -1220,7 +1242,7 @@ def remediate_php_fix_directory(root_path, apply_fixes=True):
                         open(fpath, "w", encoding="utf-8").write(new_content)
                     actions.append({"file": rel_path, "applied": apply_fixes, "changes": changes})
 
-            # 2) PHP-FPM pool *.conf
+            # 3) PHP-FPM pool *.conf
             elif low.endswith(".conf"):
                 try:
                     content = open(fpath, "r", encoding="utf-8", errors="replace").read()
@@ -1235,38 +1257,7 @@ def remediate_php_fix_directory(root_path, apply_fixes=True):
                             "php_admin_flag[session.upload_progress.enabled] = off",
                             new_content
                         )
-                        changes.append("FPM havuzunda php_admin_flag[session.upload_progress.enabled] = off kilitlendi")
-                    elif "session.upload_progress.enabled" not in new_content:
-                        new_content = new_content.rstrip() + "\nphp_admin_flag[session.upload_progress.enabled] = off\n"
-                        changes.append("FPM havuzuna php_admin_flag[session.upload_progress.enabled] = off eklendi")
-                    if changes and new_content != content:
-                        if apply_fixes:
-                            shutil.copy2(fpath, f"{fpath}.bak-{ts}")
-                            open(fpath, "w", encoding="utf-8").write(new_content)
-                        actions.append({"file": rel_path, "applied": apply_fixes, "changes": changes})
-
-            # 3) Dockerfile (PHP imaj sürümü yükseltme + zz-php2shell.ini)
-            elif low in SAST_DOCKERFILE_NAMES or low.startswith("dockerfile."):
-                try:
-                    content = open(fpath, "r", encoding="utf-8", errors="replace").read()
-                except OSError:
-                    continue
-                if re.search(r"(?im)^FROM\s+php:", content):
-                    new_content = content
-                    changes = []
-                    for branch, fixed_ver in PHP_PATCHED_VERSIONS.items():
-                        pat = rf"(?im)^(FROM\s+php:){re.escape(branch)}(?:\.[0-9]+)?(-\S+)?$"
-                        if re.search(pat, new_content):
-                            new_content = re.sub(pat, rf"\g<1>{fixed_ver}\2", new_content)
-                            changes.append(f"PHP imajı yamalı {fixed_ver} sürümüne yükseltildi (CVE-2026-109618/109619)")
-                    if "zz-php2shell.ini" not in new_content:
-                        dropin = (
-                            "\n# php2shell (CVE-2026-109618 / CVE-2026-109619) mitigation\n"
-                            "RUN printf 'session.upload_progress.enabled=Off\\nfatal_error_backtraces=Off\\npost_max_size=8M\\n' "
-                            "> /usr/local/etc/php/conf.d/zz-php2shell.ini\n"
-                        )
-                        new_content = new_content.rstrip() + dropin
-                        changes.append("Dockerfile içine /usr/local/etc/php/conf.d/zz-php2shell.ini katmanı eklendi")
+                        changes.append("Resmi Bülten Önlemi (CVE-2026-109619): FPM havuzunda php_admin_flag[session.upload_progress.enabled] = off kilitlendi")
                     if changes and new_content != content:
                         if apply_fixes:
                             shutil.copy2(fpath, f"{fpath}.bak-{ts}")
@@ -1277,8 +1268,13 @@ def remediate_php_fix_directory(root_path, apply_fixes=True):
         "success": True,
         "root": root_path,
         "applied": apply_fixes,
+        "advisory_url": PHP_OFFICIAL_ADVISORY_URL,
         "patched_versions": PHP_PATCHED_VERSIONS,
         "modified_files_count": len(actions),
         "actions": actions,
-        "host_command": "curl -fsSL https://raw.githubusercontent.com/ersinkoc/php-fix/main/install.sh | sudo bash",
+        "primary_solution": {
+            "summary": "Resmi PHP paket kaynaklarından yamalı sürüme (8.5.12, 8.4.27, 8.3.36, 8.2.35) yükseltin ve tüm PHP işçilerini (FPM/Apache) tam yeniden başlatın.",
+            "debian_ubuntu": r"sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" $(dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package}\n' | awk '/^ii  php[0-9]+\.[0-9]+-/{print $2}') && (sudo systemctl restart php*-fpm 2>/dev/null || sudo systemctl restart apache2 2>/dev/null)",
+            "rhel_almalinux": "sudo dnf clean all && sudo dnf upgrade 'php*' -y && (sudo systemctl restart php-fpm 2>/dev/null || sudo systemctl restart httpd 2>/dev/null)",
+        },
     }

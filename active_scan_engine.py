@@ -430,6 +430,34 @@ def test_deep_headers(base_url):
         })
         return findings
 
+    # Resmi PHP 21 Ekim 2026 Bülteni (https://www.php.net/archive/2026.php) — Yamasız PHP Sürümü Tespiti (CVE-2026-109618 / CVE-2026-109619)
+    xpb = _get_header(resp_headers, "x-powered-by") or ""
+    srv_hdr = _get_header(resp_headers, "server") or ""
+    php_ver_match = re.search(r"\bPHP/([0-9]+\.[0-9]+\.[0-9]+)", xpb + " " + srv_hdr, re.IGNORECASE)
+    if php_ver_match:
+        pver = php_ver_match.group(1)
+        parts = [int(x) for x in pver.split(".")]
+        maj, min_v, pat_v = parts[0], parts[1], parts[2]
+        is_vuln_php = False
+        if maj < 8 or (maj == 8 and min_v <= 1):
+            is_vuln_php = True
+        elif maj == 8 and min_v == 2 and pat_v < 35:
+            is_vuln_php = True
+        elif maj == 8 and min_v == 3 and pat_v < 36:
+            is_vuln_php = True
+        elif maj == 8 and min_v == 4 and pat_v < 27:
+            is_vuln_php = True
+        elif maj == 8 and min_v == 5 and pat_v < 12:
+            is_vuln_php = True
+        if is_vuln_php:
+            findings.append({
+                "test": "Derin Başlık", "severity": "KRİTİK",
+                "title": f"Yamasız PHP Sürümü ({pver}) — CVE-2026-109618 & CVE-2026-109619 (php2shell RCE)",
+                "evidence": f"HTTP Başlığı: PHP/{pver} (Yamalı sürümler: 8.5.12, 8.4.27, 8.3.36, 8.2.35)",
+                "cwe": "CWE-416",
+                "fix": "Birincil Çözüm (https://www.php.net/archive/2026.php): PHP'yi resmi paket kaynaklarından yamalı sürüme (8.5.12, 8.4.27, 8.3.36, 8.2.35) yükseltin ve tüm PHP işçilerini (systemctl restart php*-fpm / apache2 / httpd) tam yeniden başlatın. Güncelleme yapılana kadar geçici önlem olarak php.ini/FPM içinde session.upload_progress.enabled = Off, PHP 8.5'te fatal_error_backtraces = Off ve post_max_size sınırlandırması uygulayın."
+            })
+
     # CSP direktif analizi
     csp = _get_header(resp_headers, "content-security-policy")
     if csp:

@@ -1657,6 +1657,18 @@ function exportMarkdownReport() {
     for (const f of sast.findings) {
       md += `| ${f.severity} | ${f.rule_id} | ${f.cvss} | ${f.cwe} | ${f.verified ? '✓' : '—'} | \`${f.file}:${f.line}\` | ${f.title} |\n`;
     }
+    const phpAdvHits = sast.findings.filter(f => String(f.rule_id || '').startsWith('PHP-ADV-'));
+    if (phpAdvHits.length > 0) {
+      md += `\n### 📌 Resmi PHP 2026 Güvenlik Bülteni Çözüm Önerileri (https://www.php.net/archive/2026.php)\n\n`;
+      md += `- **1. Birincil ve Kesin Çözüm (Resmi PHP Sürüm Güncellemesi & Tam İşçi Yeniden Başlatma):**\n`;
+      md += `  - PHP'yi resmi paket kaynaklarından yamalı sürümlere (**PHP 8.5.12**, **PHP 8.4.27**, **PHP 8.3.36**, **PHP 8.2.35**) yükseltin (EOL 7.4/8.0/8.1 için kaynak kod backport yaması veya desteklenen sürüme geçiş).\n`;
+      md += `  - **Debian / Ubuntu (Mevcut php.ini ve eklentileri koruyarak):** \`sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \$(dpkg-query -W -f='\${db:Status-Abbrev} \${binary:Package}\\n' | awk '/^ii  php[0-9]+\\.[0-9]+-/{print \$2}') && (sudo systemctl restart php*-fpm 2>/dev/null || sudo systemctl restart apache2 2>/dev/null)\`\n`;
+      md += `  - **RHEL / AlmaLinux / Rocky:** \`sudo dnf clean all && sudo dnf upgrade 'php*' -y && (sudo systemctl restart php-fpm 2>/dev/null || sudo systemctl restart httpd 2>/dev/null)\`\n`;
+      md += `  - **Kritik Adım:** Güncelleme sonrasında eski ikili dosyayı (binary) bellekte tutan işçilerin (stale workers) temizlenmesi için \`reload\` yerine mutlaka **tam \`restart\`** uygulanmalıdır.\n`;
+      md += `- **2. Güncelleme Yapılana Kadar Resmi Bülten Geçici Önlemleri (https://www.php.net/archive/2026.php):**\n`;
+      md += `  - **CVE-2026-109618 (OOM Corruption RCE):** Uygulamaların ezemeyeceği şekilde \`php_admin_value[memory_limit] = -1\` tanımlayın (yamalandıktan sonra FPM'de \`-1\` bırakmayın), \`post_max_size\` değerini düşürün (\`8M\`/\`32M\`), istek boyutunu ve \`max_input_vars\` / \`max_file_uploads\` / \`max_input_nesting_level\` sınırlarını daraltın. **Kesinlikle \`RLIMIT_AS\` / \`RLIMIT_DATA\` (\`ulimit -v\`) kullanmayın** (hatayı bizzat tetikler; container/\`cgroup\` sınırı kullanın).\n`;
+      md += `  - **CVE-2026-109619 (Stale Global State RCE):** Yamasız PHP 8.5'te üretici yolu kapatmak için \`fatal_error_backtraces = 0 (Off)\` yapın; tüketici yolu kapatmak için \`php.ini\` içinde \`session.upload_progress.enabled = 0 (Off)\` ve FPM havuzunda \`php_admin_flag[session.upload_progress.enabled] = off\` tanımlayın (\`ini_set()\` ve \`.user.ini\` etkisizdir); istek öncesi uyarı üreten geçersiz per-request INI ayarlarını kaldırın.\n`;
+    }
     if (sast.dependencies && sast.dependencies.analyzed) {
       const vulnDeps = sast.dependencies.vulnerable || [];
       md += `\n### 📦 Bağımlılık CVE Denetimi (OSV)\n\n`;

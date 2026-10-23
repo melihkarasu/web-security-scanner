@@ -86,8 +86,8 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_sast_ai()
             return
 
-        if parsed.path == "/api/php-fix-remediate":
-            self.handle_api_php_fix_remediate()
+        if parsed.path in ("/api/php-advisory-remediate", "/api/php-remediate"):
+            self.handle_api_php_advisory_remediate()
             return
 
         self.send_json({"success": False, "error": "Bilinmeyen POST ucu"}, status=404)
@@ -613,7 +613,7 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.send_json({"success": False, "error": f"SAST taraması başarısız: {str(e)}"}, status=500)
 
 
-    def handle_api_php_fix_remediate(self):
+    def handle_api_php_advisory_remediate(self):
         """Proje dizinindeki PHP yapılandırmalarına CVE-2026-109618 / CVE-2026-109619 otomatik düzeltmelerini uygular."""
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -635,8 +635,8 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             return
 
         try:
-            from sast_engine import remediate_php_fix_directory
-            res = remediate_php_fix_directory(resolved_path, apply_fixes=apply_fixes)
+            from sast_engine import remediate_php_advisory_directory
+            res = remediate_php_advisory_directory(resolved_path, apply_fixes=apply_fixes)
             self.send_json(res)
         except Exception as e:
             self.send_json({"success": False, "error": f"PHP otomatik düzeltme hatası: {str(e)}"}, status=500)
