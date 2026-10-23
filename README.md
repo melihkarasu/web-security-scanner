@@ -110,7 +110,7 @@ Scan any local directory path (`/var/www/app`, `~/project`, `./src`) either **st
 | Layer | Engine | Capabilities |
 |-------|--------|--------------|
 | **Pattern Rules (`sast_engine.py`)** | 42 regex rules across 9 code categories | Hardcoded secrets (11 rules: AWS, GitHub, GitLab, Slack, Google, OpenAI, JWT, DB URIs), SQLi (6), XSS sinks (5), SSRF (4), Path Traversal (2), Weak Crypto (2), Dangerous Functions (7), Dockerfile/IaC (5) |
-| **Structural AST & Taint (`deep_sast_engine.py`)** | Python `ast` + JS taint + Shannon entropy + extended rules | Python AST call-graph taint tracking (`eval`, `exec`, `pickle`, `subprocess`, SQL execution), multi-line JavaScript source-to-sink taint analysis, high-entropy secret string detection, and extended JWT/CORS/Kubernetes/GraphQL checks |
+| **Structural AST, Taint & 2026 Runtime Advisories (`deep_sast_engine.py`)** | Python `ast` + JS taint + Shannon entropy + 86 extended rules (128 total) | Python AST call-graph taint tracking (`eval`, `exec`, `pickle`, `subprocess`, SQL execution), multi-line JavaScript source-to-sink taint analysis, high-entropy secret string detection, **20 Official PHP 2026 Advisory rules (`PHP-ADV-001`…`020` — `php2shell` CVE-2026-109618 OOM RCE & CVE-2026-109619 Stale Global State RCE)**, **10 Official Node.js Oct 2026 Security Release rules (`NODE-ADV-001`…`010` — CVE-2026-111497 Brotli RCE, `dns.resolve` NUL byte, TLS fullwidth/IP bypass, SEA/Snapshot entropy)**, and JWT/CORS/Kubernetes/GraphQL checks |
 | **Independent Verification Pass** | Two-pass file re-verification | Re-reads matched file lines to filter out comments, test fixtures, and false positives |
 | **Live Dependency CVE Audit** | Google OSV API (`api.osv.dev`) | Parses `package.json` / `package-lock.json` (npm), `requirements.txt` (PyPI), and `go.mod` (Go) and queries Google OSV in batch for known CVEs |
 
@@ -215,7 +215,9 @@ web-security-scanner/
 - `GET  /api/status` — Server health & local mode detection
 - `GET  /api/headers?url=` — Live HTTP response header proxy (bypasses browser CORS)
 - `GET  /api/deep-scan?url=` — Deep passive scan (cookies, TLS, `robots.txt`, mixed content, tech fingerprint)
-- `GET  /api/sast?path=` — Local directory SAST + AST/taint + Google OSV dependency CVE scan
+- `GET  /api/sast?path=` — Local directory SAST (128 rules incl. PHP `php2shell` & Node.js Oct 2026 advisories) + AST/taint + Google OSV dependency CVE scan
+- `POST /api/php-advisory-remediate` — Official [php.net/archive/2026.php](https://www.php.net/archive/2026.php) `Dockerfile`/`php.ini`/FPM remediation (`8.5.12`, `8.4.27`, `8.3.36`, `8.2.35`)
+- `POST /api/node-advisory-remediate` — Official [Node.js Oct 2026 Security Releases](https://nodejs.org/tr/blog/vulnerability/october-2026-security-releases) `Dockerfile`/`.nvmrc`/`.node-version` remediation (`v26.12.1`, `v24.22.1`, `v22.23.4`)
 - `POST /api/active-confirm` — Per-domain ethical authorization gate
 - `GET  /api/active-scan?url=&modules=` — Rate-limited active vulnerability scan
 - `POST /api/ai-test` — LLM provider connectivity test
