@@ -90,6 +90,10 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_php_advisory_remediate()
             return
 
+        if parsed.path in ("/api/node-advisory-remediate", "/api/node-remediate"):
+            self.handle_api_node_advisory_remediate()
+            return
+
         self.send_json({"success": False, "error": "Bilinmeyen POST ucu"}, status=404)
 
     def do_GET(self):
@@ -640,6 +644,34 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.send_json(res)
         except Exception as e:
             self.send_json({"success": False, "error": f"PHP otomatik düzeltme hatası: {str(e)}"}, status=500)
+
+    def handle_api_node_advisory_remediate(self):
+        """Proje dizinindeki Node.js yapılandırmalarına 21 Ekim 2026 güvenlik bülteni düzeltmelerini uygular."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length > 0 else b"{}"
+            data = json.loads(body.decode("utf-8") or "{}")
+        except (ValueError, json.JSONDecodeError):
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+
+        raw_path = (data.get("path") or "").strip()
+        apply_fixes = data.get("apply") is not False
+        if not raw_path:
+            self.send_json({"success": False, "error": "path alanı gereklidir"}, status=400)
+            return
+
+        resolved_path, available = self._resolve_sast_path(raw_path)
+        if not resolved_path:
+            self.send_json({"success": False, "error": f"Dizin bulunamadı: {raw_path}", "available_dirs": available}, status=404)
+            return
+
+        try:
+            from sast_engine import remediate_node_advisory_directory
+            res = remediate_node_advisory_directory(resolved_path, apply_fixes=apply_fixes)
+            self.send_json(res)
+        except Exception as e:
+            self.send_json({"success": False, "error": f"Node.js otomatik düzeltme hatası: {str(e)}"}, status=500)
 
     def handle_api_sast_ai(self):
         """ersinkoc/security-check 4-Aşamalı AI Kaynak Kod Denetimi (Recon -> Hunt -> Verify -> Report)."""

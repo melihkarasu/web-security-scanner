@@ -1657,6 +1657,35 @@ function exportMarkdownReport() {
     for (const f of sast.findings) {
       md += `| ${f.severity} | ${f.rule_id} | ${f.cvss} | ${f.cwe} | ${f.verified ? '✓' : '—'} | \`${f.file}:${f.line}\` | ${f.title} |\n`;
     }
+    const nodeAdvHits = sast.findings.filter(f => String(f.rule_id || '').startsWith('NODE-ADV-'));
+    if (nodeAdvHits.length > 0) {
+      md += `
+### 📌 Resmi Node.js Ekim 2026 Güvenlik Bülteni Çözüm Önerileri (https://nodejs.org/tr/blog/vulnerability/october-2026-security-releases)
+
+`;
+      md += `- **1. Birincil ve Kesin Çözüm (Resmi Yamalı Node.js Sürümlerine Yükseltme):**
+`;
+      md += `  - **Node.js 26.x:** **v26.12.1** (Current) • **Node.js 24.x:** **v24.22.1** ('Krypton' LTS) • **Node.js 22.x:** **v22.23.4** (Maintenance LTS).
+`;
+      md += `  - **EOL Sürümler (<= 20.x, 21.x, 23.x, 25.x):** Destek süresi dolmuş sürümler tüm güvenlik bültenlerinden etkilenir; aktif LTS (**v24.22.1** veya **v22.23.4**) sürümüne yükseltin ve tüm Node.js süreçlerini (pm2 / systemd / Docker) yeniden başlatın.
+`;
+      md += `- **2. Giderilen 10 CVE ve Kod / Yapılandırma Önlemleri:**
+`;
+      md += `  - **CVE-2026-111497 (Yüksek — RCE):** Node.js Brotli çözücüsünde sınır dışı yazma (OOB write). Güncellenene kadar güvenilmeyen girdilerde Brotli (br) sıkıştırmasını kapatın.
+`;
+      md += `  - **CVE-2026-105482 (Yüksek):** dns.resolve() NUL karakter (\0) alan adı kesme zafiyeti. DNS sorgularından önce girdilerde NUL bayt (\x00 / %00) kontrolü uygulayın.
+`;
+      md += `  - **CVE-2026-105483, CVE-2026-106069 & CVE-2026-106072 (Yüksek/Orta):** Tam genişlikli (fullwidth) rakamlar ve kanonik olmayan IPv4 adresleriyle TLS sertifika hostname doğrulama atlatma. Dış bağlantı host/IP girdilerini kanonik ASCII/IPv4 biçimine normalize edin.
+`;
+      md += `  - **CVE-2026-105481 (Orta):** Keep-alive soketlerde istek gönderilmeden önce yazılan yanıtın işlenmesi (HTTP Response Smuggling).
+`;
+      md += `  - **CVE-2026-106074 (Orta):** Kullanıcı alanı startup snapshot ve SEA imajlarında crypto.randomUUID() / randomInt() entropi önbellek tekrarı. Yamalı Node.js ile snapshot/SEA dosyalarını yeniden oluşturun.
+`;
+      md += `  - **CVE-2026-106070, CVE-2026-106071 & CVE-2026-106073 (Düşük):** zlib geçersiz ZIP yerel başlık önbelleklemesi, Permission Model wildcard (*) radix araması aşırı yetkilendirmesi ve fs.realpathSync ile Permission Model atlatma.
+`;
+      md += `  - **Gömülü Bağımlılık Güncellemeleri:** c-ares 1.34.9, ca-cert / NSS 3.131.1 (eMudhra Intermediate CA Compromise), OpenSSL 3.5.9, SQLite ve Undici (8.12.2 / 7.30.1).
+`;
+    }
     const phpAdvHits = sast.findings.filter(f => String(f.rule_id || '').startsWith('PHP-ADV-'));
     if (phpAdvHits.length > 0) {
       md += `\n### 📌 Resmi PHP 2026 Güvenlik Bülteni Çözüm Önerileri (https://www.php.net/archive/2026.php)\n\n`;

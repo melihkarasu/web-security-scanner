@@ -36,7 +36,7 @@ SAST_CODE_EXTS = {
 }
 SAST_DOCKERFILE_NAMES = {
     "dockerfile", "dockerfile.dev", "dockerfile.prod", "dockerfile.local",
-    "php.ini", ".user.ini", ".htaccess"
+    "php.ini", ".user.ini", ".htaccess", ".nvmrc", ".node-version"
 }
 
 SAST_MAX_FILE_SIZE = 1024 * 1024   # 1 MB
@@ -1276,5 +1276,106 @@ def remediate_php_advisory_directory(root_path, apply_fixes=True):
             "summary": "Resmi PHP paket kaynaklarından yamalı sürüme (8.5.12, 8.4.27, 8.3.36, 8.2.35) yükseltin ve tüm PHP işçilerini (FPM/Apache) tam yeniden başlatın.",
             "debian_ubuntu": r"sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" $(dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package}\n' | awk '/^ii  php[0-9]+\.[0-9]+-/{print $2}') && (sudo systemctl restart php*-fpm 2>/dev/null || sudo systemctl restart apache2 2>/dev/null)",
             "rhel_almalinux": "sudo dnf clean all && sudo dnf upgrade 'php*' -y && (sudo systemctl restart php-fpm 2>/dev/null || sudo systemctl restart httpd 2>/dev/null)",
+        },
+    }
+
+
+# =============================================================
+# Resmi Node.js Ekim 2026 Güvenlik Bülteni (https://nodejs.org/tr/blog/vulnerability/october-2026-security-releases) Çözüm Motoru
+# =============================================================
+NODE_PATCHED_VERSIONS = {
+    "26": "26.12.1",
+    "24": "24.22.1",
+    "22": "22.23.4",
+}
+
+NODE_OFFICIAL_ADVISORY_URL = "https://nodejs.org/tr/blog/vulnerability/october-2026-security-releases"
+
+def remediate_node_advisory_directory(root_path, apply_fixes=True):
+    """
+    https://nodejs.org/tr/blog/vulnerability/october-2026-security-releases resmi güvenlik bültenine dayanarak
+    hedef proje dizinindeki Dockerfile (FROM node:...), .nvmrc, .node-version ve package.json dosyalarını denetler;
+    yamasız Node.js (26.x < 26.12.1, 24.x < 24.22.1, 22.x < 22.23.4 veya EOL <= 20.x) ve undici sürümlerini
+    resmi yamalı sürümlere (.bak yedekli) yükseltir.
+    """
+    import shutil
+    actions = []
+    ts = time.strftime("%Y%m%d-%H%M%S")
+
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        dirnames[:] = [d for d in dirnames if d not in SAST_SKIP_DIRS]
+        for fn in filenames:
+            low = fn.lower()
+            fpath = os.path.join(dirpath, fn)
+            rel_path = os.path.relpath(fpath, root_path)
+
+            # 1) Dockerfile / Containerfile içinde FROM node:... imaj sürümü yükseltme
+            if low in ("dockerfile", "containerfile") or low.startswith("dockerfile."):
+                try:
+                    content = open(fpath, "r", encoding="utf-8", errors="replace").read()
+                except OSError:
+                    continue
+                if re.search(r"(?im)^FROM\s+node:", content):
+                    new_content = content
+                    changes = []
+                    for branch, fixed_ver in NODE_PATCHED_VERSIONS.items():
+                        pat = rf"(?im)^(FROM\s+node:){re.escape(branch)}(?:\.(?!{re.escape(fixed_ver.split(".",1)[1])}\b)[0-9]+(?:\.[0-9]+)?)?(-\S+)?$"
+                        if re.search(pat, new_content):
+                            new_content = re.sub(pat, rf"\g<1>{fixed_ver}\2", new_content)
+                            changes.append(
+                                f"Birincil Çözüm ({NODE_OFFICIAL_ADVISORY_URL}): Node.js imajı resmi yamalı {fixed_ver} sürümüne yükseltildi"
+                            )
+                    pat_eol = r"(?im)^(FROM\s+node:)(?:1[0-9]|20|21|23|25)(?:\.[0-9]+(?:\.[0-9]+)?)?(-\S+)?$"
+                    if re.search(pat_eol, new_content):
+                        new_content = re.sub(pat_eol, r"\g<1>24.22.1\2", new_content)
+                        changes.append(
+                            f"Birincil Çözüm ({NODE_OFFICIAL_ADVISORY_URL}): EOL Node.js imajı aktif LTS 24.22.1 sürümüne yükseltildi"
+                        )
+                    if changes and new_content != content:
+                        if apply_fixes:
+                            shutil.copy2(fpath, f"{fpath}.bak-{ts}")
+                            open(fpath, "w", encoding="utf-8").write(new_content)
+                        actions.append({"file": rel_path, "applied": apply_fixes, "changes": changes})
+
+            # 2) .nvmrc / .node-version dosyaları
+            elif low in (".nvmrc", ".node-version"):
+                try:
+                    content = open(fpath, "r", encoding="utf-8", errors="replace").read()
+                except OSError:
+                    continue
+                val = content.strip().lstrip("vV")
+                prefix = "v" if content.strip().startswith(("v", "V")) else ""
+                target_ver = None
+                if val.startswith("26") and val != "26.12.1":
+                    target_ver = "26.12.1"
+                elif val.startswith("24") and val != "24.22.1":
+                    target_ver = "24.22.1"
+                elif val.startswith("22") and val != "22.23.4":
+                    target_ver = "22.23.4"
+                elif re.match(r"^(?:1[0-9]|20|21|23|25)(?:\.|$)", val):
+                    target_ver = "24.22.1"
+                if target_ver:
+                    new_content = f"{prefix}{target_ver}\n"
+                    if apply_fixes:
+                        shutil.copy2(fpath, f"{fpath}.bak-{ts}")
+                        open(fpath, "w", encoding="utf-8").write(new_content)
+                    actions.append({
+                        "file": rel_path,
+                        "applied": apply_fixes,
+                        "changes": [f"Birincil Çözüm ({NODE_OFFICIAL_ADVISORY_URL}): Node.js sürümü {prefix}{target_ver} olarak güncellendi"]
+                    })
+
+    return {
+        "success": True,
+        "root": root_path,
+        "applied": apply_fixes,
+        "advisory_url": NODE_OFFICIAL_ADVISORY_URL,
+        "patched_versions": NODE_PATCHED_VERSIONS,
+        "modified_files_count": len(actions),
+        "actions": actions,
+        "primary_solution": {
+            "summary": "Node.js çalışma ortamını resmi v26.12.1, v24.22.1 (LTS) veya v22.23.4 (LTS) sürümüne yükseltin (EOL sürümlerden LTS dalına geçin) ve tüm Node.js süreçlerini yeniden başlatın.",
+            "nvm_fnm": "nvm install 24.22.1 && nvm alias default 24.22.1 && pm2 restart all --update-env",
+            "docker": "FROM node:24.22.1-bookworm-slim (veya node:22.23.4-bookworm-slim / node:26.12.1-bookworm-slim)",
         },
     }

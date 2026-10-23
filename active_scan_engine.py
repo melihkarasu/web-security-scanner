@@ -458,6 +458,30 @@ def test_deep_headers(base_url):
                 "fix": "Birincil Çözüm (https://www.php.net/archive/2026.php): PHP'yi resmi paket kaynaklarından yamalı sürüme (8.5.12, 8.4.27, 8.3.36, 8.2.35) yükseltin ve tüm PHP işçilerini (systemctl restart php*-fpm / apache2 / httpd) tam yeniden başlatın. Güncelleme yapılana kadar geçici önlem olarak php.ini/FPM içinde session.upload_progress.enabled = Off, PHP 8.5'te fatal_error_backtraces = Off ve post_max_size sınırlandırması uygulayın."
             })
 
+    # Resmi Node.js 21 Ekim 2026 Bülteni (https://nodejs.org/tr/blog/vulnerability/october-2026-security-releases) — Yamasız Node.js Sürümü Tespiti
+    node_ver_match = re.search(r"\bNode(?:\.js)?[/\s]+v?([0-9]+\.[0-9]+\.[0-9]+)", xpb + " " + srv_hdr, re.IGNORECASE)
+    if node_ver_match:
+        nver = node_ver_match.group(1)
+        nparts = [int(x) for x in nver.split(".")]
+        nmaj, nmin, npat = nparts[0], nparts[1], nparts[2]
+        is_vuln_node = False
+        if nmaj < 22 or nmaj in (23, 25):
+            is_vuln_node = True
+        elif nmaj == 22 and (nmin < 23 or (nmin == 23 and npat < 4)):
+            is_vuln_node = True
+        elif nmaj == 24 and (nmin < 22 or (nmin == 22 and npat < 1)):
+            is_vuln_node = True
+        elif nmaj == 26 and (nmin < 12 or (nmin == 12 and npat < 1)):
+            is_vuln_node = True
+        if is_vuln_node:
+            findings.append({
+                "test": "Derin Başlık", "severity": "KRİTİK",
+                "title": f"Yamasız Node.js Sürümü (v{nver}) — CVE-2026-111497 (Brotli RCE) & Ekim 2026 Güvenlik Bülteni",
+                "evidence": f"HTTP Başlığı: Node.js v{nver} (Yamalı sürümler: v26.12.1, v24.22.1, v22.23.4)",
+                "cwe": "CWE-787",
+                "fix": "Birincil Çözüm (https://nodejs.org/tr/blog/vulnerability/october-2026-security-releases): Node.js çalışma ortamını resmi yamalı sürüme (v26.12.1, v24.22.1 LTS veya v22.23.4 LTS) yükseltin ve tüm Node.js süreçlerini yeniden başlatın."
+            })
+
     # CSP direktif analizi
     csp = _get_header(resp_headers, "content-security-policy")
     if csp:
