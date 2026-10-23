@@ -1175,7 +1175,7 @@ def remediate_php_advisory_directory(root_path, apply_fixes=True):
             rel_path = os.path.relpath(fpath, root_path)
 
             # 1) Birincil Çözüm: Dockerfile içinde resmi PHP imaj sürümü yükseltme (8.5.12 / 8.4.27 / 8.3.36 / 8.2.35)
-            if low in SAST_DOCKERFILE_NAMES or low.startswith("dockerfile."):
+            if low in ("dockerfile", "containerfile") or low.startswith("dockerfile."):
                 try:
                     content = open(fpath, "r", encoding="utf-8", errors="replace").read()
                 except OSError:
