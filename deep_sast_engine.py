@@ -613,6 +613,10 @@ EXTRA_RULES = [
      "CVE-2026-109618/109619: İstek Başına Hatalı INI (Diagnostics Producer) veya Üçüncü Parti Depo Gecikmesi",
      re.compile(r"(?i)rpms\.remirepo\.net|ini_set\s*\(\s*[\"'](?:error_reporting|display_errors)[\"']"),
      "Resmi PHP 21 Ekim 2026 Bülteni (https://www.php.net/archive/2026.php): CVE-2026-109619 için istek başlatma öncesi uyarı (diagnostic) üreten geçersiz/deprecated per-request INI ayarlarını kaldırın (error_reporting/display_errors/@ ile gizlemek zafiyeti engellemez) ve PHP'yi resmi paket depolarından 8.5.12 / 8.4.27 / 8.3.36 / 8.2.35 sürümüne yükseltin."),
+    ("PHP-ADV-021", "PHP Güvenliği (2026 Advisories)", "KRİTİK", "CWE-502",
+     "CVE-2026-115560 (23 Ekim 2026 Bülteni): session.serialize_handler Çalışma Zamanı Değişimi & Session Upload Progress RCE",
+     re.compile(r"(?i)ini_set\s*\(\s*[\"\']session\.serialize_handler[\"\']|^\s*session\.serialize_handler\s*=\s*[\"\']?(?:php_binary|php_serialize)[\"\']?\b"),
+     "Resmi PHP 23 Ekim 2026 Bülteni (https://www.php.net/archive/2026.php#2026-10-23-1 — CVE-2026-115560): Yapılandırmada session.serialize_handler = php_binary veya php_serialize iken çalışma zamanında session_start() öncesinde ini_set('session.serialize_handler', 'php') çağrılması ve session.upload_progress.enabled açık olması uzaktan kod yürütmeye (RCE) yol açar. Birincil önlem olarak php.ini ve FPM havuzunda session.upload_progress.enabled = 0 (Off) yapın ve çalışma zamanında serialize_handler değiştirmeyin."),
     # --- Resmi Node.js 21 Ekim 2026 Güvenlik Bülteni (https://nodejs.org/tr/blog/vulnerability/october-2026-security-releases) ---
     ("NODE-ADV-001", "Node.js Güvenliği (Ekim 2026 Bülteni)", "KRİTİK", "CWE-1104",
      "CVE-2026-111497 / CVE-2026-105482 / CVE-2026-105483 / CVE-2026-106069: Yamasız veya EOL Node.js Sürümü (< 26.12.1, < 24.22.1, < 22.23.4)",
@@ -721,7 +725,7 @@ def run_deep_analysis(fpath, rel_path):
             continue
         is_comment = stripped.startswith(("//", "#", "*", "/*"))
         for rule_id, category, severity, cwe, title, rx, desc in EXTRA_RULES:
-            if is_comment and rule_id not in ("PHP-ADV-001", "PHP-ADV-009", "PHP-ADV-018"):
+            if is_comment and rule_id not in ("PHP-ADV-001", "PHP-ADV-009", "PHP-ADV-018", "PHP-ADV-021"):
                 continue
             m = rx.search(line)
             if m:

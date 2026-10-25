@@ -452,10 +452,10 @@ def test_deep_headers(base_url):
         if is_vuln_php:
             findings.append({
                 "test": "Derin Başlık", "severity": "KRİTİK",
-                "title": f"Yamasız PHP Sürümü ({pver}) — CVE-2026-109618 & CVE-2026-109619 (php2shell RCE)",
+                "title": f"Yamasız PHP Sürümü ({pver}) — CVE-2026-109618, CVE-2026-109619 & CVE-2026-115560 (php2shell RCE)",
                 "evidence": f"HTTP Başlığı: PHP/{pver} (Yamalı sürümler: 8.5.12, 8.4.27, 8.3.36, 8.2.35)",
                 "cwe": "CWE-416",
-                "fix": "Birincil Çözüm (https://www.php.net/archive/2026.php): PHP'yi resmi paket kaynaklarından yamalı sürüme (8.5.12, 8.4.27, 8.3.36, 8.2.35) yükseltin ve tüm PHP işçilerini (systemctl restart php*-fpm / apache2 / httpd) tam yeniden başlatın. Güncelleme yapılana kadar geçici önlem olarak php.ini/FPM içinde session.upload_progress.enabled = Off, PHP 8.5'te fatal_error_backtraces = Off ve post_max_size sınırlandırması uygulayın."
+                "fix": "Birincil Çözüm (https://www.php.net/archive/2026.php): PHP'yi resmi paket kaynaklarından yamalı sürüme (8.5.12, 8.4.27, 8.3.36, 8.2.35) yükseltin ve tüm PHP işçilerini (systemctl restart php*-fpm / apache2 / httpd) tam yeniden başlatın. CVE-2026-115560 (23 Ekim 2026) ve CVE-2026-109619 koruması için php.ini/FPM içinde session.upload_progress.enabled = Off (0) yapın, çalışma zamanında session.serialize_handler değiştirmeyin, PHP 8.5'te fatal_error_backtraces = Off ve post_max_size sınırlandırması uygulayın."
             })
 
     # Resmi Node.js 21 Ekim 2026 Bülteni (https://nodejs.org/tr/blog/vulnerability/october-2026-security-releases) — Yamasız Node.js Sürümü Tespiti

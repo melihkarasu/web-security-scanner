@@ -1210,7 +1210,7 @@ def remediate_php_advisory_directory(root_path, apply_fixes=True):
                         "session.upload_progress.enabled = Off",
                         new_content
                     )
-                    changes.append("Resmi Bülten Önlemi (CVE-2026-109619): session.upload_progress.enabled = Off yapıldı")
+                    changes.append("Resmi Bülten Önlemi (CVE-2026-109619 & CVE-2026-115560): session.upload_progress.enabled = Off yapıldı")
 
                 if re.search(r"(?im)^\s*;?\s*fatal_error_backtraces\s*=\s*[\"']?(?:on|1|true|yes)[\"']?", new_content):
                     new_content = re.sub(
@@ -1257,7 +1257,7 @@ def remediate_php_advisory_directory(root_path, apply_fixes=True):
                             "php_admin_flag[session.upload_progress.enabled] = off",
                             new_content
                         )
-                        changes.append("Resmi Bülten Önlemi (CVE-2026-109619): FPM havuzunda php_admin_flag[session.upload_progress.enabled] = off kilitlendi")
+                        changes.append("Resmi Bülten Önlemi (CVE-2026-109619 & CVE-2026-115560): FPM havuzunda php_admin_flag[session.upload_progress.enabled] = off kilitlendi")
                     if changes and new_content != content:
                         if apply_fixes:
                             shutil.copy2(fpath, f"{fpath}.bak-{ts}")
