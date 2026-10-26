@@ -279,14 +279,17 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 result["cookies"] = {"analyzed": False, "error": str(e), "findings": []}
 
-            # 1.2 TLS / Sertifika Analizi (yalnızca HTTPS hedeflerde)
+            # 1.2 TLS / Sertifika & Cipher Suite / PFS Analizi (yalnızca HTTPS hedeflerde)
             if is_https:
                 try:
                     ctx = ssl.create_default_context()
-                    with socket.create_connection((hostname, 443), timeout=TIMEOUT_SECONDS) as sock:
+                    tls_port = parsed_target.port or 443
+                    with socket.create_connection((hostname, tls_port), timeout=TIMEOUT_SECONDS) as sock:
                         with ctx.wrap_socket(sock, server_hostname=hostname) as tls_sock:
                             cert = tls_sock.getpeercert()
                             tls_version = tls_sock.version()
+                            cipher_info = tls_sock.cipher()  # (cipher_name, tls_proto, secret_bits)
+                            compression = tls_sock.compression()
 
                     import datetime
                     not_after = cert.get("notAfter", "")
@@ -298,19 +301,46 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
                         except Exception:
                             pass
 
+                    cipher_name = cipher_info[0] if cipher_info else ""
+                    cipher_bits = cipher_info[2] if cipher_info and len(cipher_info) > 2 else None
+                    upper_cipher = (cipher_name or "").upper()
+                    has_pfs = (
+                        tls_version == "TLSv1.3"
+                        or "ECDHE" in upper_cipher
+                        or "DHE" in upper_cipher
+                        or upper_cipher.startswith("TLS_AES_")
+                        or upper_cipher.startswith("TLS_CHACHA20_")
+                    )
+
                     tls_findings = []
                     if expiry_days is not None and expiry_days < 30:
                         tls_findings.append({"level": "YÜKSEK" if expiry_days < 7 else "ORTA", "issue": f"Sertifika {expiry_days} gün içinde sona eriyor", "evidence": not_after})
-                    if tls_version and tls_version in ("TLSv1", "TLSv1.1"):
-                        tls_findings.append({"level": "YÜKSEK", "issue": f"Eski TLS protokolü: {tls_version}", "evidence": "TLS 1.0/1.1 kullanımdan kaldırıldı"})
+                    if tls_version and tls_version in ("TLSv1", "TLSv1.1", "SSLv3", "SSLv2"):
+                        tls_findings.append({"level": "YÜKSEK", "issue": f"Eski TLS protokolü: {tls_version} (POODLE/BEAST riski)", "evidence": "TLS 1.0/1.1 kullanımdan kaldırıldı; TLS 1.2+ zorunlu kılın"})
+
+                    # Claude-Red offensive-tls-attacks: Zayıf Cipher Suite & PFS & CRIME denetimi
+                    if any(w in upper_cipher for w in ("RC4", "3DES", "DES", "NULL", "EXPORT", "ANON", "MD5")):
+                        tls_findings.append({"level": "KRİTİK", "issue": f"Kırılmış/Zayıf TLS Cipher Suite aktif: {cipher_name}", "evidence": f"{cipher_name} ({cipher_bits} bit) — SWEET32/RC4 saldırılarına açık"})
+                    elif "CBC" in upper_cipher and tls_version != "TLSv1.3":
+                        tls_findings.append({"level": "DÜŞÜK", "issue": f"CBC modlu Cipher Suite kullanımı ({cipher_name})", "evidence": "Lucky13 / Padding Oracle riskine karşı AEAD (AES-GCM / ChaCha20-Poly1305) tercih edin"})
+                    if cipher_bits is not None and cipher_bits < 128:
+                        tls_findings.append({"level": "YÜKSEK", "issue": f"Düşük simetrik anahtar uzunluğu ({cipher_bits} bit)", "evidence": cipher_name})
+                    if cipher_name and not has_pfs:
+                        tls_findings.append({"level": "ORTA", "issue": "Perfect Forward Secrecy (PFS / ECDHE) desteği yok", "evidence": f"Anlaşılan şifreleme: {cipher_name} (Statik RSA anahtar değişimi geçmiş trafiğin deşifre edilmesine yol açar)"})
+                    if compression:
+                        tls_findings.append({"level": "YÜKSEK", "issue": f"TLS Sıkıştırma (Compression) aktif: {compression}", "evidence": "CRIME / BREACH yan kanal saldırılarına karşı TLS sıkıştırmasını kapatın"})
 
                     sans = [v for k, v in cert.get("subjectAltName", ()) if k == "DNS"] if cert else []
-                    if hostname not in sans:
-                        tls_findings.append({"level": "ORTA", "issue": "Hostname SAN listesinde birebir eşleşmiyor (wildcard olabilir)", "evidence": ", ".join(sans[:5])})
+                    if hostname not in sans and not any(s.startswith("*.") and hostname.endswith(s[1:]) for s in sans):
+                        tls_findings.append({"level": "ORTA", "issue": "Hostname SAN listesinde birebir eşleşmiyor", "evidence": ", ".join(sans[:5])})
 
                     result["tls"] = {
                         "analyzed": True,
                         "protocol": tls_version,
+                        "cipher_suite": cipher_name,
+                        "cipher_bits": cipher_bits,
+                        "pfs_supported": has_pfs,
+                        "compression": compression,
                         "issuer": dict(x[0] for x in cert.get("issuer", ())).get("organizationName", "(bilinmiyor)"),
                         "valid_until": not_after,
                         "expiry_days": expiry_days,
@@ -394,6 +424,17 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
                 for fmark, fname in (("cloudflare", "Cloudflare CDN"), ("amazonaws", "AWS S3/CloudFront"), ("googleusercontent", "Google Cloud")):
                     if fmark in html_body[:20480]:
                         techs.append({"category": "CDN/Bulut", "value": fname, "source": "HTML kalıbı"})
+            # WAF / CDN Başlık Parmak İzi (Claude-Red offensive-waf-bypass için)
+            if "cf-ray" in final_headers or "cloudflare" in server_h.lower():
+                techs.append({"category": "WAF/CDN", "value": "Cloudflare WAF", "source": "CF-Ray / Server başlığı"})
+            if "x-amzn-requestid" in final_headers or "x-amz-cf-id" in final_headers:
+                techs.append({"category": "WAF/CDN", "value": "AWS CloudFront / WAF", "source": "X-Amz başlığı"})
+            if "x-iinfo" in final_headers or "incap_ses" in str(final_headers.get("set-cookie", "")):
+                techs.append({"category": "WAF/CDN", "value": "Imperva Incapsula WAF", "source": "X-Iinfo / çerez"})
+            if "akamai" in server_h.lower() or "x-akamai-transformed" in final_headers:
+                techs.append({"category": "WAF/CDN", "value": "Akamai WAF/CDN", "source": "Akamai başlığı"})
+            if "mod_security" in server_h.lower() or "modsecurity" in server_h.lower():
+                techs.append({"category": "WAF", "value": "ModSecurity WAF", "source": "Server başlığı"})
             for c in result["cookies"].get("findings", []):
                 if c["name"].lower().startswith(("wp-", "wordpress_")):
                     techs.append({"category": "CMS", "value": "WordPress", "source": "çerez adı"})

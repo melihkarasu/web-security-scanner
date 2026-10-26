@@ -83,6 +83,66 @@ class AIAgent:
         return self.connector.chat(full_prompt)
 
 
+# =============================================================
+# Claude-Red Dinamik Saldırı Playbook'ları (Context-Aware Skill Priming)
+# Keşif aşamasında tespit edilen teknoloji, başlık, form veya yollara göre
+# Scout ve Strategist ajanlarına yalnızca ilgili uzman metodolojileri yükler.
+# =============================================================
+CLAUDE_RED_PLAYBOOKS = {
+    "jwt_auth": (
+        "[SKILL: offensive-jwt & offensive-oauth] "
+        "Check JWT tokens for alg:none, RS256->HS256 key confusion, 'kid' path traversal/SQLi, "
+        "'jku'/'x5u' SSRF key spoofing, and missing exp. On OAuth/OIDC endpoints (/authorize, /callback, /oauth), "
+        "test missing 'state' (CSRF), redirect_uri open-redirect chaining, and response_type=token leakage."
+    ),
+    "graphql": (
+        "[SKILL: offensive-graphql] "
+        "Target /graphql or /api/graphql with Introspection (__schema), field suggestion oracle probes, "
+        "alias-based IDOR/rate-limit bypass, and nested query depth checks."
+    ),
+    "waf_bypass": (
+        "[SKILL: offensive-waf-bypass & offensive-parameter-pollution] "
+        "WAF/CDN detected on target. Avoid noisy raw script tags; prefer HTTP Parameter Pollution (duplicate params), "
+        "URL/Unicode encoding variations, JSON/form Content-Type switching, and differential boolean/math probes."
+    ),
+    "api_bola_mass": (
+        "[SKILL: offensive-api-security & offensive-api-abuse] "
+        "Test REST/JSON endpoints for BOLA/IDOR (numeric/UUID object IDs), BFLA (admin/role parameters), "
+        "Mass Assignment (role=admin, is_admin=true), and pagination/limit boundary abuse."
+    ),
+    "ssrf_cloud": (
+        "[SKILL: offensive-ssrf & offensive-cloud] "
+        "URL-like parameters (url, redirect, next, webhook, callback, uri) should be tested for loopback/internal "
+        "differentials (127.0.0.1, localhost) and cloud metadata pivot indicators."
+    ),
+    "ssti_rce": (
+        "[SKILL: offensive-ssti & offensive-sqli] "
+        "Use non-destructive polyglot math evaluation markers ({{7*7}}, 49, <%= 7*7 %>) for SSTI, "
+        "and single-quote / boolean differential (' AND 1=1 vs ' AND 1=2) for SQLi/NoSQLi."
+    ),
+}
+
+
+def select_claude_red_playbooks(initial_data: Dict[str, Any], target_url: str) -> List[str]:
+    """Hedefin gerçek keşif verisine (başlıklar, teknolojiler, URL'ler, bulgular) göre ilgili Claude-Red playbook'larını seçer."""
+    selected = []
+    blob = (json.dumps(initial_data, ensure_ascii=False, default=str) + " " + (target_url or "")).lower()
+
+    if any(k in blob for k in ("jwt", "eyj", "bearer", "oauth", "client_id", "redirect_uri", "openid")):
+        selected.append("jwt_auth")
+    if any(k in blob for k in ("graphql", "gql", "__schema", "__typename")):
+        selected.append("graphql")
+    if any(k in blob for k in ("cloudflare", "cf-ray", "akamai", "incapsula", "modsecurity", "aws waf", "waf")):
+        selected.append("waf_bypass")
+    if any(k in blob for k in ("/api/", "/v1/", "/v2/", "json", "id=", "uid=", "user", "account", "role")):
+        selected.append("api_bola_mass")
+    if any(k in blob for k in ("url=", "redirect=", "next=", "callback=", "uri=", "webhook", "amazonaws", "googleusercontent")):
+        selected.append("ssrf_cloud")
+
+    selected.append("ssti_rce")
+    return selected
+
+
 class AIOrchestrator:
     """
     Ajanlar arası döngüyü yöneten ve maliyet kontrolü yapan ana orkestratör.
@@ -109,7 +169,7 @@ class AIOrchestrator:
             "surface, and a history of already-executed tests, choose the NEXT set of concrete probes "
             "(max 4) that are NOT already in the history. Reply with ONLY a JSON array, no prose:\n"
             '[{"url": "<exact url from the data>", "param": "<exact param name>", "payload": "<harmless read-only probe payload>", '
-            '"vuln_class": "sqli|xss|ssti|ssrf|open_redirect|idor|nosqli|other", "reason": "<one line>"}]\n'
+            '"vuln_class": "sqli|xss|ssti|ssrf|open_redirect|idor|nosqli|jwt_oauth|graphql|hpp|cors|other", "reason": "<one line>"}]\n'
             "Rules: payloads must be harmless and read-only (e.g. error-based markers, reflection markers "
             "like wzxqmk731, {{7*7}}, benign internal URLs for SSRF differentials, numeric ID swaps). "
             "No INSERT/UPDATE/DELETE, no destructive commands, no external canary domains you invented. "
@@ -179,19 +239,24 @@ class AIOrchestrator:
                 except Exception:
                     pass
 
+        active_playbooks = select_claude_red_playbooks(initial_data, target_url)
+        playbook_text = "\n".join(CLAUDE_RED_PLAYBOOKS[k] for k in active_playbooks if k in CLAUDE_RED_PLAYBOOKS)
+        initial_data["loaded_claude_red_skills"] = active_playbooks
+
         context = json.dumps(initial_data, ensure_ascii=False, default=str)
-        emit("system", "Bağlam hazır: %d sayfa, %d form, %d temel bulg." % (
+        emit("system", "Bağlam hazır: %d sayfa, %d form, %d temel bulgu | Claude-Red Playbook'ları yüklendi: %s" % (
             len((initial_data.get("attack_surface") or {}).get("pages", [])),
             len((initial_data.get("attack_surface") or {}).get("forms", [])),
-            len(initial_data.get("static_findings", []))))
+            len(initial_data.get("static_findings", [])),
+            ", ".join(active_playbooks)))
 
         while loop_count < self.max_loops:
             loop_count += 1
 
             # 1. KEŞİF (The Scout) — her turda biriken bulgularla yeniden değerlendirir
             emit("scout", "Tur %d/%d: Saldırı yüzeyi analiz ediliyor…" % (loop_count, self.max_loops))
-            scout_input = ("Target: %s\nScan data:\n%s\nPrevious loop verdict: %s\nFindings so far: %s"
-                           % (target_url, _trim(context, 6500), _trim(scout_report, 1200),
+            scout_input = ("Target: %s\nActive Claude-Red Specialist Playbooks:\n%s\nScan data:\n%s\nPrevious loop verdict: %s\nFindings so far: %s"
+                           % (target_url, playbook_text, _trim(context, 6000), _trim(scout_report, 1200),
                               _trim(json.dumps([f.get("summary") for f in verified_findings], default=str), 1500)))
             scout_report = self.scout.think(scout_input)
             if _is_llm_error(scout_report):
@@ -201,8 +266,8 @@ class AIOrchestrator:
 
             # 2. STRATEJİ (The Strategist)
             emit("strategist", "Tur %d: Hipotez planlanıyor…" % loop_count)
-            strategy_ctx = ("Target: %s\nScout assessment: %s\nFull attack surface: %s\nAlready executed tests (DO NOT repeat):\n%s"
-                            % (target_url, _trim(scout_report, 2000), _trim(context, 3500),
+            strategy_ctx = ("Target: %s\nActive Claude-Red Playbooks:\n%s\nScout assessment: %s\nFull attack surface: %s\nAlready executed tests (DO NOT repeat):\n%s"
+                            % (target_url, playbook_text, _trim(scout_report, 2000), _trim(context, 3200),
                                self._compress_history(executed)))
             plan_raw = self.strategist.think(strategy_ctx)
             if _is_llm_error(plan_raw):
@@ -332,6 +397,7 @@ class AIOrchestrator:
 
         return {
             "verified_findings": verified_findings,
+            "loaded_skills": active_playbooks,
             "loops": loop_count,
             "tests_executed": len(executed),
             "executed_tests": executed,

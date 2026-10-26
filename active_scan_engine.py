@@ -112,25 +112,29 @@ class RateLimitedClient:
         self.request_count = 0
         self.last_request_at = 0.0
 
-    def get(self, url, params=None, timeout=REQUEST_TIMEOUT):
-        """Rate-limited GET. İstek üst sınırına ulaşınca StopIteration yükseltir."""
+    def request(self, url, method="GET", params=None, headers=None, data=None, timeout=REQUEST_TIMEOUT):
+        """Rate-limited HTTP isteği (GET/POST/OPTIONS + özel başlık desteği)."""
         if self.request_count >= MAX_REQUESTS_PER_SCAN:
             raise StopIteration("İstek üst sınırına ulaşıldı (%d)" % MAX_REQUESTS_PER_SCAN)
 
-        # Rate limit uygula
         elapsed = time.time() - self.last_request_at
         if elapsed < RATE_LIMIT_SECONDS:
             time.sleep(RATE_LIMIT_SECONDS - elapsed)
 
         if params:
             sep = "&" if "?" in url else "?"
-            url = url + sep + urllib.parse.urlencode(params)
+            url = url + sep + urllib.parse.urlencode(params, doseq=True)
 
-        req = urllib.request.Request(url, headers={
+        req_headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 WebSecurityScanner/1.0",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml,application/json;q=0.9,*/*;q=0.8",
             "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8"
-        }, method="GET")
+        }
+        if headers:
+            req_headers.update(headers)
+
+        body_bytes = data.encode("utf-8") if isinstance(data, str) else data
+        req = urllib.request.Request(url, data=body_bytes, headers=req_headers, method=method)
 
         self.request_count += 1
         self.last_request_at = time.time()
@@ -148,6 +152,10 @@ class RateLimitedClient:
             return {"status": e.code, "headers": dict(e.headers or {}), "body": body, "url": url, "error": None}
         except Exception as e:
             return {"status": None, "headers": {}, "body": "", "url": url, "error": str(e)}
+
+    def get(self, url, params=None, timeout=REQUEST_TIMEOUT, headers=None):
+        """Rate-limited GET. İstek üst sınırına ulaşınca StopIteration yükseltir."""
+        return self.request(url, method="GET", params=params, headers=headers, timeout=timeout)
 
 
 # =============================================================
@@ -715,6 +723,303 @@ def test_open_redirect(client, base_url):
 
 
 # =============================================================
+# Faz 7 (Claude-Red Entegrasyonu):
+# 1) Aktif CORS Origin Reflection & Null/Prefix Bypass (offensive-api-security)
+# 2) Canlı JWT & OAuth 2.0 / OIDC Güvenlik Analizi (offensive-jwt & offensive-oauth)
+# 3) Aktif GraphQL Introspection, Field Suggestion & Batching (offensive-graphql)
+# 4) HTTP Parameter Pollution (HPP) & Web Cache Poisoning / Desync (offensive-parameter-pollution)
+# =============================================================
+def test_cors_active(client, base_url):
+    """Aktif CORS testi: Keyfi Origin, null Origin ve prefix/suffix bypass denemeleri."""
+    findings = []
+    parsed = urllib.parse.urlparse(base_url)
+    host = parsed.hostname or "example.com"
+    scheme = parsed.scheme or "https"
+
+    test_origins = [
+        ("https://evil-cors-scanner.example.org", "Keyfi (Arbitrary) Origin Yansıması"),
+        ("null", "Null Origin (Sandbox iframe bypass) İzni"),
+        (f"{scheme}://{host}.evil-scanner.example.org", "Subdomain/Suffix Regex Bypass İzni"),
+        (f"{scheme}://evil-{host}", "Prefix Regex Bypass İzni"),
+    ]
+
+    for origin_val, desc in test_origins:
+        resp = client.get(base_url, headers={"Origin": origin_val})
+        if resp["error"]:
+            continue
+        acao = _get_header(resp["headers"], "access-control-allow-origin") or ""
+        acac = (_get_header(resp["headers"], "access-control-allow-credentials") or "").lower()
+        if acao and (acao == origin_val or (origin_val == "null" and acao == "null")):
+            if acac == "true":
+                findings.append({
+                    "test": "CORS Aktif", "severity": "KRİTİK",
+                    "title": f"Aktif CORS Zafiyeti: {desc} + Credentials=true",
+                    "evidence": f"Origin: {origin_val} → Access-Control-Allow-Origin: {acao}, Access-Control-Allow-Credentials: true",
+                    "cwe": "CWE-942",
+                    "fix": "Origin başlığını doğrudan yansıtmayın; katı tam eşleşmeli (exact-match) allow-list kullanın ve null origin'i reddedin."
+                })
+                break
+            else:
+                findings.append({
+                    "test": "CORS Aktif", "severity": "ORTA",
+                    "title": f"Aktif CORS Origin Yansıması ({desc})",
+                    "evidence": f"Origin: {origin_val} → Access-Control-Allow-Origin: {acao} (Credentials kapalı)",
+                    "cwe": "CWE-942",
+                    "fix": "Yalnızca güvenilir origin'lere izin verin; dinamik Origin yansımasını kaldırın."
+                })
+                break
+    return findings
+
+
+def _b64url_decode(data_str):
+    import base64
+    pad = "=" * ((4 - len(data_str) % 4) % 4)
+    return base64.urlsafe_b64decode((data_str + pad).encode("ascii"))
+
+
+def test_jwt_oauth(client, base_url):
+    """Canlı JWT token analizi (alg:none, kid/jku/x5u, zayıf HMAC secret) ve OAuth 2.0 / OIDC akış denetimi."""
+    import hmac
+    import hashlib
+    findings = []
+    resp = client.get(base_url)
+    if resp["error"]:
+        return findings
+
+    # 1. Yanıt başlıklarında (Set-Cookie, Authorization) ve gövdede JWT token ara
+    raw_sources = []
+    for hk, hv in resp["headers"].items():
+        if hk.lower() in ("set-cookie", "authorization", "x-auth-token", "x-access-token"):
+            raw_sources.append(hv)
+    raw_sources.append((resp["body"] or "")[:30000])
+
+    jwt_regex = re.compile(r"\b(eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*)\b")
+    found_jwts = []
+    for src in raw_sources:
+        for m in jwt_regex.finditer(src):
+            tok = m.group(1)
+            if tok not in found_jwts:
+                found_jwts.append(tok)
+
+    weak_secrets = [
+        "secret", "password", "123456", "jwt_secret", "secretkey", "changeme",
+        "admin", "key", "private", "default", "mysecret", "supersecret", "test"
+    ]
+
+    for tok in found_jwts[:3]:
+        parts = tok.split(".")
+        if len(parts) < 2:
+            continue
+        try:
+            hdr = json.loads(_b64url_decode(parts[0]).decode("utf-8", errors="replace"))
+            payload = json.loads(_b64url_decode(parts[1]).decode("utf-8", errors="replace"))
+        except Exception:
+            continue
+        if not isinstance(hdr, dict) or not isinstance(payload, dict):
+            continue
+
+        alg = str(hdr.get("alg", "")).strip()
+        if alg.lower() == "none" or not parts[2]:
+            findings.append({
+                "test": "JWT & OAuth", "severity": "KRİTİK",
+                "title": "JWT İmzasız Algoritma (alg: none) veya Boş İmza",
+                "evidence": f"Header: {json.dumps(hdr)[:100]}",
+                "cwe": "CWE-347",
+                "fix": "JWT doğrulayıcıda 'none' algoritmasını açıkça reddedin ve algoritmayı sunucu tarafında sabitleyin."
+            })
+
+        for hdr_key in ("jku", "x5u"):
+            if hdr_key in hdr:
+                findings.append({
+                    "test": "JWT & OAuth", "severity": "YÜKSEK",
+                    "title": f"JWT Header '{hdr_key}' Harici Anahtar URL'si İçeriyor (SSRF / Key Spoofing Riski)",
+                    "evidence": f"{hdr_key}: {str(hdr.get(hdr_key))[:100]}",
+                    "cwe": "CWE-347",
+                    "fix": "JWT doğrulamasında istemciden gelen jku/x5u başlıklarına güvenmeyin; yerel/sabit JWKS kullanın."
+                })
+
+        if "kid" in hdr:
+            kid_val = str(hdr.get("kid", ""))
+            if "/" in kid_val or ".." in kid_val or "'" in kid_val:
+                findings.append({
+                    "test": "JWT & OAuth", "severity": "YÜKSEK",
+                    "title": "JWT 'kid' Başlığında Dosya Yolu / Enjeksiyon Kalıbı",
+                    "evidence": f"kid={kid_val[:80]}",
+                    "cwe": "CWE-22",
+                    "fix": "kid parametresini yalnızca alfanümerik bir anahtar kimliği olarak doğrulayın; dosya sistemine veya SQL sorgusuna doğrudan geçirmeyin."
+                })
+
+        if "exp" not in payload:
+            findings.append({
+                "test": "JWT & OAuth", "severity": "ORTA",
+                "title": "JWT Token'da Son Kullanma Tarihi (exp claim) Yok",
+                "evidence": f"Payload anahtarları: {', '.join(list(payload.keys())[:8])}",
+                "cwe": "CWE-613",
+                "fix": "Tüm JWT token'larına kısa ömürlü 'exp' (expiration) alanı ekleyin."
+            })
+
+        # Zayıf HMAC secret offline testi (HS256)
+        if alg.upper() == "HS256" and len(parts) == 3 and parts[2]:
+            signing_input = f"{parts[0]}.{parts[1]}".encode("ascii")
+            try:
+                sig_bytes = _b64url_decode(parts[2])
+                for sec in weak_secrets:
+                    calc = hmac.new(sec.encode("utf-8"), signing_input, hashlib.sha256).digest()
+                    if hmac.compare_digest(calc, sig_bytes):
+                        findings.append({
+                            "test": "JWT & OAuth", "severity": "KRİTİK",
+                            "title": f"JWT Zayıf HMAC Secret Kırıldı ('{sec}')",
+                            "evidence": f"HS256 imzası yaygın sözlük anahtarı '{sec}' ile doğrulandı.",
+                            "cwe": "CWE-798",
+                            "fix": "En az 256-bit kriptografik olarak rastgele bir JWT secret kullanın veya RS256/EdDSA asimetrik imzaya geçin."
+                        })
+                        break
+            except Exception:
+                pass
+
+    # 2. OAuth 2.0 / OIDC Parametre ve Uç Nokta Denetimi
+    parsed = urllib.parse.urlparse(base_url)
+    qs = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+    if any(k in qs for k in ("client_id", "redirect_uri", "response_type")):
+        if "state" not in qs or not qs.get("state", [""])[0]:
+            findings.append({
+                "test": "JWT & OAuth", "severity": "YÜKSEK",
+                "title": "OAuth 2.0 Yetkilendirme İsteğinde 'state' Parametresi Eksik (OAuth CSRF)",
+                "evidence": f"URL: {base_url[:120]} (client_id/redirect_uri var ancak state yok)",
+                "cwe": "CWE-352",
+                "fix": "OAuth akışlarında oturuma bağlı, tahmin edilemez 'state' ve 'code_challenge' (PKCE S256) parametrelerini zorunlu kılın."
+            })
+        if qs.get("response_type", [""])[0] == "token":
+            findings.append({
+                "test": "JWT & OAuth", "severity": "ORTA",
+                "title": "OAuth 2.0 Güvensiz Implicit Flow (response_type=token) Kullanımı",
+                "evidence": "response_type=token (Access token URL fragment ve Referer üzerinden sızabilir)",
+                "cwe": "CWE-522",
+                "fix": "Implicit Flow yerine PKCE destekli Authorization Code Flow (response_type=code) kullanın."
+            })
+
+    # OIDC Discovery (.well-known/openid-configuration) kontrolü
+    oidc_url = f"{parsed.scheme}://{parsed.netloc}/.well-known/openid-configuration"
+    oidc_resp = client.get(oidc_url)
+    if not oidc_resp["error"] and oidc_resp["status"] == 200 and "authorization_endpoint" in (oidc_resp["body"] or ""):
+        try:
+            oidc_data = json.loads(oidc_resp["body"])
+            methods = oidc_data.get("code_challenge_methods_supported") or []
+            if "plain" in methods:
+                findings.append({
+                    "test": "JWT & OAuth", "severity": "ORTA",
+                    "title": "OIDC Yapılandırması 'plain' PKCE Metoduna İzin Veriyor (PKCE Downgrade Riski)",
+                    "evidence": f"code_challenge_methods_supported: {methods}",
+                    "cwe": "CWE-326",
+                    "fix": "PKCE için yalnızca 'S256' metoduna izin verin; 'plain' metodunu devre dışı bırakın."
+                })
+        except Exception:
+            pass
+
+    return findings
+
+
+def test_graphql_active(client, base_url):
+    """Aktif GraphQL testi: Introspection ifşası, Query Batching (brute-force/rate-limit bypass) ve Field Suggestion."""
+    findings = []
+    parsed = urllib.parse.urlparse(base_url)
+    origin_base = f"{parsed.scheme}://{parsed.netloc}"
+
+    candidates = []
+    if "graphql" in parsed.path.lower() or "gql" in parsed.path.lower():
+        candidates.append(base_url)
+    for p in ("/graphql", "/api/graphql"):
+        u = origin_base + p
+        if u not in candidates:
+            candidates.append(u)
+
+    for gql_url in candidates[:2]:
+        # 1. Introspection sorgusu
+        intro_payload = json.dumps({"query": "query{__schema{queryType{name}types{name}}}"})
+        resp = client.request(gql_url, method="POST", headers={"Content-Type": "application/json"}, data=intro_payload)
+        if resp["error"] or resp["status"] not in (200, 400):
+            continue
+        body = resp["body"] or ""
+        if "__schema" in body and "queryType" in body:
+            findings.append({
+                "test": "GraphQL", "severity": "ORTA",
+                "title": f"GraphQL Introspection Üretim Ortamında Açık ({gql_url})",
+                "evidence": _excerpt(body, r"__schema|queryType", 90),
+                "cwe": "CWE-200",
+                "fix": "Üretim ortamında GraphQL introspection sorgularını kapatın ve sorgu derinlik sınırı (maxDepth) uygulayın."
+            })
+
+        # 2. Array Query Batching testi (Rate-limit / OTP brute-force bypass riski)
+        batch_payload = json.dumps([{"query": "{__typename}"}, {"query": "{__typename}"}])
+        b_resp = client.request(gql_url, method="POST", headers={"Content-Type": "application/json"}, data=batch_payload)
+        if not b_resp["error"] and b_resp["status"] == 200:
+            b_body = (b_resp["body"] or "").strip()
+            if b_body.startswith("[") and b_body.count("__typename") >= 2:
+                findings.append({
+                    "test": "GraphQL", "severity": "ORTA",
+                    "title": f"GraphQL Array Batching Aktif — Rate-Limit / Brute-Force Bypass Riski ({gql_url})",
+                    "evidence": f"Tek HTTP POST içinde çoklu dizi sorgusu çalıştırıldı: {b_body[:100]}",
+                    "cwe": "CWE-307",
+                    "fix": "GraphQL sunucusunda dizi tabanlı batching'i kapatın veya batch başına işlem/maliyet sınırı uygulayın."
+                })
+        break
+    return findings
+
+
+def test_hpp_and_cache_poisoning(client, base_url):
+    """HTTP Parameter Pollution (HPP) ve X-Forwarded-Host önbellek zehirleme / desync yansıma testi."""
+    findings = []
+    parsed = urllib.parse.urlparse(base_url)
+
+    # 1. X-Forwarded-Host / X-Forwarded-Scheme yansıma testi (Web Cache Poisoning / Password Reset Poisoning)
+    canary_host = "wss-cache-canary.example.org"
+    resp_hdr = client.get(base_url, headers={"X-Forwarded-Host": canary_host, "X-Forwarded-Server": canary_host})
+    if not resp_hdr["error"]:
+        body_hdr = resp_hdr["body"] or ""
+        loc_hdr = _get_header(resp_hdr["headers"], "location") or ""
+        if canary_host in body_hdr or canary_host in loc_hdr:
+            findings.append({
+                "test": "HPP & Header Poisoning", "severity": "YÜKSEK",
+                "title": "X-Forwarded-Host Başlık Yansıması (Web Cache / Password Reset Poisoning)",
+                "evidence": f"X-Forwarded-Host: {canary_host} değeri yanıt gövdesine veya Location başlığına yansıdı.",
+                "cwe": "CWE-644",
+                "fix": "Uygulamada mutlak URL üretirken X-Forwarded-Host başlığına güvenmeyin; sabit canonical host tanımı kullanın."
+            })
+
+    # 2. HTTP Parameter Pollution (HPP) — tekrarlı parametre ayrıştırma farkı
+    if parsed.query:
+        params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+        for pname in list(params.keys())[:2]:
+            orig_val = params[pname][0]
+            hpp_marker = "wsshpp991"
+            dup_query = parsed.query + f"&{urllib.parse.quote(pname)}={hpp_marker}"
+            hpp_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, dup_query, ""))
+            hpp_resp = client.get(hpp_url)
+            if hpp_resp["error"]:
+                continue
+            if hpp_resp["status"] == 500:
+                findings.append({
+                    "test": "HPP & Header Poisoning", "severity": "ORTA",
+                    "title": f"HTTP Parameter Pollution (HPP) Sunucu Hatası Tetikledi ({pname})",
+                    "evidence": f"Tekrarlı parametre ({pname}={orig_val}&{pname}={hpp_marker}) HTTP 500 döndürdü (beklenmeyen dizi/string dönüşümü).",
+                    "cwe": "CWE-235",
+                    "fix": "Tekil beklenen sorgu parametrelerinin dizi (array) olarak gelmesi durumunu tip doğrulamasıyla engelleyin."
+                })
+                break
+            elif orig_val in (hpp_resp["body"] or "") and hpp_marker in (hpp_resp["body"] or "") and f"{orig_val},{hpp_marker}" in (hpp_resp["body"] or ""):
+                findings.append({
+                    "test": "HPP & Header Poisoning", "severity": "DÜŞÜK",
+                    "title": f"HTTP Parameter Pollution (HPP) Parametre Birleştirme Davranışı ({pname})",
+                    "evidence": f"Tekrarlı parametreler virgülle birleştirilerek işlendi ({orig_val},{hpp_marker}) — WAF bypass riski.",
+                    "cwe": "CWE-235",
+                    "fix": "Ön-uç doğrulaması ile arka-uç yönlendiricisinin tekrarlı parametrelerde aynı öncelik kuralını kullandığından emin olun."
+                })
+                break
+
+    return findings
+
+
+# =============================================================
 # Faz 6A: Zincirleme Korelasyon Motoru
 # Bulgular arası risk kombinasyonlarını tespit eder.
 # =============================================================
@@ -796,6 +1101,26 @@ def correlate_findings(findings):
             "components": ["SSTI"],
             "description": "Şablon motoru kullanıcı girdisini değerlendiriyor; çoğu motorda bu, sunucuda keyfi kod yürütme (RCE) anlamına gelir.",
             "fix": "Kullanıcı girdisini şablon olarak değerlendirmeyi derhal kaldırın."
+        })
+
+    # 6. Open Redirect + OAuth/JWT → OAuth Token Çalma Zinciri (Claude-Red offensive-oauth)
+    if _has("Open Redirect") and _has("JWT & OAuth"):
+        chains.append({
+            "title": "Open Redirect + OAuth/JWT = Yetkilendirme Kodu / Token Çalma Zinciri",
+            "severity": "KRİTİK",
+            "components": ["Open Redirect", "JWT & OAuth"],
+            "description": "Açık yönlendirme (Open Redirect) zafiyeti, OAuth redirect_uri doğrulamasını atlatarak authorization code veya access token'ların saldırgan sunucusuna sızdırılmasına yol açar.",
+            "fix": "OAuth redirect_uri için tam URI eşleşmesi zorunlu kılın ve açık yönlendirmeleri kapatın."
+        })
+
+    # 7. Aktif CORS + CSRF/Oturum → Cross-Origin Veri Sızıntısı Zinciri
+    if _has("CORS Aktif") and _sev_of("CORS Aktif") <= 1:
+        chains.append({
+            "title": "Aktif CORS Origin Yansıması + Credentials = Cross-Origin Hesap Ele Geçirme",
+            "severity": "KRİTİK",
+            "components": ["CORS Aktif"],
+            "description": "Sunucu keyfi Origin başlığını kabul edip Access-Control-Allow-Credentials: true döndürüyor; saldırgan bir web sayfası üzerinden kurbanın oturum verilerini okuyabilir.",
+            "fix": "Origin yansımasını kaldırın ve hassas uçlarda credentials ile dinamik CORS kullanmayın."
         })
 
     return chains
@@ -1005,6 +1330,10 @@ def build_active_coverage_ledger(scan_url, active_modules, module_stats, finding
         ("ssrf", "Server-Side Request Forgery", "url_param -> internal_network", True),
         ("idor", "Insecure Direct Object Reference", "object_id -> authorization_check", True),
         ("deep_headers", "Deep HTTP Security Headers & CORS", "origin_response -> browser_policy", False),
+        ("cors_active", "Active CORS Origin Reflection & Bypass", "cross_origin_header -> acao_credentials", False),
+        ("jwt_oauth", "Live JWT & OAuth 2.0 / OIDC Security Audit", "token_and_oauth_flow -> auth_verifier", False),
+        ("graphql", "Active GraphQL Introspection & Batching", "graphql_endpoint -> schema_and_rate_limit", False),
+        ("hpp", "HTTP Parameter Pollution & Header Poisoning", "duplicate_params_headers -> parser_and_cache", False),
         ("browser", "Browser Simulation (Crawler/JS/Forms)", "same_origin_crawl -> dom_and_forms", False),
         ("logic", "Business Logic & Race Conditions", "workflow_param -> state_machine", False),
         ("ports", "TCP Infrastructure Port Exposure", "external_network -> host_tcp_ports", False),
@@ -1052,7 +1381,7 @@ def run_active_scan(base_url, modules=None):
     if not ETHICAL_GATE.is_confirmed(hostname or ""):
         return {"success": False, "error": "ETIK_ONAY_YOK", "message": "Aktif test için etik onay gerekli."}
 
-    all_modules = ["sqli", "nosqli", "ssti", "open_redirect", "xss", "csrf", "ssrf", "idor", "ports", "deep_headers", "browser", "logic"]
+    all_modules = ["sqli", "nosqli", "ssti", "open_redirect", "xss", "csrf", "ssrf", "idor", "ports", "deep_headers", "cors_active", "jwt_oauth", "graphql", "hpp", "browser", "logic"]
     active_modules = modules if modules else all_modules
 
     client = RateLimitedClient()
@@ -1094,6 +1423,14 @@ def run_active_scan(base_url, modules=None):
         findings += _run("idor", lambda: test_idor_indicators(client, scan_url))
     if "deep_headers" in active_modules:
         findings += _run("deep_headers", lambda: test_deep_headers(scan_url))
+    if "cors_active" in active_modules:
+        findings += _run("cors_active", lambda: test_cors_active(client, scan_url))
+    if "jwt_oauth" in active_modules:
+        findings += _run("jwt_oauth", lambda: test_jwt_oauth(client, scan_url))
+    if "graphql" in active_modules:
+        findings += _run("graphql", lambda: test_graphql_active(client, scan_url))
+    if "hpp" in active_modules:
+        findings += _run("hpp", lambda: test_hpp_and_cache_poisoning(client, scan_url))
 
     # Faz 6E: Tarayıcı Simülasyonu (crawler + JS + form + clickjacking + oturum)
     browser_site_map = []

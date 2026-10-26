@@ -36,7 +36,8 @@ SAST_CODE_EXTS = {
 }
 SAST_DOCKERFILE_NAMES = {
     "dockerfile", "dockerfile.dev", "dockerfile.prod", "dockerfile.local",
-    "php.ini", ".user.ini", ".htaccess", ".nvmrc", ".node-version"
+    "php.ini", ".user.ini", ".htaccess", ".nvmrc", ".node-version",
+    ".npmrc", "pip.conf", "nuget.config"
 }
 
 SAST_MAX_FILE_SIZE = 1024 * 1024   # 1 MB
@@ -897,6 +898,100 @@ def _parse_nuget_deps(root_path):
     return deps[:SAST_DEPS_MAX_PACKAGES]
 
 
+def check_supply_chain_and_confusion(root_path, npm_deps=None, pip_deps=None):
+    """Claude-Red offensive-dependency-confusion & offensive-supply-chain:
+    1) .npmrc, pip.conf, nuget.config içindeki registry öncelik ve ekstra indeks zafiyetlerini denetler.
+    2) Özel (scoped @corp/ veya internal-/corp-/private- önekli) paketlerin açık npm/PyPI kayıt defterlerinde sahipsiz (unclaimed) olup olmadığını kontrol eder.
+    """
+    issues = []
+
+    # 1. Yapılandırma dosyaları (.npmrc, pip.conf, nuget.config)
+    for cfg_name in (".npmrc", "pip.conf", "nuget.config"):
+        cfg_path = os.path.join(root_path, cfg_name)
+        if not os.path.isfile(cfg_path):
+            continue
+        try:
+            with open(cfg_path, "r", encoding="utf-8", errors="replace") as f:
+                txt = f.read()
+            if cfg_name == ".npmrc":
+                if "registry=" in txt and not re.search(r"@[a-zA-Z0-9_\-]+:registry=", txt):
+                    issues.append({
+                        "type": "config_risk",
+                        "severity": "ORTA",
+                        "file": cfg_name,
+                        "title": ".npmrc içinde özel scope (@scope:registry) sabitlenmemiş",
+                        "detail": "Özel şirket paketleri için @scope:registry tanımlanmaması Dependency Confusion riskine yol açabilir."
+                    })
+            elif cfg_name == "pip.conf":
+                if "extra-index-url" in txt:
+                    issues.append({
+                        "type": "dependency_confusion",
+                        "severity": "YÜKSEK",
+                        "file": cfg_name,
+                        "title": "pip.conf içinde extra-index-url kullanımı (Dependency Confusion)",
+                        "detail": "pip, extra-index-url ile genel PyPI'daki daha yüksek sürümlü sahte paketi dahili pakete tercih eder."
+                    })
+            elif cfg_name == "nuget.config":
+                if "<packageSourceMapping>" not in txt and txt.lower().count("<add key=") >= 2:
+                    issues.append({
+                        "type": "dependency_confusion",
+                        "severity": "YÜKSEK",
+                        "file": cfg_name,
+                        "title": "nuget.config içinde çoklu kaynak var ancak packageSourceMapping yok",
+                        "detail": "NuGet birden fazla feed tanımlandığında packageSourceMapping yoksa genel nuget.org paketlerini çekebilir."
+                    })
+        except OSError:
+            pass
+
+    # 2. Özel/Dahili görünümlü paketler için Unclaimed Namespace kontrolü (maksimum 3 aday, kısa zaman aşımı)
+    internal_prefixes = ("internal-", "private-", "corp-", "company-", "intranet-", "local-")
+    npm_candidates = []
+    for name, _ver in (npm_deps or []):
+        if name.startswith("@") or name.startswith(internal_prefixes):
+            npm_candidates.append(name)
+
+    for pkg_name in npm_candidates[:2]:
+        try:
+            url = f"https://registry.npmjs.org/{urllib.parse.quote(pkg_name)}"
+            req = urllib.request.Request(url, headers={"User-Agent": "WebSecurityScanner/2.0"}, method="HEAD")
+            with urllib.request.urlopen(req, timeout=3):
+                pass
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                issues.append({
+                    "type": "unclaimed_package",
+                    "severity": "KRİTİK",
+                    "package": pkg_name,
+                    "ecosystem": "npm",
+                    "title": f"Dependency Confusion Riski: '{pkg_name}' genel npm kayıt defterinde sahipsiz (404)!",
+                    "detail": "Dahili paket adı genel npm'de kayıtlı değil; saldırgan bu adı kaydederek uzaktan kod yürütme (RCE) elde edebilir."
+                })
+        except Exception:
+            pass
+
+    pip_candidates = [n for n, _v in (pip_deps or []) if n.lower().startswith(internal_prefixes)]
+    for pkg_name in pip_candidates[:2]:
+        try:
+            url = f"https://pypi.org/pypi/{urllib.parse.quote(pkg_name)}/json"
+            req = urllib.request.Request(url, headers={"User-Agent": "WebSecurityScanner/2.0"}, method="HEAD")
+            with urllib.request.urlopen(req, timeout=3):
+                pass
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                issues.append({
+                    "type": "unclaimed_package",
+                    "severity": "KRİTİK",
+                    "package": pkg_name,
+                    "ecosystem": "PyPI",
+                    "title": f"Dependency Confusion Riski: '{pkg_name}' genel PyPI üzerinde sahipsiz (404)!",
+                    "detail": "Dahili Python paketi PyPI'da kayıtlı değil; --extra-index-url kullanılıyorsa RCE riski oluşturur."
+                })
+        except Exception:
+            pass
+
+    return issues
+
+
 def check_dependencies_osv(root_path):
     """Proje bağımlılıklarını 8 ekosistemde (npm, PyPI, Go, crates.io, Packagist, RubyGems, Maven, NuGet) OSV veritabanında sorgular."""
     result = {
@@ -904,6 +999,7 @@ def check_dependencies_osv(root_path):
         "ecosystems": [],
         "checked": 0,
         "vulnerable": [],
+        "supply_chain_issues": [],
         "errors": []
     }
 
@@ -930,6 +1026,11 @@ def check_dependencies_osv(root_path):
         ):
             if dlist:
                 tasks.append((eco_name, dlist))
+
+        try:
+            result["supply_chain_issues"] = check_supply_chain_and_confusion(root_path, npm_deps, pip_deps)
+        except Exception:
+            result["supply_chain_issues"] = []
 
         if not tasks:
             result["analyzed"] = True

@@ -1414,7 +1414,9 @@ function renderActiveResults(data) {
       sqli: 'SQL Injection', nosqli: 'NoSQL Injection', ssti: 'SSTI',
       open_redirect: 'Open Redirect', xss: 'XSS', csrf: 'CSRF', ssrf: 'SSRF',
       idor: 'IDOR', ports: 'Port Taraması', deep_headers: 'Derin Başlık',
-      browser: 'Tarayıcı Simülasyonu'
+      cors_active: 'Aktif CORS & Origin Bypass', jwt_oauth: 'JWT & OAuth 2.0 Denetimi',
+      graphql: 'GraphQL Güvenliği', hpp: 'HPP & Cache Poisoning',
+      browser: 'Tarayıcı Simülasyonu', logic: 'İş Mantığı & Race Condition'
     };
     modulesEl.innerHTML = Object.entries(data.modules || {}).map(([mid, m]) => {
       const statusHtml = m.ran
@@ -3327,8 +3329,8 @@ async function startUnifiedScan() {
     // -------------------------------------------------------------
     if (cleanUrl && modActive && STATE.mode === 'local_api') {
       const selectedActiveMods = [];
-      if (chkActInj) selectedActiveMods.push('sqli', 'nosqli', 'ssti', 'xss');
-      if (chkActAcc) selectedActiveMods.push('csrf', 'ssrf', 'open_redirect', 'idor', 'deep_headers');
+      if (chkActInj) selectedActiveMods.push('sqli', 'nosqli', 'ssti', 'xss', 'graphql', 'hpp');
+      if (chkActAcc) selectedActiveMods.push('csrf', 'ssrf', 'open_redirect', 'idor', 'deep_headers', 'cors_active', 'jwt_oauth');
       if (chkActCrawl) selectedActiveMods.push('browser', 'logic', 'ports');
 
       updateProgressBar(72, `[4/6] Aktif güvenlik testleri (${displayTarget}): ${selectedActiveMods.join(', ')} taranıyor...`);
@@ -3372,16 +3374,16 @@ async function startUnifiedScan() {
             };
             allFindings.push(fObj);
             const tName = (f.test || '').toLowerCase();
-            if (tName.includes('sql') || tName.includes('ssti') || tName.includes('xss')) {
+            if (tName.includes('sql') || tName.includes('ssti') || tName.includes('xss') || tName.includes('graphql') || tName.includes('hpp')) {
               if (fObj.verdict !== 'hardening_note') itemTracker[5].findings.push(fObj);
-            } else if (tName.includes('csrf') || tName.includes('ssrf') || tName.includes('redirect') || tName.includes('idor') || tName.includes('başlık')) {
+            } else if (tName.includes('csrf') || tName.includes('ssrf') || tName.includes('redirect') || tName.includes('idor') || tName.includes('başlık') || tName.includes('cors') || tName.includes('jwt') || tName.includes('oauth')) {
               if (fObj.verdict !== 'hardening_note') itemTracker[6].findings.push(fObj);
             } else {
               if (fObj.verdict !== 'hardening_note') itemTracker[7].findings.push(fObj);
             }
           });
-          if (chkActInj) itemTracker[5].note = 'SQLi, NoSQLi, SSTI ve Reflected/DOM XSS probları tamamlandı.';
-          if (chkActAcc) itemTracker[6].note = 'CSRF, SSRF, Open Redirect, IDOR ve derin CSP/CORS kontrolleri tamamlandı.';
+          if (chkActInj) itemTracker[5].note = 'SQLi, NoSQLi, SSTI, Reflected/DOM XSS, GraphQL ve HPP/Header Poisoning probları tamamlandı.';
+          if (chkActAcc) itemTracker[6].note = 'CSRF, SSRF, Open Redirect, IDOR, Aktif CORS ve Canlı JWT/OAuth 2.0 kontrolleri tamamlandı.';
           if (chkActCrawl) itemTracker[7].note = `Tarayıcı simülasyonu (${(aData.site_map || []).length} sayfa), iş mantığı ve 24 TCP port taraması tamamlandı.`;
         } else if (!aData.success) {
           const errStr = aData.error || aData.message || 'Aktif tarama başarısız';

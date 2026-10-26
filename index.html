@@ -351,7 +351,7 @@
                   </div>
                   <input type="checkbox" id="chk-deep" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard">
                 </div>
-                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">Çerez bayrakları (HttpOnly, Secure, SameSite), TLS sürümü ve sertifika bitiş süresi, <code class="font-mono">robots.txt</code> hassas yol ifşası, Mixed Content ve teknoloji parmak izi.</p>
+                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">Çerez bayrakları (HttpOnly, Secure, SameSite), TLS sürümü, Cipher Suite &amp; PFS/CRIME denetimi, <code class="font-mono">robots.txt</code> ifşası, Mixed Content ve WAF/teknoloji parmak izi.</p>
               </div>
             </label>
 
@@ -365,7 +365,7 @@
                   <span class="text-xs font-bold text-mistral-ink">4. Statik Kaynak Kod &amp; Tedarik Zinciri CVE (SAST)</span>
                   <input type="checkbox" id="chk-sast" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard">
                 </div>
-                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">7 dilde 98 statik/AST/taint/entropy kuralı, gömülü sır/anahtar tespiti ve 8 ekosistemde (npm, PyPI, Go, Cargo, Composer, Maven, NuGet, RubyGems) canlı OSV CVE taraması.</p>
+                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">7 dilde 146 statik/AST/taint/entropy kuralı (AI/LLM, CI/CD, JWT/OAuth, K8s, PHP &amp; Node.js 2026 bültenleri dahil), Dependency Confusion denetimi ve 8 ekosistemde canlı OSV CVE taraması.</p>
               </div>
             </label>
 
@@ -379,7 +379,7 @@
                   <span class="text-xs font-bold text-mistral-ink">5. Aktif Enjeksiyon &amp; Girdi Manipülasyonu Testleri</span>
                   <input type="checkbox" id="chk-active-inj" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard">
                 </div>
-                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">SQL Injection (Error/Boolean/Time-based), NoSQL Injection (<code class="font-mono">$ne</code>), SSTI şablon motoru enjeksiyonu ve Reflected/DOM XSS testleri (zararsız okuma probları).</p>
+                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">SQLi, NoSQLi (<code class="font-mono">$ne</code>), SSTI, Reflected/DOM XSS, aktif GraphQL (Introspection/Batching) ve HTTP Parameter Pollution (HPP) &amp; Cache Poisoning testleri.</p>
               </div>
             </label>
 
@@ -393,7 +393,7 @@
                   <span class="text-xs font-bold text-mistral-ink">6. Aktif Oturum, CSRF, SSRF &amp; Erişim Kontrolü</span>
                   <input type="checkbox" id="chk-active-access" checked onchange="syncLegacyModuleFlags()" class="analysis-item-check group-standard">
                 </div>
-                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">CSRF form token/SameSite denetimi, SSRF iç ağ erişim probları, Open Redirect açık yönlendirme, IDOR nesne referansı ve derin CORS/CSP politika analizi.</p>
+                <p class="text-[11px] text-mistral-slate mt-1 leading-relaxed">CSRF, SSRF, Open Redirect, IDOR, aktif CORS Origin yansıma/bypass testi ve canlı JWT (<code class="font-mono">alg:none</code>, <code class="font-mono">kid</code>, <code class="font-mono">jku</code>, zayıf secret) &amp; OAuth 2.0 / OIDC denetimi.</p>
               </div>
             </label>
 
