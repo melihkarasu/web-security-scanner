@@ -38,6 +38,8 @@ Web Security Scanner bridges that gap with a **Unified Single-Input Command Cent
 | **Strix Autonomous AI Pentest** (100% CLI flag & env parity + Docker sandbox PoC generation + live sub-agent tree + `coverage.json` + SARIF 2.1.0/CSV/MD) | ❌ | ✅ (Requires `strix-agent` + Docker) |
 | **Scan History & Diff** (local SQLite, secrets masked, 30-day retention, new / fixed / persisting vs. previous scan) | ✅ | ✅ |
 | **Threat Intelligence** (opt-in: version banners & JS libraries → NVD / OSV / CISA KEV, always *needs validation*) | ✅ | ✅ |
+| **Security Assistant** (read-only chat that explains this scan's findings & fixes, no actions) | ✅ | ✅ |
+| **Editable Agent Prompts** (customize each agent's instructions; safety enforced in code) | ❌ | ✅ |
 | **Cloudflare Audit Lifecycle & Unified Coverage Ledger** (`Confirmed` / `Needs Validation` / `Hardening Notes` / `Rejected` + cross-engine Coverage Ledger) | ✅ (Passive/DNS) | ✅ Full across all engines |
 | **Exportable Reports** (Markdown, JSON, HTML, SARIF 2.1.0, CSV, `SECURITY-REPORT.md`, `architecture.md`, `coverage-ledger.md`, `findings.json`) | Basic (DNS/Score) | ✅ Full multi-engine report |
 
@@ -107,6 +109,8 @@ Access the Web UI at **`http://localhost:8765`**.
 - **Technology Fingerprinting** — Identifies web servers, frameworks, CMSs, and CDNs (WordPress, Next.js, Angular, React, Laravel, PHP, Java, Express.js, Cloudflare, AWS) from headers, meta tags, script markers, and cookie names.
 - **Scan History & Diff (local)** — Every active / AI scan is stored per target origin in a local SQLite file (secrets masked, 30-day retention, deletable from the UI or API). Results show **new / fixed (not seen again) / persisting** findings versus the previous scan of the same target and kind, also in the Markdown/HTML export.
 - **Threat Intelligence (opt-in, off by default)** — Matches version banners (`Server`, `X-Powered-By`, `<meta name="generator">`) and JS library paths against the NVD CVE API 2.0, OSV (npm) and the CISA KEV catalogue. Only product + version leave your machine (never the target address); results are always marked *needs validation* because distributions backport fixes without changing banner versions.
+- **Security Assistant (read-only chat)** — Ask questions about the current scan's findings ("what is the most critical issue?", "how do I fix this SQLi?"). The assistant only explains and advises from the scan context (masked before it reaches the LLM); it cannot start scans, send requests or change settings, and treats finding text as untrusted data (prompt-injection safe).
+- **Editable Agent Prompts** — Customize each agent's instructions (Scout / Strategist / Analyst / Reporter / Mentor) from the AI settings drawer, with reset-to-default. A non-overridable safety suffix is always appended and the real guardrails (scope lock, destructive-payload rejection, operator confirmation for state-changing endpoints) are enforced in code, so editing prompts can never weaken safety.
 
 ### 3. SAST — Local Directory & Source Code Analysis (Local / Docker Mode)
 Scan any local directory path (`/var/www/app`, `~/project`, `./src`) either **standalone** or **in parallel with a live URL** (hybrid white-box scan):
@@ -215,6 +219,7 @@ web-security-scanner/
 ├── ai_jobs.py                 # Background AI jobs: live event stream, cancel, steering notes, operator questions
 ├── scan_history.py            # Local scan history (SQLite): masked findings, stable fingerprints, new/fixed/persisting diff, retention
 ├── threat_intel.py            # Opt-in threat intel: version banners & JS libs -> NVD / OSV / CISA KEV (needs-validation findings)
+├── security_assistant.py      # Read-only findings chat assistant (masked context, tool-less, prompt-injection safe)
 ├── ai_orchestrator.py         # Evidence-verified 4-agent Red Team pipeline (Scout → Strategist → Analyst → Reporter)
 ├── safety_guard.py            # Code-enforced AI probe guard: exact-origin scope lock + destructive/DoS payload filter
 ├── redaction.py               # Secret masking for every LLM prompt (cookies, Authorization, JWT, API & private keys)
@@ -253,6 +258,8 @@ All `/api/*` endpoints require the per-launch session token in an `X-WSS-Token` 
 - `POST /api/ai-cancel` — Cancel a running AI job (effective after the current step)
 - `POST /api/ai-note` — Add an operator steering note (max 5 × 500 chars) for the next planning round
 - `POST /api/ai-answer` — Answer a pending operator confirmation question
+- `POST /api/ai-chat` — Read-only security assistant Q&A about the current scan (masked context, no actions)
+- `GET  /api/ai-agent-prompts` — Default agent instructions + the locked-safety note (for the prompt editor)
 - `GET  /api/history?target=&kind=&limit=` — Local scan history for a target (newest first)
 - `GET  /api/history-scan?id=` — One stored scan with its masked findings
 - `GET  /api/history-diff?id=&base=` — New / fixed (not seen) / persisting findings versus the previous (or a given) scan

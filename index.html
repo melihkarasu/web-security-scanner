@@ -203,6 +203,17 @@
           <input type="checkbox" id="ai-small-model-mode" class="mt-0.5" />
           <span><strong>Küçük / yerel model modu:</strong> Bulgu çıkmayan bir turdan sonra bağımsız bir Mentor ajanı Strategist'e yön önerir (en fazla 2 ek LLM çağrısı).</span>
         </label>
+        <div class="mt-3 pt-3 border-t border-stone-200">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-bold text-mistral-slate">Ajan talimatları (gelişmiş)</span>
+            <div class="flex gap-2">
+              <button type="button" id="ai-prompts-edit-btn" onclick="openAgentPromptsEditor()" class="text-[11px] px-2 py-0.5 rounded border border-stone-300 text-stone-700 hover:bg-stone-100">Düzenle</button>
+              <button type="button" onclick="resetAgentPrompts()" class="text-[11px] px-2 py-0.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50">Varsayılana dön</button>
+            </div>
+          </div>
+          <p class="mt-1 text-[11px] text-stone-500">Her ajanın talimatını özelleştirebilirsin. Güvenlik kuralları (yalnız onaylı host:port kapsamı, yıkıcı payload reddi, durum değiştiren uçlar için onay) <strong>kodda zorlanır</strong>; talimat ne yazarsa yazsın bu kurallar geçerli kalır ve her talimata değiştirilemez bir güvenlik eki eklenir.</p>
+          <div id="ai-prompts-editor" class="hidden mt-2 space-y-2"></div>
+        </div>
       </details>
 
       <!-- Aksiyon & Test Barı -->
@@ -917,6 +928,19 @@
               <div id="ai-thought-log" class="font-mono text-[11px] text-stone-300 bg-black/60 rounded-xl p-4 max-h-[400px] overflow-y-auto space-y-1.5">
                 <div class="text-stone-500">[Sistem] AI Red Team hazır. Taramada 'AI Red Team' seçildiğinde ajan akışı buraya yansıyacaktır.</div>
               </div>
+              <div class="mt-4 pt-3.5 border-t border-stone-800">
+                <div class="flex items-center justify-between gap-2 mb-2">
+                  <span class="text-xs font-bold text-stone-200">💬 Güvenlik Asistanı <span class="text-[10px] font-normal text-stone-500">(salt-okunur; bu taramanın bulgularını açıklar)</span></span>
+                  <button type="button" onclick="clearSecurityChat()" class="text-[10px] px-2 py-0.5 rounded border border-stone-700 text-stone-400 hover:bg-stone-800">Temizle</button>
+                </div>
+                <div id="ai-chat-log" class="font-mono text-[11px] text-stone-300 bg-black/40 rounded-xl p-3 max-h-[260px] overflow-y-auto space-y-2">
+                  <div class="text-stone-500">Bir tarama tamamlandıktan sonra bulgular hakkında soru sorabilirsin (ör. "en kritik bulgu ne?", "SQLi'yi nasıl düzeltirim?"). Asistan yalnızca açıklama yapar; tarama başlatmaz veya ayar değiştirmez.</div>
+                </div>
+                <div class="mt-2 flex gap-2">
+                  <input type="text" id="ai-chat-input" maxlength="2000" placeholder="Bulgular hakkında soru sor…" class="flex-1 bg-black/40 border border-stone-700 rounded px-2 py-1.5 text-[11px] text-stone-200 font-mono" onkeydown="if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendSecurityChat(); }" />
+                  <button type="button" id="ai-chat-send" onclick="sendSecurityChat()" class="text-[11px] px-3 py-1.5 rounded bg-indigo-700 text-white hover:bg-indigo-600">Sor</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1052,6 +1076,6 @@
   </div>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261101d"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261101e"></script>
 </body>
 </html>

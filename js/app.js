@@ -1428,6 +1428,172 @@ async function startActiveScan(options = {}) {
 }
 
 // =============================================================
+// Faz 4: Salt-okunur güvenlik sohbet asistanı + düzenlenebilir ajan talimatları
+// =============================================================
+const SECURITY_CHAT = { history: [], busy: false };
+
+function latestScanContext() {
+  const r = (STATE && STATE.results) || {};
+  return r.aiScan || r.activeScan || null;
+}
+
+function appendChatBubble(role, text) {
+  const log = document.getElementById('ai-chat-log');
+  if (!log) return;
+  if (log.dataset.empty !== '1') { log.innerHTML = ''; log.dataset.empty = '1'; }
+  const wrap = document.createElement('div');
+  const isUser = role === 'user';
+  wrap.className = isUser ? 'text-right' : 'text-left';
+  const bubble = document.createElement('span');
+  bubble.className = 'inline-block max-w-[85%] whitespace-pre-wrap rounded-lg px-2.5 py-1.5 ' +
+    (isUser ? 'bg-indigo-800/70 text-indigo-50' : (role === 'error' ? 'bg-rose-900/60 text-rose-100' : 'bg-stone-800 text-stone-200'));
+  bubble.textContent = text;
+  wrap.appendChild(bubble);
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+}
+
+function clearSecurityChat() {
+  SECURITY_CHAT.history = [];
+  const log = document.getElementById('ai-chat-log');
+  if (log) {
+    log.dataset.empty = '0';
+    log.innerHTML = '<div class="text-stone-500">Sohbet temizlendi. Bulgular hakkında yeni bir soru sorabilirsin.</div>';
+  }
+}
+
+async function sendSecurityChat() {
+  const input = document.getElementById('ai-chat-input');
+  const btn = document.getElementById('ai-chat-send');
+  const question = (input?.value || '').trim();
+  if (!question || SECURITY_CHAT.busy) return;
+  const context = latestScanContext();
+  if (!context) {
+    appendChatBubble('error', 'Önce bir tarama çalıştır; asistan yalnızca mevcut taramanın bulgularını açıklar.');
+    return;
+  }
+  SECURITY_CHAT.busy = true;
+  if (btn) btn.disabled = true;
+  if (input) input.value = '';
+  appendChatBubble('user', question);
+  SECURITY_CHAT.history.push({ role: 'user', content: question });
+  const thinking = document.createElement('div');
+  thinking.className = 'text-left text-stone-500';
+  thinking.textContent = 'Asistan düşünüyor…';
+  document.getElementById('ai-chat-log')?.appendChild(thinking);
+  try {
+    const aiConfig = buildAIConfigForRequest();
+    const res = await fetch('/api/ai-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ai_config: aiConfig, question: question, context: context,
+                             history: SECURITY_CHAT.history.slice(0, -1) }),
+      signal: AbortSignal.timeout(60000)
+    });
+    const data = await res.json();
+    thinking.remove();
+    if (data.success) {
+      appendChatBubble('assistant', data.answer);
+      SECURITY_CHAT.history.push({ role: 'assistant', content: data.answer });
+    } else {
+      appendChatBubble('error', 'Asistan yanıtı alınamadı: ' + (data.error || 'bilinmeyen hata'));
+      SECURITY_CHAT.history.pop();
+    }
+  } catch (err) {
+    thinking.remove();
+    appendChatBubble('error', 'İstek başarısız: ' + err.message);
+    SECURITY_CHAT.history.pop();
+  } finally {
+    SECURITY_CHAT.busy = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+// --- Düzenlenebilir ajan talimatları ---
+const AGENT_PROMPT_ROLES = ['scout', 'strategist', 'analyst', 'reporter', 'mentor'];
+const AGENT_PROMPT_LABELS = { scout: 'Scout (keşif)', strategist: 'Strategist (planlama)', analyst: 'Analyst (karar)', reporter: 'Reporter (rapor)', mentor: 'Mentor (küçük model modu)' };
+let AGENT_PROMPT_DEFAULTS = null;
+
+function loadCustomAgentPrompts() {
+  try { return JSON.parse(localStorage.getItem('wss_agent_prompts') || '{}') || {}; } catch (e) { return {}; }
+}
+
+function collectAgentPrompts() {
+  // Yalnızca varsayılandan farklı olanları gönder (kaydet).
+  const custom = {};
+  const stored = loadCustomAgentPrompts();
+  for (const role of AGENT_PROMPT_ROLES) {
+    const el = document.getElementById('ai-prompt-' + role);
+    const val = el ? el.value.trim() : (stored[role] || '');
+    if (val && (!AGENT_PROMPT_DEFAULTS || val !== (AGENT_PROMPT_DEFAULTS[role] || '').trim())) {
+      custom[role] = val;
+    }
+  }
+  return custom;
+}
+
+async function openAgentPromptsEditor() {
+  const box = document.getElementById('ai-prompts-editor');
+  if (!box) return;
+  if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
+  if (!AGENT_PROMPT_DEFAULTS) {
+    try {
+      const res = await fetch('/api/ai-agent-prompts', { signal: AbortSignal.timeout(15000) });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'hata');
+      AGENT_PROMPT_DEFAULTS = data.defaults;
+      box.dataset.lockedNote = data.locked_note || '';
+    } catch (err) {
+      showToast('Ajan talimatları yüklenemedi: ' + err.message, 'error');
+      return;
+    }
+  }
+  const custom = loadCustomAgentPrompts();
+  box.innerHTML = AGENT_PROMPT_ROLES.map(function (role) {
+    const val = custom[role] || AGENT_PROMPT_DEFAULTS[role] || '';
+    return '<div><label class="text-[11px] font-semibold text-stone-600">' + escapeHtml(AGENT_PROMPT_LABELS[role] || role) +
+      '</label><textarea id="ai-prompt-' + role + '" rows="4" class="w-full mt-1 bg-white border border-stone-300 rounded px-2 py-1 text-[11px] font-mono" spellcheck="false">' +
+      escapeHtml(val) + '</textarea></div>';
+  }).join('') +
+    '<p class="text-[10px] text-stone-500">' + escapeHtml(box.dataset.lockedNote || '') + '</p>' +
+    '<button type="button" onclick="saveAgentPrompts()" class="text-[11px] px-2 py-1 rounded bg-emerald-700 text-white hover:bg-emerald-600">Talimatları kaydet</button>';
+  box.classList.remove('hidden');
+}
+
+function saveAgentPrompts() {
+  const custom = collectAgentPrompts();
+  localStorage.setItem('wss_agent_prompts', JSON.stringify(custom));
+  const n = Object.keys(custom).length;
+  showToast(n ? (n + ' ajan talimatı özelleştirildi (sonraki taramada geçerli).') : 'Tüm ajanlar varsayılan talimatı kullanıyor.', 'success');
+}
+
+function resetAgentPrompts() {
+  localStorage.removeItem('wss_agent_prompts');
+  const box = document.getElementById('ai-prompts-editor');
+  if (box && !box.classList.contains('hidden')) {
+    AGENT_PROMPT_ROLES.forEach(function (role) {
+      const el = document.getElementById('ai-prompt-' + role);
+      if (el && AGENT_PROMPT_DEFAULTS) el.value = AGENT_PROMPT_DEFAULTS[role] || '';
+    });
+  }
+  showToast('Ajan talimatları varsayılana döndürüldü.', 'info');
+}
+
+// Tarama isteklerinde ai_config'i tek yerden kur (sohbet + ajan talimatları ortak).
+function buildAIConfigForRequest() {
+  return {
+    provider: document.getElementById('ai-provider')?.value || 'openai',
+    model: document.getElementById('ai-model')?.value.trim() || '',
+    base_url: document.getElementById('ai-base-url')?.value.trim() || '',
+    project_id: document.getElementById('ai-project-id')?.value.trim() || '',
+    region: document.getElementById('ai-region')?.value.trim() || 'global',
+    auth: { type: document.getElementById('ai-auth-type')?.value || 'service_account',
+            value: document.getElementById('ai-auth')?.value.trim() || '' },
+    api_key: document.getElementById('ai-auth')?.value.trim() || ''
+  };
+}
+
+// =============================================================
 // Faz 3: Tarama geçmişi / fark kartı + tehdit istihbaratı tercihi
 // =============================================================
 function threatIntelEnabled() {
@@ -2854,6 +3020,7 @@ async function startAIOrchestrationScan(targetUrl, modules) {
         api_key: aiAuth,
         small_model_mode: !!document.getElementById('ai-small-model-mode')?.checked,
         role_models: collectRoleModels(),
+        agent_prompts: collectAgentPrompts(),
         threat_intel: threatIntelEnabled()
       }
     }, (ev) => appendAILog(ev.message, ev.agent || 'info'));

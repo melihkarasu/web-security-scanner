@@ -32,6 +32,7 @@ from ai_connector import AIProviderFactory
 from redaction import redact_text
 from ai_jobs import AIJobManager, JobLimitError
 import scan_history
+import security_assistant
 import threat_intel
 from strix_engine import STRIX_MANAGER, strix_capabilities
 
@@ -208,6 +209,10 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_ai_json_test()
             return
 
+        if parsed.path == "/api/ai-chat":
+            self.handle_api_ai_chat()
+            return
+
         if parsed.path == "/api/ai-cancel":
             self.handle_api_ai_cancel()
             return
@@ -292,6 +297,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         # 1f. API: /api/strix-capabilities (Strix kurulum + özellik tespiti)
         if parsed.path == "/api/strix-capabilities":
             self.send_json(strix_capabilities())
+            return
+
+        # 1d. API: ajan talimatı varsayılanları (Faz 4)
+        if parsed.path == "/api/ai-agent-prompts":
+            self.handle_api_ai_agent_prompts()
             return
 
         # 1e. API: tarama geçmişi + fark (Faz 3)
@@ -1124,6 +1134,32 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.send_json(test_res)
         except Exception as e:
             self.send_json({"success": False, "error": f"Bağlantı hatası: {str(e)}"}, status=400)
+
+    def handle_api_ai_chat(self):
+        """Faz 4: tarama bulguları hakkında salt-okunur güvenlik sohbet asistanı."""
+        data = self._read_json_payload()
+        if data is None:
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+        try:
+            result = security_assistant.answer_question(
+                data.get("ai_config") or {}, data.get("question"),
+                context=data.get("context"), history=data.get("history"))
+            self.send_json(result, status=200 if result.get("success") else 400)
+        except Exception as e:
+            self.send_json({"success": False, "error": "Asistan hatası: %s" % str(e)[:200]}, status=500)
+
+    def handle_api_ai_agent_prompts(self):
+        """Faz 4: düzenlenebilir ajan talimatlarının varsayılanları (arayüz bunları gösterir/düzenler)."""
+        import ai_orchestrator
+        self.send_json({
+            "success": True,
+            "defaults": ai_orchestrator.DEFAULT_AGENT_PROMPTS,
+            "roles": list(ai_orchestrator._ROLE_NAMES),
+            "locked_note": ("Her talimata değiştirilemez bir güvenlik eki eklenir. Kapsam (yalnız onaylı "
+                            "host:port), yıkıcı payload reddi ve durum değiştiren uçlar için operatör onayı "
+                            "KODDA zorlanır; talimat ne derse desin bu kurallar geçerlidir."),
+        })
 
     def handle_api_ai_json_test(self):
         """AI saglayici/modelin JSON modu uyumlulugunu olcer (Faz 1 — json_health_check).
