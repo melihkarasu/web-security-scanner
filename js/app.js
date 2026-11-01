@@ -7,6 +7,54 @@
 // =============================================================
 // 1. Durum Yönetimi & Sabitler
 // =============================================================
+// --- Yerel API oturum anahtarı ---------------------------------------------
+// server.py, index.html'e <meta name="wss-token"> olarak bu oturuma özel bir anahtar gömer.
+// Aynı kökene giden /api/* isteklerine anahtar X-WSS-Token başlığıyla eklenir.
+// GitHub Pages (statik mod) sürümünde anahtar boştur ve sarmalayıcı devreye girmez.
+(function installWssTokenFetch() {
+  try {
+    const meta = document.querySelector('meta[name="wss-token"]');
+    const token = meta ? (meta.getAttribute('content') || '') : '';
+    if (!token || typeof window.fetch !== 'function') return;
+    const nativeFetch = window.fetch.bind(window);
+    let warned = false;
+    const showExpiredBanner = () => {
+      if (warned) return;
+      warned = true;
+      const bar = document.createElement('div');
+      bar.setAttribute('role', 'alert');
+      bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;padding:10px 16px;background:#7f1d1d;color:#fef2f2;font:600 14px/1.4 Inter,system-ui,sans-serif;text-align:center;';
+      bar.textContent = 'Yerel sunucu yeniden başlatıldı; oturum anahtarı değişti. Devam etmek için sayfayı yenileyin. ';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'Sayfayı yenile';
+      btn.style.cssText = 'margin-left:8px;padding:4px 10px;border-radius:6px;border:0;background:#fef2f2;color:#7f1d1d;font-weight:700;cursor:pointer;';
+      btn.addEventListener('click', () => window.location.reload());
+      bar.appendChild(btn);
+      (document.body || document.documentElement).appendChild(bar);
+    };
+    window.fetch = function (input, init) {
+      let target = null;
+      try {
+        const raw = typeof input === 'string' ? input : (input && input.url) || String(input);
+        target = new URL(raw, window.location.href);
+      } catch (e) { target = null; }
+      if (!target || target.origin !== window.location.origin || target.pathname.indexOf('/api/') !== 0) {
+        return nativeFetch(input, init);
+      }
+      const opts = Object.assign({}, init || {});
+      const baseHeaders = opts.headers || ((typeof Request !== 'undefined' && input instanceof Request) ? input.headers : undefined) || {};
+      const headers = new Headers(baseHeaders);
+      headers.set('X-WSS-Token', token);
+      opts.headers = headers;
+      return nativeFetch(input, opts).then((resp) => {
+        if (resp && resp.status === 401) showExpiredBanner();
+        return resp;
+      });
+    };
+  } catch (e) { /* statik modda sessizce geç */ }
+})();
+
 const STATE = {
   currentDomain: '',
   targetUrl: '',
@@ -1311,7 +1359,7 @@ async function startActiveScan(options = {}) {
 
     // 2. Aktif taramayı başlat
     const scanUrl = '/api/active-scan?url=' + encodeURIComponent(rawUrl) + '&modules=' + encodeURIComponent(modules.join(','));
-    const res = await fetch(scanUrl, { signal: AbortSignal.timeout(300000) });
+    const res = await fetch(scanUrl, { method: 'POST', signal: AbortSignal.timeout(300000) });
     const data = await res.json();
 
     if (!data.success) {
@@ -1347,7 +1395,7 @@ async function startActiveScan(options = {}) {
 
       // 2. Aktif taramayı başlat
       const scanUrl = '/api/active-scan?url=' + encodeURIComponent(rawUrl) + '&modules=' + encodeURIComponent(modules.join(','));
-      const res = await fetch(scanUrl, { signal: AbortSignal.timeout(300000) });
+      const res = await fetch(scanUrl, { method: 'POST', signal: AbortSignal.timeout(300000) });
       const data = await res.json();
 
       if (!data.success) {

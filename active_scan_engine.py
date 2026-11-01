@@ -22,6 +22,8 @@ import urllib.request
 import urllib.parse
 import urllib.error
 
+from safety_guard import is_in_scope, validate_probe_payload
+
 # Faz 6F: İş Mantığı Test Motoru
 from business_logic_engine import run_business_logic_scan
 
@@ -105,17 +107,47 @@ ETHICAL_GATE = EthicalGate()
 # =============================================================
 # Rate-Limited HTTP İstemcisi
 # =============================================================
-class RateLimitedClient:
-    """Tüm aktif istekler bu istemciden geçer: rate limit + sayaç + User-Agent."""
+class _ScopedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Kapsam dışına (farklı scheme/host/port) giden yönlendirmeleri İZLEMEZ.
 
-    def __init__(self):
+    3xx yanıtı olduğu gibi (Location başlığıyla) döner; bu aynı zamanda açık yönlendirme
+    kanıtıdır. Kapsam içi yönlendirmeler normal şekilde izlenir.
+    """
+
+    def __init__(self, scope_url):
+        super().__init__()
+        self.scope_url = scope_url
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not is_in_scope(newurl, self.scope_url):
+            raise urllib.error.HTTPError(newurl, code, "Kapsam dışı yönlendirme izlenmedi: %s" % newurl, headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+class RateLimitedClient:
+    """Tüm aktif istekler bu istemciden geçer: rate limit + sayaç + User-Agent.
+
+    scope_url verilirse (AI probları) istemci yalnızca o kökene (scheme + host + port) istek
+    atar ve kapsam dışına yönlendirmeleri izlemez. max_requests, istemci başına istek
+    bütçesidir (varsayılan MAX_REQUESTS_PER_SCAN).
+    """
+
+    def __init__(self, scope_url=None, max_requests=None):
         self.request_count = 0
         self.last_request_at = 0.0
+        self.scope_url = scope_url
+        self.max_requests = int(max_requests) if max_requests else MAX_REQUESTS_PER_SCAN
+        self._opener = urllib.request.build_opener(_ScopedRedirectHandler(scope_url)) if scope_url else None
 
     def request(self, url, method="GET", params=None, headers=None, data=None, timeout=REQUEST_TIMEOUT):
         """Rate-limited HTTP isteği (GET/POST/OPTIONS + özel başlık desteği)."""
-        if self.request_count >= MAX_REQUESTS_PER_SCAN:
-            raise StopIteration("İstek üst sınırına ulaşıldı (%d)" % MAX_REQUESTS_PER_SCAN)
+        if self.request_count >= self.max_requests:
+            raise StopIteration("İstek üst sınırına ulaşıldı (%d)" % self.max_requests)
+
+        # Kapsam koruması (AI probları): farklı scheme/host/port'a istek GÖNDERİLMEZ ve sayaca yazılmaz.
+        if self.scope_url and not is_in_scope(url, self.scope_url):
+            return {"status": None, "headers": {}, "body": "", "url": url,
+                    "error": "KAPSAM_DISI", "blocked": "scope"}
 
         elapsed = time.time() - self.last_request_at
         if elapsed < RATE_LIMIT_SECONDS:
@@ -139,8 +171,9 @@ class RateLimitedClient:
         self.request_count += 1
         self.last_request_at = time.time()
 
+        opener = self._opener.open if getattr(self, "_opener", None) else urllib.request.urlopen
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with opener(req, timeout=timeout) as resp:
                 body = resp.read(256 * 1024).decode("utf-8", errors="replace")
                 return {"status": resp.status, "headers": dict(resp.headers), "body": body, "url": url, "error": None}
         except urllib.error.HTTPError as e:
@@ -1192,8 +1225,25 @@ def run_custom_test(client, url, param, payload):
                 urllib.parse.urlencode(existing), ""))
         except ValueError:
             merged_url = url
+    # Kod düzeyinde payload koruması: LLM ne önerirse önersin yıkıcı / DoS / metadata payload'ı
+    # (ve URL'ye gömülmüş benzerleri) hedefe GÖNDERİLMEZ.
+    try:
+        merged_query = urllib.parse.unquote_plus(urllib.parse.urlsplit(merged_url).query or "")
+    except ValueError:
+        merged_query = ""
+    for candidate, limit in ((payload, 2048), (param, 256), (merged_query, 8192)):
+        allowed, reason = validate_probe_payload(candidate, max_length=limit)
+        if not allowed:
+            return {"url": merged_url, "param": param, "payload": payload, "status": None,
+                    "error": "PAYLOAD_REDDEDILDI", "blocked": "payload", "reason": reason,
+                    "body": "", "body_length": 0, "headers": ""}
     try:
         resp = client.get(merged_url)
+        if resp.get("blocked") == "scope":
+            return {"url": merged_url, "param": param, "payload": payload, "status": None,
+                    "error": "KAPSAM_DISI", "blocked": "scope",
+                    "reason": "Prob URL'si etik onaylı hedefle aynı köken (scheme + host + port) değil.",
+                    "body": "", "body_length": 0, "headers": ""}
         body = resp.get("body", "") or ""
         headers = resp.get("headers", {}) or {}
         try:
@@ -1209,6 +1259,9 @@ def run_custom_test(client, url, param, payload):
             "body_length": len(body),
             "headers": headers_s
         }
+    except StopIteration as e:
+        return {"url": merged_url, "param": param, "payload": payload, "status": None,
+                "error": "istek limiti", "limit_reached": True, "reason": str(e)}
     except Exception as e:
         return {"error": str(e)}
 

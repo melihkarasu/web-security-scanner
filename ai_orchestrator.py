@@ -321,11 +321,26 @@ class AIOrchestrator:
                     response = active_scanner_callback(url, param, payload)
                 except Exception as e:
                     response = {"error": str(e)}
-                if isinstance(response, dict) and response.get("error") in ("istek limiti",):
-                    emit("error", "İstek limitine ulaşıldı; döngü sonlandırılıyor.")
+                if not isinstance(response, dict):
+                    response = {"error": "geçersiz yanıt"}
+                # İstemci bütçesi doldu (run_custom_test → limit_reached). Eski sürümde bu kontrol
+                # hiç eşleşmeyen bir metne bakıyordu; artık açık bayrak kullanılır.
+                if response.get("limit_reached") or response.get("error") == "istek limiti":
+                    emit("error", "AI istek bütçesi doldu; döngü sonlandırılıyor.")
                     executed.append({"url": url, "param": param, "payload": payload, "verdict": "RATE_LIMIT"})
                     loop_count = self.max_loops  # üst limit: dış döngüyü de bitir
                     break
+                # Kod düzeyindeki koruma (safety_guard) probu GÖNDERMEDİ → Analyst çağrısı yapılmaz;
+                # geçmişe yazılır ki Stratejist aynı probu tekrar önermesin.
+                if response.get("blocked"):
+                    blocked_verdict = "BLOCKED_SCOPE" if response.get("blocked") == "scope" else "BLOCKED_PAYLOAD"
+                    block_reason = str(response.get("reason") or response.get("error") or "")[:200]
+                    executed.append({"url": url, "param": param, "payload": payload,
+                                     "verdict": blocked_verdict, "reason": block_reason})
+                    emit("error", "⛔ Prob gönderilmedi (%s): %s [%s] — %s" % (
+                        "kapsam dışı" if blocked_verdict == "BLOCKED_SCOPE" else "güvensiz payload",
+                        url[:70], param, block_reason[:120]))
+                    continue
 
                 # 4. ANALİZ (The Analyst) — her kanıt ayrı değerlendirilir
                 verdict_raw = ""

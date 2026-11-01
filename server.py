@@ -22,11 +22,14 @@ from http.server import HTTPServer, ThreadingHTTPServer, SimpleHTTPRequestHandle
 import webbrowser
 import threading
 import time
+import secrets
+import hmac
 
 # Faz 3: Aktif tarama motoru (etik onay geçidi + rate limiter içerir)
 from active_scan_engine import ETHICAL_GATE, run_active_scan, run_custom_test, export_scan_state, RateLimitedClient, RATE_LIMIT_SECONDS
 from ai_orchestrator import AIOrchestrator
 from ai_connector import AIProviderFactory
+from redaction import redact_text
 from strix_engine import STRIX_MANAGER, strix_capabilities
 
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -35,21 +38,146 @@ NO_BROWSER = os.environ.get("NO_BROWSER", "0").lower() in ("1", "true", "yes")
 EDITION = "lite" if ("--lite" in sys.argv or os.environ.get("WSS_EDITION", "").lower() == "lite") else "full"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 WebSecurityScanner/1.0"
 TIMEOUT_SECONDS = 8
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# --- Yerel API güvenliği (PentAGI'nin Bearer token yaklaşımının yerel uyarlaması) ---
+# Oturum anahtarı her açılışta rastgele üretilir; CLI/CI için WSS_API_TOKEN ile sabitlenebilir.
+API_TOKEN_FROM_ENV = bool(os.environ.get("WSS_API_TOKEN", "").strip())
+API_TOKEN = os.environ.get("WSS_API_TOKEN", "").strip() or secrets.token_urlsafe(32)
+# DNS rebinding koruması: yalnızca bu ana makine adlarıyla gelen isteklere yanıt verilir.
+ALLOWED_HOSTNAMES = frozenset({"127.0.0.1", "localhost", "::1"} | {
+    h.strip().lower() for h in os.environ.get("WSS_ALLOWED_HOSTS", "").split(",") if h.strip()})
+# Tarama başlatan uçlar yalnızca POST ile çağrılabilir.
+POST_ONLY_API_PATHS = frozenset({"/api/active-scan", "/api/ai-scan"})
+# Statik servis izin listesi: kaynak kod, .git, rapor ve test dizinleri servis edilmez.
+STATIC_ALLOWED_PREFIXES = ("/css/", "/js/", "/assets/", "/img/", "/images/", "/fonts/", "/icons/")
+STATIC_ALLOWED_ROOT_EXT = (".html", ".ico", ".png", ".svg", ".jpg", ".jpeg", ".webp", ".gif", ".webmanifest")
+TOKEN_META_PLACEHOLDER = '<meta name="wss-token" content="">'
 
 class ScannerHTTPHandler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        # Statik dosyalar her zaman uygulama dizininden servis edilir (çalışma dizininden bağımsız).
+        kwargs.setdefault("directory", APP_DIR)
+        super().__init__(*args, **kwargs)
+
     def end_headers(self):
-        # Yerel istemci ve konteyner için CORS başlıkları
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        # CORS başlığı GÖNDERİLMEZ: arayüz aynı kökenden servis edilir; başka sitelerin yerel API
+        # yanıtlarını okuması tarayıcı tarafından engellenir (eski sürüm "Access-Control-Allow-Origin: *" gönderiyordu).
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         super().end_headers()
 
+    # ------------------------------------------------------------------
+    # Yerel API güvenlik geçidi
+    # ------------------------------------------------------------------
+    def _request_hostname(self):
+        host = self.headers.get("Host")
+        if host is None:
+            return None
+        try:
+            return (urllib.parse.urlsplit("//" + host.strip()).hostname or "").lower().rstrip(".")
+        except ValueError:
+            return ""
+
+    def _security_gate(self, method):
+        """Host (tüm istekler) + köken, oturum anahtarı ve yöntem (/api/*) kontrolleri. Geçerse True döner."""
+        path = urllib.parse.urlparse(self.path).path
+        hostname = self._request_hostname()
+        if hostname is not None and hostname not in ALLOWED_HOSTNAMES:
+            self.send_json({"success": False, "error": "GECERSIZ_HOST",
+                            "message": "İstek yalnızca yerel adreslerden (127.0.0.1 / localhost) kabul edilir "
+                                       "(DNS rebinding koruması). Gerekirse WSS_ALLOWED_HOSTS ile ekleyin."}, status=403)
+            return False
+        if not path.startswith("/api/"):
+            return True
+        host_header = (self.headers.get("Host") or "").strip().lower()
+        origin = self.headers.get("Origin")
+        if origin is not None and origin.strip().lower() not in ("http://" + host_header, "https://" + host_header):
+            self.send_json({"success": False, "error": "CAPRAZ_KOKEN_ENGELLENDI",
+                            "message": "Yerel API'ye yalnızca arayüzün kendi kökeninden erişilebilir."}, status=403)
+            return False
+        fetch_site = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+        if fetch_site and fetch_site not in ("same-origin", "none"):
+            self.send_json({"success": False, "error": "CAPRAZ_KOKEN_ENGELLENDI",
+                            "message": "Yerel API'ye başka sitelerden istek gönderilemez."}, status=403)
+            return False
+        supplied = (self.headers.get("X-WSS-Token") or "").strip()
+        if not supplied:
+            auth = (self.headers.get("Authorization") or "").strip()
+            if auth.lower().startswith("bearer "):
+                supplied = auth[7:].strip()
+        if not supplied or not hmac.compare_digest(supplied.encode("utf-8"), API_TOKEN.encode("utf-8")):
+            self.send_json({"success": False, "error": "WSS_TOKEN_GEREKLI",
+                            "message": "Yerel API oturum anahtarı eksik veya geçersiz. Arayüz sayfasını yenileyin; "
+                                       "CLI için sunucu açılışında yazdırılan anahtarı X-WSS-Token başlığıyla gönderin."},
+                           status=401)
+            return False
+        if method == "GET" and path in POST_ONLY_API_PATHS:
+            self.send_json({"success": False, "error": "YALNIZCA_POST",
+                            "message": "Bu uç tarama başlattığı için yalnızca POST ile çağrılabilir."}, status=405)
+            return False
+        return True
+
+    @staticmethod
+    def _is_static_allowed(path):
+        decoded = urllib.parse.unquote(path or "")
+        if not decoded.startswith("/") or "\\" in decoded or "\x00" in decoded:
+            return False
+        segments = [s for s in decoded.split("/") if s]
+        if any(s.startswith(".") for s in segments):
+            return False  # .git, .env, ../ vb.
+        if decoded.startswith(STATIC_ALLOWED_PREFIXES):
+            return True
+        return len(segments) == 1 and segments[0].lower().endswith(STATIC_ALLOWED_ROOT_EXT)
+
+    def list_directory(self, path):
+        # Dizin listeleme kapalı.
+        self.send_error(404, "Not Found")
+        return None
+
+    def _serve_index(self):
+        """index.html'i oturum anahtarı gömülü olarak servis eder (önbelleğe alınmaz)."""
+        try:
+            with open(os.path.join(APP_DIR, "index.html"), "r", encoding="utf-8") as fh:
+                html = fh.read()
+        except OSError:
+            self.send_error(404, "index.html bulunamadı")
+            return
+        token_meta = '<meta name="wss-token" content="%s">' % API_TOKEN
+        if TOKEN_META_PLACEHOLDER in html:
+            html = html.replace(TOKEN_META_PLACEHOLDER, token_meta, 1)
+        else:
+            html = re.sub(r"(<head[^>]*>)", lambda m: m.group(1) + "\n    " + token_meta, html, count=1, flags=re.I)
+        body = html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_OPTIONS(self):
+        # CORS ön kontrolüne izin verilmez (Access-Control-Allow-* gönderilmez).
+        hostname = self._request_hostname()
+        if hostname is not None and hostname not in ALLOWED_HOSTNAMES:
+            self.send_json({"success": False, "error": "GECERSIZ_HOST"}, status=403)
+            return
         self.send_response(204)
+        self.send_header("Allow", "GET, POST, OPTIONS")
+        self.send_header("Content-Length", "0")
         self.end_headers()
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
+        if not self._security_gate("POST"):
+            return
+
+        # Aktif tarama — yalnızca POST (parametreler sorgu dizesinde)
+        if parsed.path == "/api/active-scan":
+            self.handle_api_active_scan(parsed)
+            return
 
         # Faz 3: Etik onay ucu — aktif test öncesi kullanıcı beyanı
         if parsed.path == "/api/active-confirm":
@@ -98,6 +226,13 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+        if not self._security_gate("GET"):
+            return
+
+        # Sağlık kontrolü (Docker HEALTHCHECK) — oturum anahtarı gerektirmez, bilgi döndürmez.
+        if parsed.path == "/healthz":
+            self.send_json({"ok": True})
+            return
 
         # 1. API: /api/headers?url=...
         if parsed.path == "/api/headers":
@@ -122,11 +257,6 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         # 1d. API: /api/active-scan?url=... (Aktif Güvenlik Testi - Faz 3)
         if parsed.path == "/api/active-scan":
             self.handle_api_active_scan(parsed)
-            return
-
-        # 1e. API: /api/ai-scan (GET uyumluluğu)
-        if parsed.path == "/api/ai-scan":
-            self.handle_api_ai_scan(parsed)
             return
 
         # 1f. API: /api/strix-capabilities (Strix kurulum + özellik tespiti)
@@ -165,7 +295,16 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             })
             return
 
-        # 3. Statik dosya sunumu (index.html, css/, js/)
+        # 3. Statik dosya sunumu — yalnızca arayüz dosyaları (kaynak kod, .git, rapor/test dizinleri servis edilmez)
+        if parsed.path.startswith("/api/"):
+            self.send_json({"success": False, "error": "Bilinmeyen GET ucu"}, status=404)
+            return
+        if parsed.path in ("/", "/index.html"):
+            self._serve_index()
+            return
+        if not self._is_static_allowed(parsed.path):
+            self.send_error(404, "Not Found")
+            return
         super().do_GET()
 
     def handle_api_headers(self, parsed_path):
@@ -895,7 +1034,7 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         thought_chain = []
 
         def emit(agent, message):
-            thought_chain.append({"agent": agent, "message": str(message)[:500], "ts": int(time.time() * 1000)})
+            thought_chain.append({"agent": agent, "message": redact_text(str(message))[:500], "ts": int(time.time() * 1000)})
 
         # --- 1. Gerçek keşif / baseline taraması ---
         emit("system", "Aşama 1/3 — Keşif: site haritası, formlar, başlıklar ve temel aktif modüller taranıyor…")
@@ -932,7 +1071,10 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         except ValueError as e:
             return {"success": False, "error": "AI_YAPILANDIRMA", "message": str(e)}
 
-        ai_client = RateLimitedClient()
+        # AI probları: yalnızca etik onaylı hedefin kökenine (scheme + host + port) ve en fazla
+        # max_loops × max_tests_per_loop isteğe izin veren ayrı, kapsam kilitli istemci (safety_guard).
+        ai_budget = max(1, int(getattr(orchestrator, "max_loops", 3)) * int(getattr(orchestrator, "max_tests_per_loop", 4)))
+        ai_client = RateLimitedClient(scope_url=url, max_requests=ai_budget)
 
         def active_test_callback(test_url, param, payload):
             return run_custom_test(ai_client, test_url, param, payload)
@@ -974,52 +1116,6 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             "disclaimer": "AI bulguları yalnızca kanıtı HTTP yanıtıyla doğrulanmış zafiyetlerdir; spekülatif bulgu yayınlanmaz."
         }
 
-    def handle_api_ai_scan(self, parsed_path):
-        """
-        AI Destekli Dinamik Tarama Uç Noktası (GET uyumluluğu).
-        """
-        try:
-            qs = urllib.parse.parse_qs(parsed_path.query)
-            url = (qs.get("url") or [""])[0].strip()
-            if not url:
-                self.send_json({"success": False, "error": "URL parametresi eksik."}, status=400)
-                return
-
-            provider_config = {
-                "provider": (qs.get("provider") or ["openai"])[0],
-                "model": (qs.get("model") or ["gpt-4o"])[0],
-                "base_url": (qs.get("base_url") or ["https://api.openai.com/v1"])[0],
-                "project_id": (qs.get("project_id") or [""])[0],
-                "region": (qs.get("region") or ["global"])[0],
-                "auth": {
-                    "type": (qs.get("auth_type") or ["api_key"])[0],
-                    "value": (qs.get("auth_value") or [""])[0]
-                }
-            }
-
-            parsed_url = urllib.parse.urlparse(url)
-            if not url.startswith("http://") and not url.startswith("https://"):
-                url = "https://" + url
-                parsed_url = urllib.parse.urlparse(url)
-            if not parsed_url.hostname or not ETHICAL_GATE.is_confirmed(parsed_url.hostname):
-                self.send_json({
-                    "success": False,
-                    "error": "ETIK_ONAY_YOK",
-                    "message": "AI taraması öncesi etik onay gereklidir."
-                }, status=403)
-                return
-
-            # Yeni hat (POST ile aynı): gerçek keşif + doğrulamalı orkestrasyon
-            result = self._run_ai_pipeline(url, [], provider_config)
-            self.send_json(result, status=200 if result.get("success") else 400)
-
-        except Exception as e:
-            self.send_json({"success": False, "error": f"AI Scan Error: {str(e)}"}, status=500)
-
-    # =============================================================
-    # STRIX: Gerçek Strix CLI entegrasyonu (subprocess + dosya tabanlı durum)
-    # Başlatma etik onay geçidine bağlıdır; durum/rapor uçları salt-okurdur.
-    # =============================================================
     def handle_api_strix_update(self):
         """Strix CLI'yı günceller (--update)."""
         result = STRIX_MANAGER.update_strix()
@@ -1169,6 +1265,7 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -1207,7 +1304,12 @@ def main():
     print(f" • Adres:          {url}")
     print(f" • Dinlenen Ağ:    {HOST}:{port}")
     print(f" • Başlık API:     {url}/api/headers?url=https://example.com")
-    print(f" • Durum:          {url}/api/status")
+    print(f" • Sağlık:         {url}/healthz")
+    if API_TOKEN_FROM_ENV:
+        print(" • API anahtarı:   WSS_API_TOKEN ortam değişkeninden alındı")
+    else:
+        print(f" • API anahtarı:   {API_TOKEN}")
+    print("                   (curl/CI: -H 'X-WSS-Token: <anahtar>' — arayüz anahtarı otomatik kullanır)")
     print("=" * 65)
 
     should_open_browser = (

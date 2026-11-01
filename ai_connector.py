@@ -8,6 +8,8 @@ import urllib.parse
 import urllib.error
 from abc import ABC, abstractmethod
 
+from redaction import redact_text
+
 # Reasoning modeller (DeepSeek-R1, Evren vb.) 60 sn'yi aşabiliyor — geniş timeout
 # + tek otomatik tekrar deneme (yalnızca ağ/timeout hatalarında; HTTP hatalarında değil)
 LLM_TIMEOUT = 180
@@ -336,10 +338,40 @@ class OllamaConnector(AIConnector):
         except Exception as e:
             return f"Error: {str(e)}"
 
+class RedactingConnector(AIConnector):
+    """LLM'e giden prompt ve sistem prompt'unu sır maskelemesinden geçiren sarmalayıcı.
+
+    PentAGI'deki GetSecretPatterns maskelemesinin bu araca uyarlanmış hâli: hedeften gelen
+    çerez/başlık/gövde verisi ve SAST kod kesitlerindeki sırlar bulut veya yerel LLM'e
+    gitmeden maskelenir. Yanıt dokunulmadan döner; diğer öznitelikler alttaki bağlayıcıya
+    yönlendirilir.
+    """
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    def chat(self, prompt: str, system_prompt: str = "") -> str:
+        return self._inner.chat(redact_text(prompt), redact_text(system_prompt) if system_prompt else system_prompt)
+
+    def __getattr__(self, name):
+        if name == "_inner":
+            raise AttributeError(name)
+        return getattr(self._inner, name)
+
+
 class AIProviderFactory:
     """Kullanıcı tercihlerine göre doğru connector örneğini üretir."""
     @staticmethod
     def create_connector(provider_config: dict) -> AIConnector:
+        """Sağlayıcı bağlayıcısını oluşturur ve sır maskeleme katmanıyla sarar.
+
+        AI Red Team hattı, SAST AI denetimi ve bağlantı testi bu fabrikayı kullandığı için
+        LLM'e giden tüm metinler tek noktadan maskelenir (bkz. redaction.py).
+        """
+        return RedactingConnector(AIProviderFactory._create_raw_connector(provider_config))
+
+    @staticmethod
+    def _create_raw_connector(provider_config: dict) -> AIConnector:
         provider = (provider_config.get("provider") or "openai").lower().strip()
 
         if provider in ("openai", "openai_compatible", "custom"):
