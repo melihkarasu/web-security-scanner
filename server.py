@@ -31,6 +31,8 @@ from ai_orchestrator import AIOrchestrator
 from ai_connector import AIProviderFactory
 from redaction import redact_text
 from ai_jobs import AIJobManager, JobLimitError
+import scan_history
+import threat_intel
 from strix_engine import STRIX_MANAGER, strix_capabilities
 
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -55,6 +57,12 @@ STATIC_ALLOWED_PREFIXES = ("/css/", "/js/", "/assets/", "/img/", "/images/", "/f
 STATIC_ALLOWED_ROOT_EXT = (".html", ".ico", ".png", ".svg", ".jpg", ".jpeg", ".webp", ".gif", ".webmanifest")
 TOKEN_META_PLACEHOLDER = '<meta name="wss-token" content="">'
 AI_JOBS = AIJobManager()  # Faz 2: arka plan AI işleri (yalnız bellek)
+# Faz 3: tehdit istihbaratı varsayılan KAPALI (WSS_THREAT_INTEL=1 ile varsayılan açılabilir)
+THREAT_INTEL_DEFAULT = os.environ.get("WSS_THREAT_INTEL", "0").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _flag(value):
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
 
 class ScannerHTTPHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -212,6 +220,10 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_ai_answer()
             return
 
+        if parsed.path == "/api/history-delete":
+            self.handle_api_history_delete()
+            return
+
         # Strix AI Pentest: tarama başlat (alt süreç; etik onay zorunlu)
         if parsed.path == "/api/strix-scan":
             self.handle_api_strix_scan_post()
@@ -280,6 +292,17 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         # 1f. API: /api/strix-capabilities (Strix kurulum + özellik tespiti)
         if parsed.path == "/api/strix-capabilities":
             self.send_json(strix_capabilities())
+            return
+
+        # 1e. API: tarama geçmişi + fark (Faz 3)
+        if parsed.path == "/api/history":
+            self.handle_api_history(parsed)
+            return
+        if parsed.path == "/api/history-scan":
+            self.handle_api_history_scan(parsed)
+            return
+        if parsed.path == "/api/history-diff":
+            self.handle_api_history_diff(parsed)
             return
 
         # 1f. API: /api/ai-status?job=&since= (Faz 2 — canlı AI iş durumu + olay akışı)
@@ -970,6 +993,7 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             raw_url = "https://" + raw_url
 
         modules = [m for m in modules_param.split(",") if m] if modules_param else None
+        threat_flag = _flag((qs.get("threat_intel") or [""])[0]) or THREAT_INTEL_DEFAULT
 
         try:
             result = run_active_scan(raw_url, modules)
@@ -980,9 +1004,108 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
                     "message": "Aktif test öncesi etik onay gereklidir. Lütfen onay diyaloğunu kabul edin."
                 }, status=403)
                 return
+            if result.get("success"):
+                self._post_scan_enrichment(result, raw_url, "active", threat_flag)
             self.send_json(result)
         except Exception as e:
             self.send_json({"success": False, "error": "Aktif tarama başarısız: %s" % str(e)}, status=500)
+
+    def _post_scan_enrichment(self, result, url, kind, threat_flag=False, emit=None):
+        """Faz 3: (isteğe bağlı) tehdit istihbaratı + tarama geçmişi kaydı + önceki taramaya göre fark.
+
+        Hiçbir hata taramanın sonucunu bozmaz; sorun result içine not edilir. İptal edilen ya da
+        başarısız taramalar kaydedilmez (yanıltıcı "kapanan bulgu" farkı üretmemek için).
+        """
+        if not isinstance(result, dict) or not result.get("success") or result.get("cancelled"):
+            return result
+        if threat_flag:
+            try:
+                # Etik onaylı hedefe tek, kapsam kilitli GET: başlıklar + ana sayfa HTML'i
+                probe = RateLimitedClient(scope_url=url, max_requests=1).get(url)
+                headers = probe.get("headers") if isinstance(probe.get("headers"), dict) else {}
+                intel_findings, intel_summary = threat_intel.run_threat_intel(
+                    headers=headers, html=probe.get("body") or "", emit=emit)
+                intel_summary["findings"] = intel_findings
+                result["threat_intel"] = intel_summary
+                bucket = "baseline_findings" if kind == "ai" else "findings"
+                result.setdefault(bucket, [])
+                result[bucket].extend(intel_findings)
+            except Exception as e:
+                result["threat_intel"] = {"enabled": True, "findings": [],
+                                          "errors": ["Tehdit istihbaratı çalıştırılamadı: %s" % str(e)[:160]]}
+        try:
+            hist_findings = list(result.get("findings") or [])
+            meta = {"threat_intel": bool(threat_flag)}
+            modules = result.get("modules")
+            if isinstance(modules, dict) and len(json.dumps(modules, default=str)) <= 20000:
+                meta["modules"] = modules
+            if kind == "ai":
+                hist_findings += list(result.get("baseline_findings") or [])
+                rep = result.get("ai_report") or {}
+                meta["ai"] = {
+                    "loops": rep.get("loops"), "tests_executed": rep.get("tests_executed"),
+                    # Probe günlüğü (PentAGI kalıcı komut/çıktı kaydı uyarlaması): ne denendi, karar ne oldu.
+                    # Yanıt gövdeleri saklanmaz; record_scan her şeyi redact_obj ile maskeler.
+                    "executed_tests": [
+                        {"url": str(t.get("url", ""))[:200], "param": str(t.get("param", ""))[:80],
+                         "payload": str(t.get("payload", ""))[:160], "verdict": t.get("verdict"), "loop": t.get("loop")}
+                        for t in (rep.get("executed_tests") or [])[:60] if isinstance(t, dict)],
+                    "telemetry_by_agent": (rep.get("telemetry") or {}).get("by_agent"),
+                }
+            recorded = scan_history.record_scan(
+                kind, url, hist_findings,
+                summary={"requests_sent": result.get("requests_sent"), "duration_ms": result.get("duration_ms")},
+                meta=meta)
+            result["history"] = recorded if recorded else {"enabled": False}
+        except Exception as e:
+            result["history"] = {"enabled": True, "error": "Tarama geçmişine yazılamadı: %s" % str(e)[:160]}
+        return result
+
+    def handle_api_history(self, parsed_path):
+        """Faz 3: hedef / tür bazında tarama geçmişi listesi (yeniden eskiye)."""
+        qs = urllib.parse.parse_qs(parsed_path.query)
+        target = (qs.get("target") or [""])[0].strip()
+        kind = (qs.get("kind") or [""])[0].strip()
+        try:
+            scans = scan_history.list_scans(target=target or None, kind=kind or None,
+                                            limit=(qs.get("limit") or ["50"])[0])
+            self.send_json({"success": True, "enabled": scan_history.history_enabled(),
+                            "retention_days": scan_history.retention_days(), "scans": scans})
+        except Exception as e:
+            self.send_json({"success": False, "error": "Geçmiş okunamadı: %s" % str(e)[:160]}, status=500)
+
+    def handle_api_history_scan(self, parsed_path):
+        qs = urllib.parse.parse_qs(parsed_path.query)
+        scan = scan_history.get_scan((qs.get("id") or [""])[0].strip())
+        if not scan:
+            self.send_json({"success": False, "error": "SCAN_NOT_FOUND"}, status=404)
+            return
+        self.send_json({"success": True, "scan": scan})
+
+    def handle_api_history_diff(self, parsed_path):
+        qs = urllib.parse.parse_qs(parsed_path.query)
+        diff = scan_history.diff_scans((qs.get("id") or [""])[0].strip(),
+                                       (qs.get("base") or [""])[0].strip() or None)
+        if not diff:
+            self.send_json({"success": False, "error": "SCAN_NOT_FOUND"}, status=404)
+            return
+        self.send_json({"success": True, "diff": diff})
+
+    def handle_api_history_delete(self):
+        data = self._read_json_payload()
+        if data is None:
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+        if data.get("id"):
+            deleted = scan_history.delete_scan(str(data["id"]))
+        elif data.get("target"):
+            deleted = scan_history.delete_target(str(data["target"]))
+        elif data.get("all") is True:
+            deleted = scan_history.delete_all()
+        else:
+            self.send_json({"success": False, "error": "id, target ya da \"all\": true gereklidir."}, status=400)
+            return
+        self.send_json({"success": True, "deleted": deleted})
 
     def handle_api_ai_test(self):
         """AI Sağlayıcı bağlantısını test eder (OpenAI Compatible, Vertex, Gemini API vb.)."""
@@ -1223,7 +1346,7 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         emit("system", "Aşama 3/3 — Tamamlandı: %d tur, %d AI testi, %d doğrulanmış bulgu (%d istek)." % (
             ai_result.get("loops", 0), ai_result.get("tests_executed", 0), len(findings), ai_client.request_count))
 
-        return {
+        result = {
             "success": True,
             "cancelled": bool(ai_result.get("cancelled")),
             "job_id": job.id if job is not None else None,
@@ -1245,6 +1368,9 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             "errors": ai_result.get("errors", []),
             "disclaimer": "AI bulguları yalnızca kanıtı HTTP yanıtıyla doğrulanmış zafiyetlerdir; spekülatif bulgu yayınlanmaz."
         }
+        ai_threat = _flag((ai_config or {}).get("threat_intel")) if isinstance(ai_config, dict) else False
+        self._post_scan_enrichment(result, url, "ai", ai_threat or THREAT_INTEL_DEFAULT, emit=emit)
+        return result
 
     def handle_api_strix_update(self):
         """Strix CLI'yı günceller (--update)."""
@@ -1434,6 +1560,17 @@ def main():
     print(f" • Adres:          {url}")
     print(f" • Dinlenen Ağ:    {HOST}:{port}")
     print(f" • Başlık API:     {url}/api/headers?url=https://example.com")
+    try:
+        pruned_scans = scan_history.prune() if scan_history.history_enabled() else 0
+    except Exception:
+        pruned_scans = 0
+    if scan_history.history_enabled():
+        pruned_note = (", %d eski kayıt silindi" % pruned_scans) if pruned_scans else ""
+        print(" • Tarama geçmişi: %s (%d gün saklanır%s)" % (scan_history.db_path(), scan_history.retention_days(), pruned_note))
+    else:
+        print(" • Tarama geçmişi: kapalı (WSS_HISTORY=0)")
+    print(" • Tehdit istihbaratı: " + ("varsayılan AÇIK (WSS_THREAT_INTEL=1)" if THREAT_INTEL_DEFAULT
+                                     else "varsayılan kapalı (tarama başına açılır)"))
     print(f" • Sağlık:         {url}/healthz")
     if API_TOKEN_FROM_ENV:
         print(" • API anahtarı:   WSS_API_TOKEN ortam değişkeninden alındı")

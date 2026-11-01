@@ -480,6 +480,20 @@
               </div>
             </label>
 
+            <!-- Faz 3: Tehdit istihbaratı (isteğe bağlı dış istek; "tümünü seç" kapsamı dışında) -->
+            <label class="module-card module-card-ai">
+              <div class="module-icon-box" aria-hidden="true">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-amber-950">Tehdit İstihbaratı (OSV / NVD / CISA KEV)</span>
+                  <input type="checkbox" id="threat-intel-toggle">
+                </div>
+                <p class="text-[11px] text-stone-600 mt-1 leading-relaxed">İsteğe bağlı: aktif / AI taramasında sunucu başlıkları ve JS kütüphanelerinden okunan sürümleri bilinen zafiyetlerle eşleştirir. Dışarıya yalnızca ürün adı + sürüm gider; sonuçlar her zaman "doğrulanmalı" işaretlenir.</p>
+              </div>
+            </label>
+
             <!-- Madde 9: 4-Aşamalı AI Semantik Kaynak Kod & Mimari Denetimi -->
             <label class="module-card module-card-ai">
               <div class="module-icon-box" aria-hidden="true">
@@ -1038,6 +1052,6 @@
   </div>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261101c"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261101d"></script>
 </body>
 </html>

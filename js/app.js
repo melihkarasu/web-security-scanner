@@ -1358,7 +1358,7 @@ async function startActiveScan(options = {}) {
     }
 
     // 2. Aktif taramayı başlat
-    const scanUrl = '/api/active-scan?url=' + encodeURIComponent(rawUrl) + '&modules=' + encodeURIComponent(modules.join(','));
+    const scanUrl = '/api/active-scan?url=' + encodeURIComponent(rawUrl) + '&modules=' + encodeURIComponent(modules.join(',')) + threatIntelQuery();
     const res = await fetch(scanUrl, { method: 'POST', signal: AbortSignal.timeout(300000) });
     const data = await res.json();
 
@@ -1394,7 +1394,7 @@ async function startActiveScan(options = {}) {
       }
 
       // 2. Aktif taramayı başlat
-      const scanUrl = '/api/active-scan?url=' + encodeURIComponent(rawUrl) + '&modules=' + encodeURIComponent(modules.join(','));
+      const scanUrl = '/api/active-scan?url=' + encodeURIComponent(rawUrl) + '&modules=' + encodeURIComponent(modules.join(',')) + threatIntelQuery();
       const res = await fetch(scanUrl, { method: 'POST', signal: AbortSignal.timeout(300000) });
       const data = await res.json();
 
@@ -1427,7 +1427,156 @@ async function startActiveScan(options = {}) {
   }
 }
 
+// =============================================================
+// Faz 3: Tarama geçmişi / fark kartı + tehdit istihbaratı tercihi
+// =============================================================
+function threatIntelEnabled() {
+  const el = document.getElementById('threat-intel-toggle');
+  if (el) return !!el.checked;
+  return localStorage.getItem('wss_threat_intel') === '1';
+}
+
+function threatIntelQuery() {
+  return threatIntelEnabled() ? '&threat_intel=1' : '';
+}
+
+(function initThreatIntelToggle() {
+  const apply = () => {
+    const el = document.getElementById('threat-intel-toggle');
+    if (!el || el.dataset.bound) return;
+    el.dataset.bound = '1';
+    el.checked = localStorage.getItem('wss_threat_intel') === '1';
+    el.addEventListener('change', () => localStorage.setItem('wss_threat_intel', el.checked ? '1' : '0'));
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+  else apply();
+})();
+
+function formatHistoryDate(epochSeconds) {
+  if (!epochSeconds) return '-';
+  try { return new Date(epochSeconds * 1000).toLocaleString('tr-TR'); } catch (e) { return String(epochSeconds); }
+}
+
+function renderScanHistoryCard(data) {
+  const anchor = document.getElementById('active-stats-grid');
+  if (!anchor || !anchor.parentNode) return;
+  let card = document.getElementById('scan-history-card');
+  const hist = data && data.history;
+  const ti = data && data.threat_intel;
+  if (!hist && !ti) {
+    if (card) card.innerHTML = '';
+    return;
+  }
+  if (!card) {
+    card = document.createElement('div');
+    card.id = 'scan-history-card';
+    card.className = 'mt-4 space-y-3';
+    anchor.parentNode.insertBefore(card, anchor.nextSibling);
+  }
+  card.dataset.target = (hist && hist.target_key) || '';
+  const parts = [];
+  if (hist && hist.enabled === false) {
+    parts.push('<div class="p-3 rounded-xl border border-stone-200 bg-stone-50 text-[11px] text-stone-600">🕘 Tarama geçmişi kapalı (WSS_HISTORY=0).</div>');
+  } else if (hist && hist.error) {
+    parts.push('<div class="p-3 rounded-xl border border-amber-200 bg-amber-50 text-[11px] text-amber-800">🕘 ' + escapeHtml(hist.error) + '</div>');
+  } else if (hist && hist.diff) {
+    const d = hist.diff;
+    const c = d.counts || {};
+    const list = (items, cls) => (items || []).map(it => '<li class="' + cls + '"><span class="font-mono text-[10px]">' + escapeHtml(it.severity || '') + '</span> ' + escapeHtml(it.title || '') + '</li>').join('');
+    let html = '<div class="p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/60">' +
+      '<div class="flex flex-wrap items-center justify-between gap-2">' +
+      '<div class="text-xs font-bold text-indigo-900">🕘 Tarama geçmişi — ' + (d.first_scan ? 'bu hedef için ilk kayıt' : 'önceki taramaya göre (' + escapeHtml(formatHistoryDate(d.base_created_at)) + ')') + '</div>' +
+      '<div class="flex gap-2">' +
+      '<button type="button" class="text-[11px] px-2 py-0.5 rounded border border-indigo-300 text-indigo-800 hover:bg-indigo-100" onclick="showScanHistory()">Geçmişi göster</button>' +
+      '<button type="button" class="text-[11px] px-2 py-0.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50" onclick="deleteTargetHistory()">Bu hedefin geçmişini sil</button>' +
+      '</div></div>';
+    if (d.first_scan) {
+      html += '<p class="mt-1 text-[11px] text-indigo-800">Sonraki taramada yeni / kapanan / devam eden bulgular burada gösterilecek. Kayıtlar yalnızca bu makinede, gizli bilgiler maskelenerek ' + escapeHtml(String(hist.retention_days || 30)) + ' gün saklanır.</p>';
+    } else {
+      html += '<div class="mt-2 flex flex-wrap gap-2 text-[11px] font-mono">' +
+        '<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-800">+' + (c.new || 0) + ' yeni</span>' +
+        '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">−' + (c.fixed || 0) + ' kapanan</span>' +
+        '<span class="px-2 py-0.5 rounded bg-stone-200 text-stone-700">' + (c.persisting || 0) + ' devam eden</span></div>';
+      if ((d.new || []).length) html += '<details class="mt-2"><summary class="cursor-pointer text-[11px] font-semibold text-rose-800">Yeni bulgular</summary><ul class="mt-1 space-y-0.5 text-[11px]">' + list(d.new, 'text-rose-900') + '</ul></details>';
+      if ((d.fixed || []).length) html += '<details class="mt-1"><summary class="cursor-pointer text-[11px] font-semibold text-emerald-800">Kapanan (bu taramada görülmeyen) bulgular</summary><ul class="mt-1 space-y-0.5 text-[11px]">' + list(d.fixed, 'text-emerald-900') + '</ul></details>';
+      html += '<p class="mt-1 text-[10px] text-indigo-700/80">AI taramalarında LLM her seferinde farklı testler seçebildiği için "kapanan" listesi kesin düzeltme anlamına gelmez.</p>';
+    }
+    html += '<div id="scan-history-list" class="mt-2"></div></div>';
+    parts.push(html);
+  }
+  if (ti) {
+    const comps = (ti.components || []).map(x => escapeHtml(x.name + ' ' + x.version)).join(', ') || 'sürümü okunabilen bileşen yok';
+    let html = '<div class="p-3.5 rounded-xl border border-amber-200 bg-amber-50/70">' +
+      '<div class="text-xs font-bold text-amber-900">🌐 Tehdit istihbaratı (OSV / NVD / CISA KEV) — sonuçlar doğrulanmalı</div>' +
+      '<p class="mt-1 text-[11px] text-amber-900">Bileşenler: ' + comps + ' · Eşleşme: ' + (ti.finding_count || 0) + ' · CISA KEV: ' + (ti.kev_matches || 0) + ' · Kaynaklar: ' + escapeHtml((ti.sources || []).join(', ') || '-') + '</p>' +
+      '<p class="mt-1 text-[10px] text-amber-800/80">' + escapeHtml(ti.note || '') + ' Dışarıya yalnızca ürün adı ve sürüm gönderildi; hedef adresi gönderilmedi.</p>';
+    if ((ti.errors || []).length) html += '<p class="mt-1 text-[10px] text-rose-700">' + (ti.errors || []).map(e => escapeHtml(e)).join('<br>') + '</p>';
+    html += '</div>';
+    parts.push(html);
+  }
+  card.innerHTML = parts.join('');
+}
+
+async function postHistoryDelete(payload) {
+  try {
+    const res = await fetch('/api/history-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await res.json();
+    if (!data.success) showToast('Silinemedi: ' + (data.error || ''), 'warning');
+    return data;
+  } catch (err) {
+    showToast('Silme isteği başarısız: ' + err.message, 'error');
+    return null;
+  }
+}
+
+async function showScanHistory() {
+  const card = document.getElementById('scan-history-card');
+  const box = document.getElementById('scan-history-list');
+  const target = card ? card.dataset.target : '';
+  if (!box || !target) return;
+  box.innerHTML = '<div class="text-[11px] text-stone-500">Yükleniyor…</div>';
+  try {
+    const res = await fetch('/api/history?limit=20&target=' + encodeURIComponent(target), { signal: AbortSignal.timeout(15000) });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'hata');
+    if (!data.scans.length) {
+      box.innerHTML = '<div class="text-[11px] text-stone-500">Kayıt yok.</div>';
+      return;
+    }
+    box.innerHTML = '<table class="w-full text-[11px] font-mono"><thead><tr class="text-left text-stone-500"><th>Tarih</th><th>Tür</th><th>Bulgu</th><th></th></tr></thead><tbody>' +
+      data.scans.map(s => '<tr class="border-t border-indigo-100"><td>' + escapeHtml(formatHistoryDate(s.created_at)) + '</td><td>' + escapeHtml(s.kind) +
+        '</td><td>' + escapeHtml(String((s.summary || {}).finding_count || 0)) + '</td><td class="text-right"><button type="button" class="text-rose-700 hover:underline" data-scan-id="' +
+        escapeHtml(s.id) + '" onclick="deleteHistoryScan(this.dataset.scanId)">sil</button></td></tr>').join('') + '</tbody></table>';
+  } catch (err) {
+    box.innerHTML = '<div class="text-[11px] text-rose-700">Geçmiş alınamadı: ' + escapeHtml(err.message) + '</div>';
+  }
+}
+
+async function deleteHistoryScan(scanId) {
+  if (!scanId || !confirm('Bu tarama kaydı silinsin mi?')) return;
+  await postHistoryDelete({ id: scanId });
+  showScanHistory();
+}
+
+async function deleteTargetHistory() {
+  const card = document.getElementById('scan-history-card');
+  const target = card ? card.dataset.target : '';
+  if (!target || !confirm('Bu hedefin tüm tarama geçmişi silinsin mi?')) return;
+  const data = await postHistoryDelete({ target: target });
+  if (data && data.success) {
+    showToast(data.deleted + ' kayıt silindi.', 'success');
+    const box = document.getElementById('scan-history-list');
+    if (box) box.innerHTML = '';
+  }
+}
+
 function renderActiveResults(data) {
+  try { renderScanHistoryCard(data); } catch (e) { /* geçmiş kartı isteğe bağlıdır */ }
   // İstatistik kartı
   const statsGrid = document.getElementById('active-stats-grid');
   if (statsGrid) {
@@ -1841,6 +1990,36 @@ function exportMarkdownReport() {
       }
     }
   }
+
+  // Faz 3: Tarama geçmişi karşılaştırması + tehdit istihbaratı (aktif ve AI taramaları)
+  [['Aktif Tarama', STATE.results.activeScan], ['AI Red Team', STATE.results.aiScan]].forEach(function (pair) {
+    const label = pair[0];
+    const res = pair[1];
+    if (!res) return;
+    const hist = res.history;
+    if (hist && hist.diff) {
+      const d = hist.diff;
+      const c = d.counts || {};
+      md += '\n## 🕘 Tarama Geçmişi Karşılaştırması — ' + label + '\n\n';
+      if (d.first_scan) {
+        md += 'Bu hedef için ilk kayıt; karşılaştırma bir sonraki taramada yapılacak.\n\n';
+      } else {
+        md += '**Önceki tarama:** ' + new Date((d.base_created_at || 0) * 1000).toISOString() + ' • **Yeni:** ' + (c.new || 0) + ' • **Kapanan:** ' + (c.fixed || 0) + ' • **Devam eden:** ' + (c.persisting || 0) + '\n\n';
+        (d.new || []).forEach(function (it) { md += '- 🆕 [' + (it.severity || '-') + '] ' + (it.title || '') + '\n'; });
+        (d.fixed || []).forEach(function (it) { md += '- ✅ [' + (it.severity || '-') + '] ' + (it.title || '') + '\n'; });
+        md += '\n';
+      }
+    }
+    const ti = res.threat_intel;
+    if (ti) {
+      md += '\n## 🌐 Tehdit İstihbaratı — ' + label + '\n\n';
+      md += '**Bileşenler:** ' + ((ti.components || []).map(function (x) { return x.name + ' ' + x.version; }).join(', ') || '-') + ' • **Eşleşme:** ' + (ti.finding_count || 0) + ' • **CISA KEV:** ' + (ti.kev_matches || 0) + ' • **Kaynaklar:** ' + ((ti.sources || []).join(', ') || '-') + '\n\n';
+      md += '> ' + (ti.note || '') + '\n\n';
+      (ti.findings || []).forEach(function (f) { md += '- [' + f.severity + '] ' + f.title + '\n'; });
+      (ti.errors || []).forEach(function (e) { md += '- ⚠️ ' + e + '\n'; });
+      md += '\n';
+    }
+  });
 
   md += `\n---\n\n*Rapor, [Web Security Scanner](https://melihkarasu.github.io/web-security-scanner/) tarafından üretilmiştir. Tarama tarihi: ${new Date().toISOString()}.*`;
 
@@ -2674,7 +2853,8 @@ async function startAIOrchestrationScan(targetUrl, modules) {
         },
         api_key: aiAuth,
         small_model_mode: !!document.getElementById('ai-small-model-mode')?.checked,
-        role_models: collectRoleModels()
+        role_models: collectRoleModels(),
+        threat_intel: threatIntelEnabled()
       }
     }, (ev) => appendAILog(ev.message, ev.agent || 'info'));
     
@@ -3674,7 +3854,7 @@ async function startUnifiedScan() {
           throw new Error(confirmData.error || 'Etik onay sunucu tarafından reddedildi.');
         }
 
-        const activeUrl = '/api/active-scan?url=' + encodeURIComponent(cleanUrl) + '&modules=' + encodeURIComponent(selectedActiveMods.join(','));
+        const activeUrl = '/api/active-scan?url=' + encodeURIComponent(cleanUrl) + '&modules=' + encodeURIComponent(selectedActiveMods.join(',')) + threatIntelQuery();
         const aRes = await fetch(activeUrl);
         const aData = await aRes.json();
         

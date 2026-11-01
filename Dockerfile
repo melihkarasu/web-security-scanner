@@ -26,7 +26,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY . .
 
 # Root olmayan güvenli kullanıcı oluşturma
-RUN useradd -m -u 1000 scanneruser && chown -R scanneruser:scanneruser /app
+RUN mkdir -p /app/data && useradd -m -u 1000 scanneruser && chown -R scanneruser:scanneruser /app
 USER scanneruser
 
 EXPOSE 8765

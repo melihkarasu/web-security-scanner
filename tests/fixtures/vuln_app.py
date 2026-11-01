@@ -3,6 +3,7 @@
 Gizli değerler (oturum çerezi, AWS anahtarı, JWT) maskeleme testleri için sayfaya gömülüdür.
 Her istek yolu server.request_log listesine yazılır (gönderilmemesi gereken istekleri doğrulamak için).
 """
+import html
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,6 +13,10 @@ SECRET_AWS = "AKIAIOSFODNN7EXAMPLE"
 SECRET_JWT_SIGNATURE = "c2lnbmF0dXJlLXRoYXQtbXVzdC1ub3QtbGVhaw"
 SECRET_JWT = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
               "eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiJ9." + SECRET_JWT_SIGNATURE)
+
+
+# Testlerin değiştirebildiği durum: XSS'i "düzelt" ve sürüm başlığı gönder (varsayılanlar eski davranış)
+FIXTURE_STATE = {"escape_search": False, "powered_by": None}
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -31,7 +36,10 @@ class _Handler(BaseHTTPRequestHandler):
                     "</body></html>") % (SECRET_AWS, SECRET_JWT)
             self._send(200, body, cookie=True)
         elif parsed.path == "/search":
-            self._send(200, "<html><body>Results for: %s</body></html>" % qs.get("q", [""])[0])
+            q = qs.get("q", [""])[0]
+            if FIXTURE_STATE["escape_search"]:
+                q = html.escape(q)
+            self._send(200, "<html><body>Results for: %s</body></html>" % q)
         elif parsed.path == "/item":
             item = qs.get("id", [""])[0]
             if "'" in item:
@@ -53,6 +61,8 @@ class _Handler(BaseHTTPRequestHandler):
         data = body.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        if FIXTURE_STATE.get("powered_by"):
+            self.send_header("X-Powered-By", FIXTURE_STATE["powered_by"])
         if cookie:
             self.send_header("Set-Cookie", "session=%s; Path=/; HttpOnly" % SECRET_SESSION)
         self.send_header("Content-Length", str(len(data)))

@@ -77,6 +77,8 @@ URLVAL_PARAM_PATTERN = re.compile(r'(?:^|&)([^=&]*(?:url|link|redirect|next|targ
 
 # XSS yansıma marker'ı (zararsız benzersiz dize)
 XSS_MARKER = "wzxqmk731"
+XSS_BREAKOUT_TAG = "<wzxtag>"
+XSS_BREAKOUT_SUFFIX = "'" + '"' + ">" + XSS_BREAKOUT_TAG  # zararsız: '\"><wzxtag>
 
 # SSRF iç ağ hedefleri (yanıt farkı analizi için)
 SSRF_PROBE_TARGET = "127.0.0.1"
@@ -277,22 +279,31 @@ def test_xss_reflected(client, base_url):
         if resp["error"]:
             continue
         body = resp["body"]
-        if XSS_MARKER in body:
-            # Marker HTML context'inde mi? (etiket içinde ham mı, yoksa kod bloğu içinde mi)
-            idx = body.find(XSS_MARKER)
-            ctx = body[max(0, idx - 40):idx + len(XSS_MARKER) + 10]
-            encoded_ok = (XSS_MARKER not in body)
-            if not encoded_ok:
-                # Önemli kontrol: marker'ın URL-encode edilmeden ve HTML-escape edilmeden dönmesi
-                if XSS_MARKER in ctx:
-                    findings.append({
-                        "test": "XSS", "severity": "YÜKSEK",
-                        "title": "Reflected XSS — encode edilmemiş yansıma (%s parametresi)" % pname,
-                        "evidence": "...%s... (marker ham olarak yanıt gövdesine yansıdı)" % _excerpt(ctx, XSS_MARKER),
-                        "cwe": "CWE-79",
-                        "fix": "Çıktıyı bağlama göre kodlayın (HTML: &lt; &gt; &quot;); textContent kullanın."
-                    })
-                    break  # bir kanıt yeter
+        if XSS_MARKER not in body:
+            continue
+        # Harf-rakam marker'ın yansıması tek başına XSS kanıtı DEĞİLDİR: kodlamayı ölçemez
+        # (eski sürüm güvenle kodlayan her arama sayfasını YÜKSEK XSS sayıyordu). İkinci, zararsız
+        # prob: marker + HTML/tırnak kırma karakterleri. Bunlar ham dönerse XSS doğrulanır.
+        probe_params[pname] = XSS_MARKER + XSS_BREAKOUT_SUFFIX
+        resp2 = client.get(_build_url(parsed, probe_params))
+        body2 = "" if resp2["error"] else (resp2["body"] or "")
+        if XSS_BREAKOUT_TAG in body2 or (XSS_MARKER + "'" + '"') in body2:
+            findings.append({
+                "test": "XSS", "severity": "YÜKSEK",
+                "title": "Reflected XSS — encode edilmemiş yansıma (%s parametresi)" % pname,
+                "evidence": "...%s... (HTML/tırnak kırma karakterleri kodlanmadan yanıt gövdesine yansıdı)" % _excerpt(body2, XSS_MARKER),
+                "cwe": "CWE-79",
+                "fix": "Çıktıyı bağlama göre kodlayın (HTML: &lt; &gt; &quot;); textContent kullanın."
+            })
+            break  # bir kanıt yeter
+        findings.append({
+            "test": "XSS", "severity": "BİLGİ",
+            "title": "Girdi yansıması var, özel karakterler kodlanıyor — XSS doğrulanmadı (%s parametresi)" % pname,
+            "evidence": "Marker yanıta yansıdı; tek/çift tırnak ve HTML etiketi içeren ikinci prob ham dönmedi%s." % (
+                " (ikinci prob yanıt vermedi)" if resp2["error"] else ""),
+            "cwe": "CWE-79",
+            "fix": "Kodlamayı tüm bağlamlarda (HTML gövdesi, öznitelik, JS dizgesi, URL) koruyun; CSP ile derinlemesine savunma ekleyin."
+        })
 
     # DOM-based XSS: sayfa içi tehlikeli sink taraması (pasif okuma, payload yok)
     resp = client.get(base_url)

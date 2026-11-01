@@ -18,3 +18,5 @@ install.sh
 *.pem
 *.key
 *.bak
+# Faz 3: yerel tarama geçmişi (hedef verisi içerir; asla commit/imaj içine girmez)
+data/

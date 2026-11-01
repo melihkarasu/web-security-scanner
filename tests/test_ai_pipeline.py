@@ -68,6 +68,12 @@ class AIPipelineE2ETests(unittest.TestCase):
                                                                   "model": "mock"}})
         self.assertEqual(status, 200, result)
         self.assertTrue(result.get("success"), result)
+        self.assertEqual(result["history"]["kind"], "ai")  # Faz 3: AI taraması geçmişe yazılır
+        import scan_history
+        stored = scan_history.get_scan(result["history"]["scan_id"])
+        probe_log = stored["meta"]["ai"]["executed_tests"]
+        self.assertTrue(any(t["verdict"] == "BLOCKED_PAYLOAD" for t in probe_log))  # probe günlüğü kalıcı
+        self.assertIn("The Analyst", stored["meta"]["ai"]["telemetry_by_agent"])
 
         verdicts = {(t["param"], t["payload"]): t["verdict"] for t in result["ai_report"]["executed_tests"]}
         self.assertEqual(verdicts[("q", "<b>x</b>")], "BLOCKED_SCOPE")
