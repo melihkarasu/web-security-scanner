@@ -167,7 +167,7 @@ We believe security tools should be transparent about their boundaries:
 
 1. **Browser Mode (GitHub Pages) is Passive-Only:** Due to browser CORS policies and raw socket restrictions, the GitHub Pages demo can only query DNS/email records via DoH. Full HTTP header fetching, deep passive scanning, local directory SAST, active testing, AI Red Team, and Strix require running `server.py` locally or in Docker.
 2. **Static HTML/JS Simulation vs. Headless Chromium:** `browser_sim_engine.py` uses Python's `HTMLParser` and regex/taint heuristics to crawl links, extract forms, and analyze external `.js` files. It does **not** run a headless browser (Playwright/Puppeteer); therefore, single-page applications (SPAs) that render routes exclusively via client-side JavaScript execution will have limited crawl coverage unless tested with Strix's full sandbox.
-3. **Conservative Active Scan Limits:** To prevent accidental denial-of-service, `active_scan_engine.py` enforces a 1.5-second minimum interval between requests and a hard cap of **60 HTTP requests per scan** (crawler capped at 10 pages / depth 2 / 5 JS files).
+3. **Conservative Active Scan Limits:** To prevent accidental denial-of-service, `active_scan_engine.py` enforces a 1.5-second minimum interval between requests and a hard cap of **60 HTTP requests per scan** (crawler capped at 10 pages / depth 2 / 5 JS files). The AI Red Team pipeline uses a separate client locked to the exact origin you confirmed and capped at 12 probes (`max_loops × max_tests_per_loop`), so one AI scan sends at most 60 discovery + 12 AI requests; if the target redirects to another origin (e.g. `http://` → `https://`), enter the final origin as the target.
 4. **AI Thought Stream Delivery:** `/api/ai-scan` executes synchronously per scan request and returns the accumulated `thought_chain` log array when the pipeline finishes (whereas Strix runs asynchronously in the background and streams status via 4-second polling on `/api/strix-status`).
 5. **External Network Calls When Configured:** While core local scanning keeps data on your machine, DNS audits query Cloudflare/Google DoH, dependency CVE checks query `api.osv.dev`, and cloud LLM providers send prompt context (headers, discovered URLs/forms, trimmed HTTP response excerpts) to your selected LLM API. Use **Ollama** if you require strictly air-gapped/local LLM inference.
 6. **Docker + Strix Socket Privilege:** Running Strix inside Docker (`docker-compose.strix.yml`) mounts `/var/run/docker.sock` so Strix can spawn sibling `strix-sandbox` containers on the host daemon. Only use the Strix compose override in trusted local environments. When scanning services bound to `localhost` on your host machine from inside the Strix Docker sandbox, target the Docker bridge IP (e.g., `http://172.17.0.1:3000`).
@@ -180,7 +180,10 @@ We believe security tools should be transparent about their boundaries:
 |-----------|----------------|
 | **Localhost-only binding** | `server.py` binds to `127.0.0.1:8765` by default (`0.0.0.0` only inside container) |
 | **Mandatory ethics gate** | Active, AI, and Strix scans require explicit per-domain confirmation (`POST /api/active-confirm`); returns `403 ETIK_ONAY_YOK` otherwise |
-| **Rate limiting & caps** | 1.5 s minimum delay between active requests, 60-request hard cap per scan |
+| **Rate limiting & caps** | 1.5 s minimum delay between active requests, 60-request hard cap for discovery plus a separate, scope-locked 12-request budget for AI probes |
+| **Local API protection** | No CORS headers, `Host` allowlist against DNS rebinding (`127.0.0.1`, `localhost`, `::1` + `WSS_ALLOWED_HOSTS`), per-launch session token (`X-WSS-Token`), cross-site `Origin`/`Sec-Fetch-Site` rejection, POST-only scan endpoints, static file allowlist (no source or `.git` exposure) |
+| **AI probe guard (code-enforced)** | LLM-proposed probes must match the ethically confirmed target's exact origin (scheme + host + port); off-scope redirects are not followed; destructive SQL/OS commands, long sleeps/`BENCHMARK`, cloud-metadata endpoints and oversized payloads are rejected before sending (`safety_guard.py`) |
+| **Secret masking before LLM calls** | Cookie values, `Authorization`, JWT payload/signature (header/`alg` kept), cloud/API keys, private keys, connection-string passwords and hardcoded secret literals are masked in every prompt sent to cloud or local LLMs — AI Red Team and SAST AI audit (`redaction.py`) |
 | **Read-only probes** | No `INSERT`/`UPDATE`/`DELETE` payloads; SQLi/SSTI/XSS probes use benign markers |
 | **Zero-dependency core** | Core server, SAST, and active engines run on Python 3 stdlib (`urllib`, `socket`, `ssl`, `http.server`, `json`, `re`, `ast`); `cryptography` is only required for Vertex AI Service Account JWT auth |
 | **Resource bounds** | SAST skips `node_modules`, `.git`, `.venv`, files >1 MB, and caps at 800 files per scan |
@@ -199,6 +202,8 @@ web-security-scanner/
 ├── business_logic_engine.py   # Numeric boundary manipulation, workflow bypass & race condition tester
 ├── ai_connector.py            # Unified LLM client (OpenAI-compatible, Vertex AI, Gemini, OpenRouter, Ollama)
 ├── ai_orchestrator.py         # Evidence-verified 4-agent Red Team pipeline (Scout → Strategist → Analyst → Reporter)
+├── safety_guard.py            # Code-enforced AI probe guard: exact-origin scope lock + destructive/DoS payload filter
+├── redaction.py               # Secret masking for every LLM prompt (cookies, Authorization, JWT, API & private keys)
 ├── strix_engine.py            # Strix CLI subprocess manager (full CLI flag parity, live polling & report mapper)
 ├── index.html                 # Unified Single-Input Command Center & 8-tab diagnostic dashboard
 ├── js/app.js                  # Frontend controller, DoH client, mode detection & MD/JSON/HTML report exporter
@@ -208,18 +213,25 @@ web-security-scanner/
 ├── Dockerfile                 # Multi-mode container build (supports ARG INSTALL_STRIX=1)
 ├── docker-compose.yml         # Standard non-root container deployment
 ├── docker-compose.strix.yml   # Strix-enabled container override (mounts host docker.sock)
+├── tests/                     # Stdlib unittest suite: mock LLM, local vulnerable fixture app, API security & E2E
 └── requirements.txt           # Optional dependency (cryptography>=42.0.0 for Vertex AI Service Account JWT)
 ```
 
+**Tests:** `python3 -m unittest discover -s tests -t .` (stdlib only; every server it starts binds to `127.0.0.1`).
+
 **Local API Endpoints (`server.py`):**
+
+All `/api/*` endpoints require the per-launch session token in an `X-WSS-Token` header (or `Authorization: Bearer`). The web UI receives it automatically; for `curl`/CI use the token printed at server start (`docker logs web-security-scanner`) or pin one with `WSS_API_TOKEN`. Requests with a non-loopback `Host` (DNS rebinding) or a cross-site `Origin` are rejected, and no CORS headers are sent.
+
 - `GET  /api/status` — Server health & local mode detection
+- `GET  /healthz` — Token-free liveness probe (Docker `HEALTHCHECK`)
 - `GET  /api/headers?url=` — Live HTTP response header proxy (bypasses browser CORS)
 - `GET  /api/deep-scan?url=` — Deep passive scan (cookies, TLS, `robots.txt`, mixed content, tech fingerprint)
 - `GET  /api/sast?path=` — Local directory SAST (129 rules incl. PHP `php2shell` & Node.js Oct 2026 advisories) + AST/taint + Google OSV dependency CVE scan
 - `POST /api/php-advisory-remediate` — Official [php.net/archive/2026.php](https://www.php.net/archive/2026.php) `Dockerfile`/`php.ini`/FPM remediation (`8.5.12`, `8.4.27`, `8.3.36`, `8.2.35`)
 - `POST /api/node-advisory-remediate` — Official [Node.js Oct 2026 Security Releases](https://nodejs.org/tr/blog/vulnerability/october-2026-security-releases) `Dockerfile`/`.nvmrc`/`.node-version` remediation (`v26.12.1`, `v24.22.1`, `v22.23.4`)
 - `POST /api/active-confirm` — Per-domain ethical authorization gate
-- `GET  /api/active-scan?url=&modules=` — Rate-limited active vulnerability scan
+- `POST /api/active-scan?url=&modules=` — Rate-limited active vulnerability scan (POST-only; `GET` returns `405`)
 - `POST /api/ai-test` — LLM provider connectivity test
 - `POST /api/ai-scan` — Evidence-verified AI Red Team orchestration
 - `GET  /api/strix-capabilities` — Strix CLI & Docker sandbox readiness check
