@@ -194,6 +194,10 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_ai_test()
             return
 
+        if parsed.path == "/api/ai-json-test":
+            self.handle_api_ai_json_test()
+            return
+
         # Strix AI Pentest: tarama başlat (alt süreç; etik onay zorunlu)
         if parsed.path == "/api/strix-scan":
             self.handle_api_strix_scan_post()
@@ -976,6 +980,28 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             connector = AIProviderFactory.create_connector(provider_config)
             test_res = connector.test_connection()
             self.send_json(test_res)
+        except Exception as e:
+            self.send_json({"success": False, "error": f"Bağlantı hatası: {str(e)}"}, status=400)
+
+    def handle_api_ai_json_test(self):
+        """AI saglayici/modelin JSON modu uyumlulugunu olcer (Faz 1 — json_health_check).
+
+        Dondurur: success, json_quality (clean|repaired|fixer_retry|parse_failed),
+        repaired, fixer_retry_used, keys_returned, latency_ms.
+        """
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length > 0 else b"{}"
+            data = json.loads(body.decode("utf-8") or "{}")
+        except (ValueError, json.JSONDecodeError):
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+
+        provider_config = data.get("ai_config") or data
+        try:
+            connector = AIProviderFactory.create_connector(provider_config)
+            result = connector.json_health_check()
+            self.send_json(result)
         except Exception as e:
             self.send_json({"success": False, "error": f"Bağlantı hatası: {str(e)}"}, status=400)
 

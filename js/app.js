@@ -2291,6 +2291,60 @@ async function testAIConnection() {
   }
 }
 
+async function testAIJsonMode() {
+  const btn = document.getElementById('ai-json-test-btn');
+  const btnText = document.getElementById('ai-json-test-btn-text');
+
+  const provider = document.getElementById('ai-provider')?.value || 'openai';
+  const model = document.getElementById('ai-model')?.value.trim() || '';
+  const baseUrl = document.getElementById('ai-base-url')?.value.trim() || '';
+  const projectId = document.getElementById('ai-project-id')?.value.trim() || '';
+  const region = document.getElementById('ai-region')?.value.trim() || 'global';
+  const authType = document.getElementById('ai-auth-type')?.value || 'service_account';
+  const auth = document.getElementById('ai-auth')?.value.trim() || '';
+
+  if (!model) {
+    showToast('Lütfen test edilecek model adını belirtin.', 'warning');
+    return;
+  }
+  saveAIConfig(false);
+  if (btn) btn.disabled = true;
+  if (btnText) btnText.innerText = 'JSON Testi...';
+
+  try {
+    const res = await fetch('/api/ai-json-test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ai_config: {
+          provider: provider, model: model, base_url: baseUrl, project_id: projectId,
+          region: region, auth: { type: authType, value: auth }, api_key: auth
+        }
+      }),
+      signal: AbortSignal.timeout(40000)
+    });
+    const data = await res.json();
+    if (data.success) {
+      const label = { clean: 'temiz (doğrudan geçerli JSON)', repaired: 'deterministik onarım gerekti',
+                      fixer_retry: 'düzeltici tekrar gerekti' }[data.json_quality] || data.json_quality;
+      const tone = data.json_quality === 'clean' ? 'success' : 'warning';
+      showToast('JSON modu: ' + label + ' (' + (data.latency_ms || 0) + ' ms)', tone);
+      appendAILog('[JSON Testi] ' + provider + ' (' + model + '): ' + label +
+                  (data.repaired ? ' · onarıldı' : '') + (data.fixer_retry_used ? ' · düzeltici retry' : ''),
+                  tone === 'success' ? 'success' : 'info');
+    } else {
+      showToast('JSON testi başarısız: ' + (data.error || 'bilinmeyen hata'), 'error');
+      appendAILog('[JSON Testi Hatası] ' + (data.error || 'bilinmeyen hata'), 'error');
+    }
+  } catch (err) {
+    showToast('JSON test isteği başarısız: ' + err.message, 'error');
+    appendAILog('[JSON Testi İstek Hatası] ' + err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    if (btnText) btnText.innerText = 'JSON Modunu Test Et';
+  }
+}
+
 function clearAILog() {
   const logEl = document.getElementById('ai-thought-log');
   if (logEl) {

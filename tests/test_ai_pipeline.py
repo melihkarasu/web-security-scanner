@@ -89,6 +89,16 @@ class AIPipelineE2ETests(unittest.TestCase):
         # Analyst yalnızca gerçekten gönderilen 2 prob için çağrıldı
         self.assertEqual(sum(1 for p in self.mock.prompts if "You are The Analyst" in p), 2)
 
+        # Faz 1: kapsam matrisi, dürüst tur geçmişi ve telemetri döndürülür
+        rep = result["ai_report"]
+        self.assertIn("coverage_matrix", rep)
+        self.assertGreaterEqual(rep["coverage_matrix"]["tested_count"], 2)
+        self.assertTrue(all("loop" in t for t in rep["executed_tests"]))
+        self.assertEqual(len(rep["history"]), rep["loops"])
+        self.assertIn("telemetry", rep)
+        self.assertGreaterEqual(rep["telemetry"]["total_calls"], 1)
+        self.assertIn("The Analyst", rep["telemetry"]["by_agent"])
+
         chain = " ".join(e["message"] for e in result["thought_chain"])
         self.assertIn("kapsam dışı", chain)
         self.assertIn("güvensiz payload", chain)

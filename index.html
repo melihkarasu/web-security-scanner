@@ -201,6 +201,10 @@
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
             <span id="ai-test-btn-text">Bağlantıyı Test Et</span>
           </button>
+          <button type="button" id="ai-json-test-btn" onclick="testAIJsonMode()" class="btn btn-sm btn-secondary" title="Sağlayıcının/modelin güvenilir JSON üretip üretmediğini ölçer (küçük/yerel modeller için faydalı)">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <span id="ai-json-test-btn-text">JSON Modunu Test Et</span>
+          </button>
         </div>
       </div>
     </div>
@@ -999,6 +1003,6 @@
   </div>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261101a"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261101b"></script>
 </body>
 </html>

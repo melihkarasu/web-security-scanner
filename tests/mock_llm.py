@@ -1,20 +1,24 @@
-"""Testler için rol bazlı senaryolu sahte LLM (PentAGI'nin mock LLM test katmanının uyarlaması).
+"""Testler icin rol bazli senaryolu sahte LLM (PentAGI'nin mock LLM test katmaninin uyarlamasi).
 
-Gerçek sağlayıcı yerine AIProviderFactory._create_raw_connector ile enjekte edilir; böylece
-RedactingConnector sarmalayıcısı da test edilmiş olur. Aldığı (maskelenmiş) prompt'ları kaydeder.
+AIConnector tabanindan turer ve yalnizca _chat_impl'i uygular; boylece gercek base-class
+chat()/telemetri yolu ve RedactingConnector sarmalayicisi da test edilmis olur. Aldigi
+(maskelenmis) prompt'lari kaydeder.
 """
 import json
 import threading
 
+from ai_connector import AIConnector
 
-class MockLLM:
+
+class MockLLM(AIConnector):
     def __init__(self, plan_factory):
         self.prompts = []
+        self.model = "mock"
         self._plan_factory = plan_factory
         self._strategist_calls = 0
         self._lock = threading.Lock()
 
-    def chat(self, prompt, system_prompt=""):
+    def _chat_impl(self, prompt, system_prompt="", json_mode=False):
         text = (system_prompt or "") + "\n" + (prompt or "")
         with self._lock:
             self.prompts.append(text)
@@ -32,5 +36,5 @@ class MockLLM:
                 first = self._strategist_calls == 1
             return json.dumps(self._plan_factory() if first else [])
         if "You are The Reporter" in text:
-            return "### Yönetici Özeti\nSahte LLM raporu."
-        return "Scout değerlendirmesi: /search?q ve /item?id parametreleri öncelikli."
+            return "### Yonetici Ozeti\nSahte LLM raporu."
+        return "Scout degerlendirmesi: /search?q ve /item?id parametreleri oncelikli."

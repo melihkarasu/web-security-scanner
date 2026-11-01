@@ -34,7 +34,7 @@ Web Security Scanner bridges that gap with a **Unified Single-Input Command Cent
 | **Deep Passive Scan** (Cookie flags, TLS/Cert expiry & SAN, `robots.txt` exposure, Mixed Content, Tech Fingerprint) | ❌ | ✅ |
 | **SAST — Local Directory Code Audit** (146 rules across 7 languages + Python AST + JS taint + Shannon entropy + 8-ecosystem Google OSV CVEs + **Supply Chain & Dependency Confusion Auditor** + **AI/LLM, CI/CD, JWT/OAuth & K8s rules** + **PHP 2026 Advisories (`php2shell` CVE-2026-109618/109619/115560)** + **Node.js Oct 2026 Security Releases (CVE-2026-111497 Brotli RCE & 10 CVEs)** + Git Diff mode + 4-phase AI Code Audit + 6-artifact `security-check` suite) | ❌ | ✅ (Standalone or hybrid with URL) |
 | **Active Security Testing** (16 modules: SQLi, NoSQLi, SSTI, XSS, CSRF, SSRF, Open Redirect, IDOR, Active CORS, Live JWT & OAuth 2.0/OIDC, Active GraphQL, HPP & Cache Poisoning, Ports, Deep Headers, Browser Sim, Business Logic + 2-pass verification) | ❌ | ✅ (Ethics-gated + rate-limited) |
-| **AI Red Team Orchestration** (Scout → Strategist → Analyst → Reporter, evidence-verified findings only) | ❌ | ✅ OpenAI-compatible / Gemini / Vertex AI / OpenRouter / Ollama |
+| **AI Red Team Orchestration** (Scout → Strategist → Analyst → Reporter, evidence-verified findings only) | ❌ | ✅ OpenAI-compatible / Anthropic Claude / Azure OpenAI / AWS Bedrock / Gemini / Vertex AI / OpenRouter / Ollama |
 | **Strix Autonomous AI Pentest** (100% CLI flag & env parity + Docker sandbox PoC generation + live sub-agent tree + `coverage.json` + SARIF 2.1.0/CSV/MD) | ❌ | ✅ (Requires `strix-agent` + Docker) |
 | **Cloudflare Audit Lifecycle & Unified Coverage Ledger** (`Confirmed` / `Needs Validation` / `Hardening Notes` / `Rejected` + cross-engine Coverage Ledger) | ✅ (Passive/DNS) | ✅ Full across all engines |
 | **Exportable Reports** (Markdown, JSON, HTML, SARIF 2.1.0, CSV, `SECURITY-REPORT.md`, `architecture.md`, `coverage-ledger.md`, `findings.json`) | Basic (DNS/Score) | ✅ Full multi-engine report |
@@ -135,7 +135,7 @@ Enforces a mandatory ethical confirmation gate (`POST /api/active-confirm` → `
 | **Finding Correlation (`correlate_findings`)** | Chains multi-module findings into high-impact attack paths (e.g., *SSRF + Open DB Port → Internal Network Compromise*, *XSS + Weak CSP → Unblocked Script Execution*) |
 
 ### 5. AI Red Team Orchestration — Evidence-Verified Pipeline
-Enable **🤖 AI Red Team Agents** in the Command Center to run a 3-stage, evidence-verified pipeline (`/api/ai-scan`):
+Enable **🤖 AI Red Team Agents** in the Command Center to run a 3-stage, evidence-verified pipeline (`/api/ai-scan`). Every agent call uses provider JSON mode with deterministic repair plus a single fixer-retry, so a malformed LLM reply no longer silently drops a probe or verdict; the Strategist receives a prioritized, budgeted attack-surface summary (not a blind character cut), and each run returns an endpoint × parameter × vuln-class **coverage matrix**, honest per-round history, and per-agent **telemetry** (calls, latency, tokens):
 
 | Stage / Agent | Role | How It Works |
 |---------------|------|--------------|
@@ -151,6 +151,9 @@ Enable **🤖 AI Red Team Agents** in the Command Center to run a 3-stage, evide
 - **Google Gemini API (Google AI Studio)** — Direct API key (`AIza...`).
 - **OpenRouter** — Unified access to 100+ models.
 - **Ollama (Local / Offline)** — Connects to `http://localhost:11434` (`gemma2`, `llama3.1`, `codellama`, etc.) for 100% offline inference.
+- **Anthropic Claude (direct)** — Native Messages API (`claude-sonnet-5-5` etc.). The `anthropic-workspace-id` header is **not** sent unless you explicitly set a workspace id (a stray workspace header otherwise causes HTTP 404).
+- **Azure OpenAI Service** — Your resource `endpoint` + `deployment` name (`api-version` configurable).
+- **AWS Bedrock** — SigV4-signed (stdlib-only) Runtime access; defaults to the Anthropic Claude model family (`model_id`), supports temporary `session_token`.
 
 ### 6. Strix Autonomous AI Pentest — Subprocess & Docker Sandbox Integration
 In addition to the built-in AI orchestrator, the **⚔️ Strix Pentest** tab manages the official **[Strix CLI](https://github.com/usestrix/strix)** (`strix_engine.py`) as a background subprocess:
@@ -200,7 +203,8 @@ web-security-scanner/
 ├── active_scan_engine.py      # 12-module active scanner, correlation engine, rate limiter & ethical gate
 ├── browser_sim_engine.py      # Crawler, external JS DOM-XSS analyzer, form injector, clickjacking & session flow
 ├── business_logic_engine.py   # Numeric boundary manipulation, workflow bypass & race condition tester
-├── ai_connector.py            # Unified LLM client (OpenAI-compatible, Vertex AI, Gemini, OpenRouter, Ollama)
+├── ai_connector.py            # Unified LLM client + JSON mode, deterministic repair, per-call telemetry (OpenAI-compatible, Anthropic, Azure OpenAI, AWS Bedrock, Vertex AI, Gemini, OpenRouter, Ollama)
+├── json_utils.py               # Robust JSON extraction from LLM output (balanced scan + fence/trailing-comma/smart-quote repair)
 ├── ai_orchestrator.py         # Evidence-verified 4-agent Red Team pipeline (Scout → Strategist → Analyst → Reporter)
 ├── safety_guard.py            # Code-enforced AI probe guard: exact-origin scope lock + destructive/DoS payload filter
 ├── redaction.py               # Secret masking for every LLM prompt (cookies, Authorization, JWT, API & private keys)
@@ -233,6 +237,7 @@ All `/api/*` endpoints require the per-launch session token in an `X-WSS-Token` 
 - `POST /api/active-confirm` — Per-domain ethical authorization gate
 - `POST /api/active-scan?url=&modules=` — Rate-limited active vulnerability scan (POST-only; `GET` returns `405`)
 - `POST /api/ai-test` — LLM provider connectivity test
+- `POST /api/ai-json-test` — LLM JSON-mode compatibility check (clean / repaired / fixer-retry / parse-failed; useful for small local models)
 - `POST /api/ai-scan` — Evidence-verified AI Red Team orchestration
 - `GET  /api/strix-capabilities` — Strix CLI & Docker sandbox readiness check
 - `POST /api/strix-scan` — Start or `--resume` an autonomous Strix pentest

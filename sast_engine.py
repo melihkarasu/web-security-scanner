@@ -1157,8 +1157,8 @@ def run_ai_sast_audit(root_path, ai_config, profile="standard", scope_mode="full
         f"Recon:\n{recon_out[:1500]}\nStatic Findings:\n{json.dumps((sast_res.get('findings') or [])[:15], ensure_ascii=False)[:2500]}\n"
         f"Code Excerpts:\n{json.dumps(code_excerpts, ensure_ascii=False)[:5000]}"
     )
-    hunt_raw = connector.chat(hunt_prompt)
-    candidates = _extract_json(hunt_raw, "list") if not _is_llm_error(hunt_raw) else []
+    hunt_res = connector.chat_json(hunt_prompt, want="list") if hasattr(connector, "chat_json") else {"data": None}
+    candidates = hunt_res.get("data") or []
     if not isinstance(candidates, list):
         candidates = []
     candidates = [c for c in candidates if isinstance(c, dict)][:6]
@@ -1176,8 +1176,8 @@ def run_ai_sast_audit(root_path, ai_config, profile="standard", scope_mode="full
         f"Candidates:\n{json.dumps(candidates, ensure_ascii=False)}\n"
         f"Code Excerpts:\n{json.dumps(code_excerpts[:5], ensure_ascii=False)[:4000]}"
     )
-    ver_raw = connector.chat(verify_prompt)
-    verdicts = _extract_json(ver_raw, "list") if not _is_llm_error(ver_raw) else []
+    ver_res = connector.chat_json(verify_prompt, want="list") if hasattr(connector, "chat_json") else {"data": None}
+    verdicts = ver_res.get("data") or []
     verdict_map = {v.get("id"): v for v in (verdicts or []) if isinstance(v, dict) and v.get("id")}
 
     ai_confirmed = []

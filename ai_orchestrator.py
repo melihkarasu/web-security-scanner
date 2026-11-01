@@ -2,6 +2,7 @@ import json
 import time
 from typing import List, Dict, Any, Optional
 from ai_connector import AIProviderFactory
+from json_utils import extract_json as _extract_json_impl
 
 # =============================================================
 # Faz 6G-v2: AI Ajan Orkestratörü (Strix metodolojisiyle hizalı)
@@ -37,38 +38,116 @@ def _trim(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit] + "…[kırptım]"
 
 
-def _extract_json(text: str, want: str = "list"):
-    """LLM çıktısından ilk dengeli JSON dizisini/cismını çıkarır."""
-    text = text or ""
-    opener, closer = ("[", "]") if want == "list" else ("{", "}")
-    start = text.find(opener)
-    if start == -1:
-        return None
-    depth = 0
-    in_str = False
-    esc = False
-    for i in range(start, len(text)):
-        ch = text[i]
-        if in_str:
-            if esc:
-                esc = False
-            elif ch == "\\":
-                esc = True
-            elif ch == '"':
-                in_str = False
+def _extract_json(text, want="list"):
+    """json_utils.extract_json geriye donuk uyumlu sarmalayici (deterministik onarim dahil)."""
+    return _extract_json_impl(text, "list" if want == "list" else "object")
+
+
+# =============================================================
+# Faz 1: Öncelikli bağlam özeti + kapsam matrisi + tur geçmişi (deterministik, LLM'siz)
+# =============================================================
+_SECURITY_HEADERS = (
+    "content-security-policy", "strict-transport-security", "x-frame-options",
+    "x-content-type-options", "referrer-policy", "permissions-policy",
+    "set-cookie", "access-control-allow-origin", "server", "x-powered-by",
+)
+
+
+def _prioritized_surface(scan_state, limit=3600):
+    """Saldırı yüzeyini ÖNCELİK sırasına göre kompakt özetler ve token bütçesine sığdırır.
+
+    Kaba karakter kesmesi yerine (eski _trim(context, 3200)); teknoloji parmak izleri,
+    güvenlik başlıkları, parametreli uç noktalar/formlar ve temel bulgular korunur. Böylece
+    büyük hedeflerde Stratejist'e giden bağlamdan kritik veri düşmez.
+    """
+    if not isinstance(scan_state, dict):
+        return _trim(str(scan_state), limit)
+    surface = scan_state.get("attack_surface") or {}
+    pages = [p for p in (surface.get("pages") or []) if isinstance(p, str)]
+    forms = surface.get("forms") or []
+    headers = scan_state.get("response_headers") or {}
+    param_pages = [p for p in pages if "?" in p]
+    plain_pages = [p for p in pages if "?" not in p]
+    sec_headers = {k: v for k, v in headers.items() if str(k).lower() in _SECURITY_HEADERS}
+    blocks = [
+        ("target", scan_state.get("target")),
+        ("technologies", scan_state.get("technology_fingerprints") or []),
+        ("security_headers", sec_headers),
+        ("forms", forms),
+        ("parameterized_endpoints", param_pages),
+        ("static_findings", scan_state.get("static_findings") or []),
+        ("other_pages", plain_pages),
+    ]
+    out = {}
+    budget = max(400, int(limit))
+    for key, val in blocks:
+        chunk = json.dumps({key: val}, ensure_ascii=False, default=str)
+        if len(chunk) > budget and isinstance(val, list):
+            trimmed = []
+            for item in val:
+                if len(json.dumps(trimmed + [item], ensure_ascii=False, default=str)) > budget:
+                    break
+                trimmed.append(item)
+            val = trimmed
+            chunk = json.dumps({key: val}, ensure_ascii=False, default=str)
+        out[key] = val
+        budget -= len(chunk)
+        if budget <= 0:
+            break
+    return json.dumps(out, ensure_ascii=False, default=str)
+
+
+def build_coverage_matrix(scan_state, executed):
+    """Uç nokta × parametre × zafiyet sınıfı kapsam matrisi (hangi kombinasyon test edildi / bulundu)."""
+    tested = {}
+    for e in (executed or []):
+        if not isinstance(e, dict):
             continue
-        if ch == '"':
-            in_str = True
-        elif ch == opener:
-            depth += 1
-        elif ch == closer:
-            depth -= 1
-            if depth == 0:
-                try:
-                    return json.loads(text[start:i + 1])
-                except Exception:
-                    return None
-    return None
+        key = (str(e.get("url", ""))[:120], str(e.get("param", "")))
+        rec = tested.setdefault(key, {"probes": 0, "verdicts": {}})
+        rec["probes"] += 1
+        v = str(e.get("verdict", "?"))
+        rec["verdicts"][v] = rec["verdicts"].get(v, 0) + 1
+    rows = []
+    for (url, param), rec in tested.items():
+        verdicts = rec["verdicts"]
+        if any(v == "VULNERABLE" for v in verdicts):
+            status = "vulnerable"
+        elif verdicts and all(v.startswith("BLOCKED") for v in verdicts):
+            status = "blocked"
+        elif any(v == "INCONCLUSIVE" for v in verdicts):
+            status = "inconclusive"
+        else:
+            status = "covered"
+        rows.append({"endpoint": url, "param": param, "probes": rec["probes"],
+                     "status": status, "verdicts": verdicts})
+    surface = (scan_state or {}).get("attack_surface") or {}
+    seen = {(r["endpoint"], r["param"]) for r in rows}
+    untested = []
+    try:
+        from urllib.parse import urlsplit, parse_qs
+        for p in (surface.get("pages") or []):
+            if isinstance(p, str) and "?" in p:
+                for pname in parse_qs(urlsplit(p).query):
+                    cand = {"endpoint": p[:120], "param": pname}
+                    if (p[:120], pname) not in seen and cand not in untested:
+                        untested.append(cand)
+    except Exception:
+        pass
+    return {"tested": rows, "untested_sample": untested[:20],
+            "tested_count": len(rows), "untested_count": len(untested)}
+
+
+def _history_from_executed(executed, loops):
+    """Tur bazında dürüst geçmiş (eski sürüm her tura aynı sayıyı yazıyordu)."""
+    hist = []
+    for ln in range(1, int(loops) + 1):
+        entries = [e for e in (executed or []) if isinstance(e, dict) and e.get("loop") == ln]
+        verified = sum(1 for e in entries if e.get("verdict") == "VULNERABLE")
+        blocked = sum(1 for e in entries if str(e.get("verdict", "")).startswith("BLOCKED"))
+        hist.append({"step": ln, "result": "%d prob · %d doğrulanmış · %d engellenmiş" % (
+            len(entries), verified, blocked)})
+    return hist
 
 
 class AIAgent:
@@ -80,7 +159,24 @@ class AIAgent:
 
     def think(self, context: str, user_input: str = "") -> str:
         full_prompt = f"{self.role_prompt}\n\nCONTEXT:\n{_trim(context, MAX_CONTEXT_CHARS)}\n\nINPUT: {user_input}"
+        try:
+            self.connector._agent_label = self.name
+        except Exception:
+            pass
         return self.connector.chat(full_prompt)
+
+    def think_json(self, context: str, user_input: str = "", want: str = "object") -> dict:
+        """JSON bekleyen ajan çağrıları: chat_json (JSON modu + deterministik onarım + düzeltici retry)."""
+        full_prompt = f"{self.role_prompt}\n\nCONTEXT:\n{_trim(context, MAX_CONTEXT_CHARS)}\n\nINPUT: {user_input}"
+        try:
+            self.connector._agent_label = self.name
+        except Exception:
+            pass
+        if hasattr(self.connector, "chat_json"):
+            return self.connector.chat_json(full_prompt, want=want)
+        raw = self.connector.chat(full_prompt)
+        data = _extract_json(raw, want)
+        return {"data": data, "raw": raw, "ok": data is not None, "repaired": False, "fixed": False}
 
 
 # =============================================================
@@ -208,6 +304,38 @@ class AIOrchestrator:
             self.connector
         )
 
+    def _telemetry_summary(self):
+        """Ajan bazında LLM telemetrisi (çağrı, gecikme, token) — bağlayıcı kayıtlarından toplanır."""
+        try:
+            calls = self.connector.get_telemetry()
+        except Exception:
+            calls = []
+        calls = calls or []
+        by_agent = {}
+        total_in = 0
+        total_out = 0
+        for c in calls:
+            if not isinstance(c, dict):
+                continue
+            a = c.get("agent") or "?"
+            d = by_agent.setdefault(a, {"calls": 0, "latency_ms": 0, "ok": 0,
+                                        "input_tokens": 0, "output_tokens": 0})
+            d["calls"] += 1
+            d["latency_ms"] += c.get("latency_ms", 0) or 0
+            d["ok"] += 1 if c.get("ok") else 0
+            u = c.get("usage") or {}
+            d["input_tokens"] += u.get("input_tokens") or 0
+            d["output_tokens"] += u.get("output_tokens") or 0
+            total_in += u.get("input_tokens") or 0
+            total_out += u.get("output_tokens") or 0
+        return {
+            "total_calls": len(calls),
+            "total_latency_ms": sum((c.get("latency_ms", 0) or 0) for c in calls if isinstance(c, dict)),
+            "total_input_tokens": total_in,
+            "total_output_tokens": total_out,
+            "by_agent": by_agent,
+        }
+
     def _compress_history(self, history: List[Dict]) -> str:
         """Maliyet kontrolü: geçmiş testleri kompakt imza listesine indirger."""
         if not history:
@@ -267,37 +395,17 @@ class AIOrchestrator:
             # 2. STRATEJİ (The Strategist)
             emit("strategist", "Tur %d: Hipotez planlanıyor…" % loop_count)
             strategy_ctx = ("Target: %s\nActive Claude-Red Playbooks:\n%s\nScout assessment: %s\nFull attack surface: %s\nAlready executed tests (DO NOT repeat):\n%s"
-                            % (target_url, playbook_text, _trim(scout_report, 2000), _trim(context, 3200),
+                            % (target_url, playbook_text, _trim(scout_report, 2000), _prioritized_surface(initial_data, 3600),
                                self._compress_history(executed)))
-            plan_raw = self.strategist.think(strategy_ctx)
-            if _is_llm_error(plan_raw):
-                errors.append("Strategist LLM hatası: %s" % _trim(plan_raw, 120))
+            plan_res = self.strategist.think_json(strategy_ctx, want="list")
+            if not plan_res.get("ok") and _is_llm_error(plan_res.get("raw", "")):
+                errors.append("Strategist LLM hatası: %s" % _trim(plan_res.get("raw", ""), 120))
                 break
-
-            plan = _extract_json(plan_raw, "list")
-            if plan is None:
-                obj = _extract_json(plan_raw, "object")
-                if isinstance(obj, dict):
-                    for v in obj.values():
-                        if isinstance(v, list):
-                            plan = v
-                            break
+            if plan_res.get("fixed"):
+                emit("strategist", "Strateji çıktısı bozuktu; düzeltici tek tekrar ile onarıldı.")
+            plan = plan_res.get("data")
             if not isinstance(plan, list):
-                # Tekrar dene: model düz metin döndürdüyse katı JSON hatırlatmasıyla
-                emit("strategist", "Strateji çıktısı ayrıştırılamadı — katı JSON modunda tekrar deneniyor…")
-                plan_raw = self.strategist.think(
-                    strategy_ctx + "\n\nCRITICAL: your previous reply was not parseable JSON. "
-                                   "Reply with ONLY the JSON array (use [] if no meaningful test remains). NO prose.")
-                plan = _extract_json(plan_raw, "list")
-                if plan is None:
-                    obj = _extract_json(plan_raw, "object")
-                    if isinstance(obj, dict):
-                        for v in obj.values():
-                            if isinstance(v, list):
-                                plan = v
-                                break
-            if not isinstance(plan, list):
-                emit("strategist", "İkinci denemede de ayrıştırılamadı; döngü burada sonlanıyor.")
+                emit("strategist", "Strateji çıktısı JSON olarak ayrıştırılamadı; döngü burada sonlanıyor.")
                 errors.append("Strateji JSON ayrıştırılamadı (tur %d)" % loop_count)
                 break
 
@@ -327,7 +435,7 @@ class AIOrchestrator:
                 # hiç eşleşmeyen bir metne bakıyordu; artık açık bayrak kullanılır.
                 if response.get("limit_reached") or response.get("error") == "istek limiti":
                     emit("error", "AI istek bütçesi doldu; döngü sonlandırılıyor.")
-                    executed.append({"url": url, "param": param, "payload": payload, "verdict": "RATE_LIMIT"})
+                    executed.append({"url": url, "param": param, "payload": payload, "verdict": "RATE_LIMIT", "loop": loop_count})
                     loop_count = self.max_loops  # üst limit: dış döngüyü de bitir
                     break
                 # Kod düzeyindeki koruma (safety_guard) probu GÖNDERMEDİ → Analyst çağrısı yapılmaz;
@@ -336,7 +444,7 @@ class AIOrchestrator:
                     blocked_verdict = "BLOCKED_SCOPE" if response.get("blocked") == "scope" else "BLOCKED_PAYLOAD"
                     block_reason = str(response.get("reason") or response.get("error") or "")[:200]
                     executed.append({"url": url, "param": param, "payload": payload,
-                                     "verdict": blocked_verdict, "reason": block_reason})
+                                     "verdict": blocked_verdict, "reason": block_reason, "loop": loop_count})
                     emit("error", "⛔ Prob gönderilmedi (%s): %s [%s] — %s" % (
                         "kapsam dışı" if blocked_verdict == "BLOCKED_SCOPE" else "güvensiz payload",
                         url[:70], param, block_reason[:120]))
@@ -344,6 +452,7 @@ class AIOrchestrator:
 
                 # 4. ANALİZ (The Analyst) — her kanıt ayrı değerlendirilir
                 verdict_raw = ""
+                vobj = None
                 try:
                     analysis_input = json.dumps({
                         "probe": {"url": url, "param": param, "payload": payload,
@@ -357,13 +466,18 @@ class AIOrchestrator:
                             "error": response.get("error"),
                         }
                     }, ensure_ascii=False, default=str)
-                    verdict_raw = self.analyst.think(analysis_input)
+                    verdict_res = self.analyst.think_json(analysis_input, want="object")
+                    vobj = verdict_res.get("data")
+                    verdict_raw = verdict_res.get("raw", "")
+                    if verdict_res.get("fixed"):
+                        emit("analyst", "Analist çıktısı bozuktu; düzeltici tek tekrar ile onarıldı.")
                 except Exception as e:
                     verdict_raw = "Error: analyst exception %s" % e
 
-                vobj = _extract_json(verdict_raw, "object") if not _is_llm_error(verdict_raw) else None
+                if vobj is None and not _is_llm_error(verdict_raw):
+                    emit("analyst", "⚠️ Analist yanıtı ayrıştırılamadı; KARARSIZ sayıldı: %s [%s]" % (url[:60], param))
                 verdict = (vobj or {}).get("verdict", "INCONCLUSIVE") if isinstance(vobj, dict) else "INCONCLUSIVE"
-                executed.append({"url": url, "param": param, "payload": payload, "verdict": verdict})
+                executed.append({"url": url, "param": param, "payload": payload, "verdict": verdict, "loop": loop_count})
 
                 if verdict == "VULNERABLE":
                     sev_map = {"critical": "KRİTİK", "high": "YÜKSEK", "medium": "ORTA", "low": "DÜŞÜK"}
@@ -418,9 +532,7 @@ class AIOrchestrator:
             "executed_tests": executed,
             "narrative_report": narrative,
             "errors": errors + ([narrative_err] if narrative_err else []),
-            "history": [
-                {"step": i + 1, "result": "%d test, toplam %d doğrulanmış bulgu" % (
-                    min(len(executed), self.max_tests_per_loop), len(verified_findings))}
-                for i in range(loop_count)
-            ],
+            "history": _history_from_executed(executed, loop_count),
+            "coverage_matrix": build_coverage_matrix(initial_data, executed),
+            "telemetry": self._telemetry_summary(),
         }
