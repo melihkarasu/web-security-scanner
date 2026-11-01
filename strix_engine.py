@@ -56,6 +56,11 @@ PROVIDER_MODEL_PREFIX = {
     "openrouter": "openrouter/",
     "ollama": "ollama_chat/",
     "vertex": "vertex_ai/",
+    "anthropic": "anthropic/",
+    "azure": "azure/",
+    "azure_openai": "azure/",
+    "bedrock": "bedrock/",
+    "aws_bedrock": "bedrock/",
 }
 
 
@@ -169,6 +174,35 @@ def build_strix_env(ai_config: dict, strix_env_opts: dict = None) -> dict:
             env["GOOGLE_API_KEY"] = key
             env["LLM_API_KEY"] = key
         env["LLM_API_KEY"] = key or env.get("LLM_API_KEY", "")
+    elif provider == "anthropic":
+        if not key:
+            raise ValueError("Strix taraması için Anthropic API anahtarı gereklidir.")
+        env["LLM_API_KEY"] = key
+        env["ANTHROPIC_API_KEY"] = key
+        if base_url:
+            env["LLM_API_BASE"] = base_url
+    elif provider in ("azure", "azure_openai"):
+        if not key or not base_url:
+            raise ValueError("Strix + Azure OpenAI için API anahtarı ve kaynak endpoint adresi (Base URL) gereklidir.")
+        env["LLM_API_KEY"] = key
+        env["AZURE_API_KEY"] = key
+        env["LLM_API_BASE"] = base_url
+        env["AZURE_API_BASE"] = base_url
+        env["AZURE_API_VERSION"] = (ai_config.get("api_version") or "2024-10-21").strip()
+    elif provider in ("bedrock", "aws_bedrock"):
+        from ai_connector import _with_bedrock_credentials
+        creds = _with_bedrock_credentials(ai_config)
+        if not (creds.get("access_key") and creds.get("secret_key")):
+            raise ValueError("Strix + AWS Bedrock için ERİŞİM_ANAHTARI:GİZLİ_ANAHTAR[:OTURUM_TOKENI] biçiminde kimlik bilgisi gereklidir.")
+        env["AWS_ACCESS_KEY_ID"] = creds["access_key"]
+        env["AWS_SECRET_ACCESS_KEY"] = creds["secret_key"]
+        if creds.get("session_token"):
+            env["AWS_SESSION_TOKEN"] = creds["session_token"]
+        region = (ai_config.get("region") or "us-east-1").strip()
+        if not region or region == "global":
+            region = "us-east-1"
+        env["AWS_REGION_NAME"] = region
+        env["AWS_DEFAULT_REGION"] = region
     else:
         if not key:
             raise ValueError("Strix taraması için API anahtarı gereklidir (%s sağlayıcısı)." % provider)

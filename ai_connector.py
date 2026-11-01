@@ -40,6 +40,44 @@ def _usage_from_openai(res_data):
     return {"input_tokens": u.get("prompt_tokens"), "output_tokens": u.get("completion_tokens"),
             "total_tokens": u.get("total_tokens")}
 
+
+_DROPPABLE_PARAMS = (
+    ("temperature", ("temperature",)),
+    ("response_format", ("response_format", "json_object", "json mode", "json_mode", "responseformat")),
+)
+
+
+def _post_json_adaptive(conn, url, headers, payload, label):
+    """JSON POST. HTTP 400/422 isteğe bağlı bir parametreyi (temperature / response_format) reddederse
+    o parametre olmadan bir kez daha dener ve bağlayıcı nesnesinde hatırlar (sonraki çağrılarda gönderilmez).
+
+    Örnek: Claude 5.x ve bazı akıl yürüten modeller 'temperature'ı, bazı OpenAI-uyumlu sunucular
+    'response_format'ı (JSON modu) reddeder. Döner: (yanıt_sözlüğü, None) ya da (None, "Error: ...").
+    """
+    dropped = conn.__dict__.setdefault("_dropped_params", set())
+    body = {k: v for k, v in payload.items() if k not in dropped}
+    for _ in range(len(_DROPPABLE_PARAMS) + 1):
+        req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers=headers)
+        try:
+            with _urlopen_with_retry(req) as resp:
+                return json.loads(resp.read().decode("utf-8")), None
+        except urllib.error.HTTPError as e:
+            err = e.read().decode("utf-8", errors="replace")
+            low = err.lower()
+            victim = None
+            if e.code in (400, 422):
+                for param, words in _DROPPABLE_PARAMS:
+                    if param in body and any(w in low for w in words):
+                        victim = param
+                        break
+            if victim is None:
+                return None, "Error: %s HTTP %d - %s" % (label, e.code, err)
+            dropped.add(victim)
+            body.pop(victim, None)
+        except Exception as e:
+            return None, "Error: %s" % str(e)
+    return None, "Error: %s isteği isteğe bağlı parametreler düşürüldükten sonra da başarısız oldu" % label
+
 # =============================================================
 # Faz 6G: AI Bağlantı Katmanı (AI Connector Layer)
 # =============================================================
@@ -181,25 +219,16 @@ class OpenAICompatibleConnector(AIConnector):
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
 
-        try:
-            data = json.dumps(payload).encode("utf-8")
-            req = urllib.request.Request(url, data=data, headers=headers)
-            with _urlopen_with_retry(req) as resp:
-                res_data = json.loads(resp.read().decode("utf-8"))
-                self._last_usage = _usage_from_openai(res_data)
-                choices = res_data.get("choices", [])
-                if choices and "message" in choices[0]:
-                    msg = choices[0]["message"]
-                    # Reasoning modellerde (DeepSeek-R1, Evren vb.) content boş kalıp
-                    # reasoning alanında metin dönebilir — her ikisini de değerlendir.
-                    content = msg.get("content") or msg.get("reasoning") or ""
-                    return content
-                return json.dumps(res_data)
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", errors="replace")
-            return f"Error: HTTP {e.code} - {err_body}"
-        except Exception as e:
-            return f"Error: {str(e)}"
+        res_data, err = _post_json_adaptive(self, url, headers, payload, "OpenAI-compatible")
+        if err:
+            return err
+        self._last_usage = _usage_from_openai(res_data)
+        choices = res_data.get("choices", [])
+        if choices and "message" in choices[0]:
+            msg = choices[0]["message"]
+            # Reasoning modellerde (DeepSeek-R1 vb.) content boş kalıp reasoning alanında metin dönebilir.
+            return msg.get("content") or msg.get("reasoning") or ""
+        return json.dumps(res_data)
 
 class VertexAIConnector(AIConnector):
     """
@@ -405,14 +434,14 @@ class OpenRouterConnector(AIConnector):
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
-        try:
-            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
-            with _urlopen_with_retry(req) as response:
-                res_data = json.loads(response.read().decode("utf-8"))
-                self._last_usage = _usage_from_openai(res_data)
-                return res_data["choices"][0]["message"]["content"]
-        except Exception as e:
-            return f"Error: {str(e)}"
+        res_data, err = _post_json_adaptive(self, url, headers, payload, "OpenRouter")
+        if err:
+            return err
+        self._last_usage = _usage_from_openai(res_data)
+        choices = res_data.get("choices") or []
+        if choices and isinstance(choices[0], dict):
+            return (choices[0].get("message") or {}).get("content") or ""
+        return json.dumps(res_data)
 
 class OllamaConnector(AIConnector):
     """Yerel veya Docker ağı üzerindeki Ollama kurulumu ile iletişim kurar."""
@@ -452,11 +481,11 @@ class AnthropicConnector(AIConnector):
     """
 
     def __init__(self, api_key, model="claude-sonnet-5-5", base_url="https://api.anthropic.com",
-                 max_tokens=2048, workspace_id="", version="2023-06-01"):
+                 max_tokens=4096, workspace_id="", version="2023-06-01"):
         self.api_key = (api_key or "").strip()
         self.model = (model or "claude-sonnet-5-5").strip()
         self.base_url = (base_url or "https://api.anthropic.com").rstrip("/")
-        self.max_tokens = int(max_tokens or 2048)
+        self.max_tokens = int(max_tokens or 4096)
         self.workspace_id = (workspace_id or "").strip()
         self.version = (version or "2023-06-01").strip()
 
@@ -473,8 +502,8 @@ class AnthropicConnector(AIConnector):
             "model": self.model,
             "max_tokens": self.max_tokens,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.2,
         }
+        # Not: Claude 5.x "temperature" parametresini reddediyor (HTTP 400 "deprecated"); varsayılan kullanılır.
         if system_prompt:
             body["system"] = system_prompt
         try:
@@ -516,19 +545,14 @@ class AzureOpenAIConnector(AIConnector):
         body = {"messages": messages, "temperature": 0.2}
         if json_mode:
             body["response_format"] = {"type": "json_object"}
-        try:
-            req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers=headers)
-            with _urlopen_with_retry(req) as resp:
-                res = json.loads(resp.read().decode("utf-8"))
-                self._last_usage = _usage_from_openai(res)
-                choices = res.get("choices", [])
-                if choices and "message" in choices[0]:
-                    return choices[0]["message"].get("content") or ""
-                return json.dumps(res)
-        except urllib.error.HTTPError as e:
-            return "Error: Azure OpenAI HTTP %d - %s" % (e.code, e.read().decode("utf-8", errors="replace"))
-        except Exception as e:
-            return "Error: %s" % str(e)
+        res, err = _post_json_adaptive(self, url, headers, body, "Azure OpenAI")
+        if err:
+            return err
+        self._last_usage = _usage_from_openai(res)
+        choices = res.get("choices", [])
+        if choices and "message" in choices[0]:
+            return choices[0]["message"].get("content") or ""
+        return json.dumps(res)
 
 
 class AWSBedrockConnector(AIConnector):
@@ -540,14 +564,14 @@ class AWSBedrockConnector(AIConnector):
 
     def __init__(self, access_key, secret_key, region="us-east-1",
                  model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
-                 session_token="", max_tokens=2048):
+                 session_token="", max_tokens=4096):
         self.access_key = (access_key or "").strip()
         self.secret_key = (secret_key or "").strip()
         self.region = (region or "us-east-1").strip()
         self.model_id = (model_id or "").strip()
         self.model = self.model_id
         self.session_token = (session_token or "").strip()
-        self.max_tokens = int(max_tokens or 2048)
+        self.max_tokens = int(max_tokens or 4096)
 
     def _build_payload(self, prompt, system_prompt):
         if self.model_id.startswith("anthropic."):
@@ -555,8 +579,9 @@ class AWSBedrockConnector(AIConnector):
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": self.max_tokens,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.2,
             }
+            if not getattr(self, "_no_temperature", False):
+                payload["temperature"] = 0.2
             if system_prompt:
                 payload["system"] = system_prompt
             return payload
@@ -605,8 +630,11 @@ class AWSBedrockConnector(AIConnector):
 
     def _chat_impl(self, prompt, system_prompt="", json_mode=False):
         host = "bedrock-runtime.%s.amazonaws.com" % self.region
-        canonical_uri = "/model/%s/invoke" % urllib.parse.quote(self.model_id)
-        endpoint = "https://%s%s" % (host, canonical_uri)
+        wire_path = "/model/%s/invoke" % urllib.parse.quote(self.model_id, safe="")
+        # SigV4: S3 dışındaki servislerde kanonik URI'deki yol İKİ KEZ kodlanır
+        # (model kimliğindeki ':' → telde %3A, imzada %253A); aksi hâlde SignatureDoesNotMatch.
+        canonical_uri = urllib.parse.quote(wire_path, safe="/~")
+        endpoint = "https://%s%s" % (host, wire_path)
         body = json.dumps(self._build_payload(prompt, system_prompt)).encode("utf-8")
         try:
             headers = self._sigv4_headers(host, canonical_uri, body)
@@ -624,7 +652,12 @@ class AWSBedrockConnector(AIConnector):
                     return res["results"][0].get("outputText", "")
                 return json.dumps(res)
         except urllib.error.HTTPError as e:
-            return "Error: Bedrock HTTP %d - %s" % (e.code, e.read().decode("utf-8", errors="replace"))
+            err = e.read().decode("utf-8", errors="replace")
+            if e.code == 400 and "temperature" in err.lower() and not getattr(self, "_no_temperature", False):
+                # Claude 5.x (Bedrock dahil) 'temperature'ı reddediyor → parametresiz, yeniden imzalanmış tek tekrar
+                self._no_temperature = True
+                return self._chat_impl(prompt, system_prompt, json_mode)
+            return "Error: Bedrock HTTP %d - %s" % (e.code, err)
         except Exception as e:
             return "Error: %s" % str(e)
 
@@ -664,6 +697,40 @@ class RedactingConnector(AIConnector):
         if name == "_inner":
             raise AttributeError(name)
         return getattr(self._inner, name)
+
+
+def _with_bedrock_credentials(cfg):
+    """UI'daki tek kimlik alanından (auth.value / api_key) AWS anahtarlarını ayrıştırır.
+
+    Kabul edilen biçimler: JSON {"access_key","secret_key","session_token"} (veya aws_* adları)
+    ya da "ERİŞİM_ANAHTARI:GİZLİ_ANAHTAR[:OTURUM_TOKENI]". Açık alanlar verilmişse dokunulmaz.
+    """
+    cfg = dict(cfg or {})
+    if cfg.get("access_key") or cfg.get("aws_access_key_id"):
+        return cfg
+    auth = cfg.get("auth") if isinstance(cfg.get("auth"), dict) else {}
+    raw = str(cfg.get("api_key") or auth.get("value") or "").strip()
+    if not raw:
+        return cfg
+    if raw.startswith("{"):
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            data = {}
+        if isinstance(data, dict):
+            for src, dst in (("access_key", "access_key"), ("aws_access_key_id", "access_key"),
+                             ("secret_key", "secret_key"), ("aws_secret_access_key", "secret_key"),
+                             ("session_token", "session_token"), ("aws_session_token", "session_token")):
+                if data.get(src) and not cfg.get(dst):
+                    cfg[dst] = str(data[src]).strip()
+        return cfg
+    parts = raw.split(":")
+    if len(parts) >= 2:
+        cfg["access_key"] = parts[0].strip()
+        cfg["secret_key"] = parts[1].strip()
+        if len(parts) >= 3:
+            cfg["session_token"] = ":".join(parts[2:]).strip()
+    return cfg
 
 
 class AIProviderFactory:
@@ -719,7 +786,7 @@ class AIProviderFactory:
                 api_key=provider_config.get("api_key") or provider_config.get("auth", {}).get("value") or "",
                 model=provider_config.get("model") or "claude-sonnet-5-5",
                 base_url=provider_config.get("base_url") or "https://api.anthropic.com",
-                max_tokens=provider_config.get("max_tokens") or 2048,
+                max_tokens=provider_config.get("max_tokens") or 4096,
                 workspace_id=provider_config.get("workspace_id") or ""
             )
         elif provider in ("azure", "azure_openai"):
@@ -731,13 +798,14 @@ class AIProviderFactory:
                 model=provider_config.get("model") or ""
             )
         elif provider in ("bedrock", "aws_bedrock", "aws"):
+            provider_config = _with_bedrock_credentials(provider_config)
             return AWSBedrockConnector(
                 access_key=provider_config.get("access_key") or provider_config.get("aws_access_key_id") or "",
                 secret_key=provider_config.get("secret_key") or provider_config.get("aws_secret_access_key") or "",
                 region=provider_config.get("region") or "us-east-1",
                 model_id=provider_config.get("model_id") or provider_config.get("model") or "anthropic.claude-3-5-sonnet-20241022-v2:0",
                 session_token=provider_config.get("session_token") or "",
-                max_tokens=provider_config.get("max_tokens") or 2048
+                max_tokens=provider_config.get("max_tokens") or 4096
             )
         else:
             raise ValueError(f"Desteklenmeyen AI sağlayıcısı: {provider}")

@@ -1,5 +1,7 @@
 import json
+import re
 import time
+from urllib.parse import urlsplit
 from typing import List, Dict, Any, Optional
 from ai_connector import AIProviderFactory
 from json_utils import extract_json as _extract_json_impl
@@ -150,6 +152,52 @@ def _history_from_executed(executed, loops):
     return hist
 
 
+# =============================================================
+# Faz 2: Operatör onayı (PentAGI "ask" bariyeri) + ajan başına model doğrulama
+# =============================================================
+CONFIRM_YES = "Evet, test et"
+CONFIRM_NO = "Hayır, atla"
+
+_SENSITIVE_ACTION_RE = re.compile(
+    r"(?:^|[/_.\-=&?])(delete|remove|destroy|drop|purge|wipe|erase|logout|log-out|signout|sign-out|"
+    r"unsubscribe|deactivate|disable|terminate|cancel|refund|transfer|withdraw|payment|pay|checkout|"
+    r"purchase|reset|shutdown|restart|reboot|revoke|ban|unlink)(?=$|[/_.\-=&?])", re.I)
+
+_ROLE_NAMES = ("scout", "strategist", "analyst", "reporter", "mentor")
+_MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9._:/@+-]{1,120}$")
+
+
+def _needs_confirmation(url, param, payload, task=None):
+    """Prob durum değiştirebilecek bir uca dokunuyorsa ya da LLM emin değilse gerekçe döndürür; aksi hâlde "".
+
+    Yalnızca GET + salt-okunur payload kullanılsa da /delete, /logout, /payment gibi uçlar
+    kötü tasarlanmış uygulamalarda durumu değiştirebilir; bu yüzden operatöre sorulur.
+    """
+    try:
+        parts = urlsplit(str(url or ""))
+        surface = "%s?%s&%s=%s" % (parts.path, parts.query, param or "", payload or "")
+    except ValueError:
+        surface = str(url or "")
+    m = _SENSITIVE_ACTION_RE.search(surface)
+    if m:
+        return "durum değiştirebilecek bir uç/eylem ('%s')" % m.group(1).lower()
+    flag = task.get("needs_confirmation") if isinstance(task, dict) else None
+    if flag is True or str(flag).strip().lower() in ("true", "yes", "1"):
+        return "model bu probun güvenli olduğundan emin değil"
+    return ""
+
+
+def _clean_role_models(raw):
+    """Ajan başına model adlarını doğrular; geçersiz adlar yok sayılır (URL'ye giden değerler)."""
+    out = {}
+    if isinstance(raw, dict):
+        for role in _ROLE_NAMES:
+            value = str(raw.get(role) or "").strip()
+            if value and _MODEL_NAME_RE.match(value):
+                out[role] = value
+    return out
+
+
 class AIAgent:
     """Genel ajan yapısı."""
     def __init__(self, name: str, role_prompt: str, connector):
@@ -244,9 +292,15 @@ class AIOrchestrator:
     Ajanlar arası döngüyü yöneten ve maliyet kontrolü yapan ana orkestratör.
     """
     def __init__(self, provider_config: dict, max_loops: int = 3, max_tests_per_loop: int = 4):
-        self.connector = AIProviderFactory.create_connector(provider_config)
+        self.provider_config = dict(provider_config or {})
+        self.connector = AIProviderFactory.create_connector(self.provider_config)
         self.max_loops = max_loops
         self.max_tests_per_loop = max_tests_per_loop
+        # Küçük/yerel model modu: verimsiz turdan sonra bağımsız Mentor önerisi (varsayılan kapalı)
+        self.small_model_mode = bool(self.provider_config.get("small_model_mode"))
+        # Ajan başına model (aynı sağlayıcı ve kimlik bilgisiyle; PentAGI pconfig uyarlaması)
+        self.role_models = _clean_role_models(self.provider_config.get("role_models"))
+        self._role_connectors = {}
 
         self.scout = AIAgent(
             "The Scout",
@@ -257,7 +311,7 @@ class AIOrchestrator:
             "with WHY (technology-specific risks), (2) likely vulnerability classes per entry point, "
             "(3) what baseline findings imply for chaining. Be specific: name exact URLs, parameters, "
             "technologies from the data. Never invent URLs that are not in the data. Max ~200 words.",
-            self.connector
+            self._connector_for("scout")
         )
         self.strategist = AIAgent(
             "The Strategist",
@@ -265,12 +319,13 @@ class AIOrchestrator:
             "surface, and a history of already-executed tests, choose the NEXT set of concrete probes "
             "(max 4) that are NOT already in the history. Reply with ONLY a JSON array, no prose:\n"
             '[{"url": "<exact url from the data>", "param": "<exact param name>", "payload": "<harmless read-only probe payload>", '
-            '"vuln_class": "sqli|xss|ssti|ssrf|open_redirect|idor|nosqli|jwt_oauth|graphql|hpp|cors|other", "reason": "<one line>"}]\n'
+            '"vuln_class": "sqli|xss|ssti|ssrf|open_redirect|idor|nosqli|jwt_oauth|graphql|hpp|cors|other", "reason": "<one line>", "needs_confirmation": false}]\n'
             "Rules: payloads must be harmless and read-only (e.g. error-based markers, reflection markers "
             "like wzxqmk731, {{7*7}}, benign internal URLs for SSRF differentials, numeric ID swaps). "
             "No INSERT/UPDATE/DELETE, no destructive commands, no external canary domains you invented. "
+            "Set needs_confirmation to true when a probe could change server state, touches account/admin/payment/logout/delete-style actions, or you are unsure it is safe (the operator will be asked first). "
             "If the surface is exhausted or nothing meaningful remains, reply with [].",
-            self.connector
+            self._connector_for("strategist")
         )
         self.analyst = AIAgent(
             "The Analyst",
@@ -288,7 +343,7 @@ class AIOrchestrator:
             "(b) a database engine error message (SQL syntax error etc.) triggered by your payload = SQLi; "
             "(c) a template expression evaluated to its computed value ({{7*7}} -> 49) = SSTI. "
             "VULNERABLE requires one of these concrete signals in the shown response.",
-            self.connector
+            self._connector_for("analyst")
         )
         self.reporter = AIAgent(
             "The Reporter",
@@ -301,16 +356,51 @@ class AIOrchestrator:
             "'### Önceliklendirilmiş Düzeltme' (numbered list, most urgent first, concrete; include "
             "critical/high deterministic findings too and mark them '(deterministik motor)'). "
             "Base every claim ONLY on the provided data; do not invent new findings. Write in Turkish.",
-            self.connector
+            self._connector_for("reporter")
         )
+
+        self.mentor = AIAgent(
+            "The Mentor",
+            "You are The Mentor, an independent senior pentest reviewer (PentAGI-style adviser). You receive "
+            "the results of the previous probing round and the coverage matrix; the round found nothing. "
+            "In at most 4 short bullet points, advise the Strategist what to change next: untested entry "
+            "points or parameters, a different vulnerability class, or a different (still harmless, "
+            "read-only) payload style. Never suggest destructive, state-changing or out-of-scope actions. "
+            "Plain text only.",
+            self._connector_for("mentor")
+        )
+
+    def _connector_for(self, role):
+        """Ajanın bağlayıcısı: role_models'ta farklı bir model varsa ayrı bağlayıcı (önbellekli)."""
+        model = self.role_models.get(role)
+        default_model = str(self.provider_config.get("model") or "").strip()
+        if not model or model == default_model:
+            return self.connector
+        if model not in self._role_connectors:
+            cfg = dict(self.provider_config)
+            cfg["model"] = model
+            for key in ("deployment", "model_id"):
+                if cfg.get(key):
+                    cfg[key] = model
+            self._role_connectors[model] = AIProviderFactory.create_connector(cfg)
+        return self._role_connectors[model]
+
+    def _all_connectors(self):
+        seen, out = set(), []
+        for conn in [self.connector] + list(self._role_connectors.values()):
+            if id(conn) not in seen:
+                seen.add(id(conn))
+                out.append(conn)
+        return out
 
     def _telemetry_summary(self):
         """Ajan bazında LLM telemetrisi (çağrı, gecikme, token) — bağlayıcı kayıtlarından toplanır."""
-        try:
-            calls = self.connector.get_telemetry()
-        except Exception:
-            calls = []
-        calls = calls or []
+        calls = []
+        for conn in self._all_connectors():
+            try:
+                calls.extend(conn.get_telemetry() or [])
+            except Exception:
+                pass
         by_agent = {}
         total_in = 0
         total_out = 0
@@ -321,6 +411,8 @@ class AIOrchestrator:
             d = by_agent.setdefault(a, {"calls": 0, "latency_ms": 0, "ok": 0,
                                         "input_tokens": 0, "output_tokens": 0})
             d["calls"] += 1
+            if c.get("model"):
+                d["model"] = c.get("model")
             d["latency_ms"] += c.get("latency_ms", 0) or 0
             d["ok"] += 1 if c.get("ok") else 0
             u = c.get("usage") or {}
@@ -347,7 +439,7 @@ class AIOrchestrator:
                 str(entry.get("payload", "")), entry.get("verdict", "?")))
         return "\n".join(lines)
 
-    def orchestrate_scan(self, target_url: str, initial_data: Dict[str, Any], active_scanner_callback, progress_callback=None):
+    def orchestrate_scan(self, target_url: str, initial_data: Dict[str, Any], active_scanner_callback, progress_callback=None, control=None):
         """
         Yapay Zeka Destekli Dinamik Tarama Döngüsü.
         active_scanner_callback: (url, param, payload) -> yanıt sözlüğü.
@@ -367,6 +459,17 @@ class AIOrchestrator:
                 except Exception:
                     pass
 
+        def cancelled():
+            try:
+                return bool(control is not None and control.is_cancelled())
+            except Exception:
+                return False
+
+        was_cancelled = False
+        steering_notes: List[str] = []
+        mentor_advice = ""
+        mentor_calls = 0
+
         active_playbooks = select_claude_red_playbooks(initial_data, target_url)
         playbook_text = "\n".join(CLAUDE_RED_PLAYBOOKS[k] for k in active_playbooks if k in CLAUDE_RED_PLAYBOOKS)
         initial_data["loaded_claude_red_skills"] = active_playbooks
@@ -379,6 +482,10 @@ class AIOrchestrator:
             ", ".join(active_playbooks)))
 
         while loop_count < self.max_loops:
+            if cancelled():
+                was_cancelled = True
+                emit("system", "⏹️ Tarama iptal edildi; yeni tur başlatılmadı.")
+                break
             loop_count += 1
 
             # 1. KEŞİF (The Scout) — her turda biriken bulgularla yeniden değerlendirir
@@ -397,6 +504,24 @@ class AIOrchestrator:
             strategy_ctx = ("Target: %s\nActive Claude-Red Playbooks:\n%s\nScout assessment: %s\nFull attack surface: %s\nAlready executed tests (DO NOT repeat):\n%s"
                             % (target_url, playbook_text, _trim(scout_report, 2000), _prioritized_surface(initial_data, 3600),
                                self._compress_history(executed)))
+            new_notes = []
+            if control is not None and hasattr(control, "pop_notes"):
+                try:
+                    new_notes = [str(n)[:500] for n in (control.pop_notes() or []) if str(n).strip()]
+                except Exception:
+                    new_notes = []
+            if new_notes:
+                steering_notes.extend(new_notes)
+                emit("strategist", "📝 Kullanıcı notu planlamaya eklendi: %s" % _trim("; ".join(new_notes), 200))
+            if steering_notes:
+                strategy_ctx += ("\nUSER STEERING NOTES (operator instructions; follow them unless they conflict "
+                                 "with the safety/scope rules):\n- " + "\n- ".join(steering_notes[-5:]))
+            if mentor_advice:
+                strategy_ctx += "\nMENTOR ADVICE (independent reviewer of the previous round):\n" + mentor_advice
+            if cancelled():
+                was_cancelled = True
+                emit("system", "⏹️ Tarama iptal edildi; planlama yapılmadı.")
+                break
             plan_res = self.strategist.think_json(strategy_ctx, want="list")
             if not plan_res.get("ok") and _is_llm_error(plan_res.get("raw", "")):
                 errors.append("Strategist LLM hatası: %s" % _trim(plan_res.get("raw", ""), 120))
@@ -423,6 +548,30 @@ class AIOrchestrator:
                 if sig in tested_signatures or not param:
                     continue
                 tested_signatures.add(sig)
+                if cancelled():
+                    was_cancelled = True
+                    break
+
+                # Riskli (durum değiştirebilecek) uçlar ya da LLM'in emin olmadığı problar için operatöre sor.
+                # Kontrol yoksa (senkron mod) veya cevap gelmezse güvenli varsayılan: testi atla.
+                confirm_reason = _needs_confirmation(url, param, payload, task)
+                if confirm_reason:
+                    question = ("AI şu testi yapmak istiyor: GET %s [%s] ← %s. Gerekçe: %s. Test edilsin mi?"
+                                % (url[:120], param, _trim(payload, 80) or "-", confirm_reason))
+                    answer = CONFIRM_NO
+                    if control is not None and hasattr(control, "ask"):
+                        try:
+                            answer = control.ask(question, [CONFIRM_YES, CONFIRM_NO], CONFIRM_NO,
+                                                 context=str(task.get("reason", ""))[:200])
+                        except Exception:
+                            answer = CONFIRM_NO
+                    if answer != CONFIRM_YES:
+                        executed.append({"url": url, "param": param, "payload": payload,
+                                         "verdict": "SKIPPED_NEEDS_CONFIRMATION", "reason": confirm_reason,
+                                         "loop": loop_count})
+                        emit("system", "⏭️ Test atlandı (onay yok): %s [%s] — %s" % (url[:70], param, confirm_reason))
+                        continue
+                    emit("system", "✅ Operatör onayladı: %s [%s]" % (url[:70], param))
 
                 emit("strategist", "Test: %s [%s] ← payload %.60s" % (url[:80], param, payload or "-"))
                 try:
@@ -499,10 +648,36 @@ class AIOrchestrator:
                 else:
                     emit("analyst", "⬜ %s: %s [%s]" % (verdict, url[:70], param))
 
+            # Küçük/yerel model modu: verimsiz turdan sonra bağımsız Mentor önerisi (PentAGI adviser uyarlaması)
+            if (self.small_model_mode and not was_cancelled and loop_count < self.max_loops
+                    and mentor_calls < 2):
+                round_entries = [e for e in executed if e.get("loop") == loop_count]
+                if not any(e.get("verdict") == "VULNERABLE" for e in round_entries):
+                    mentor_calls += 1
+                    mentor_ctx = json.dumps({
+                        "target": target_url,
+                        "round": loop_count,
+                        "round_results": [{"url": e.get("url"), "param": e.get("param"),
+                                           "payload": str(e.get("payload", ""))[:60], "verdict": e.get("verdict")}
+                                          for e in round_entries][:12],
+                        "coverage": build_coverage_matrix(initial_data, executed),
+                    }, ensure_ascii=False, default=str)
+                    advice = self.mentor.think(mentor_ctx)
+                    if not _is_llm_error(advice):
+                        mentor_advice = _trim(advice, 700)
+                        emit("mentor", "🧭 Mentor önerisi: %s" % _trim(advice, 300))
+                    else:
+                        errors.append("Mentor LLM hatası: %s" % _trim(advice, 120))
+
         # 5. FİNAL RAPOR (The Reporter) — yönetici özeti + zincir + düzeltme
         narrative = ""
         narrative_err = ""
-        emit("analyst", "Nihai rapor yazılıyor…")
+        if not was_cancelled and cancelled():
+            was_cancelled = True
+        if was_cancelled:
+            emit("system", "⏹️ İptal edildi; nihai rapor yazılmadı, kısmi sonuçlar döndürülüyor.")
+        else:
+            emit("analyst", "Nihai rapor yazılıyor…")
         try:
             report_ctx = json.dumps({
                 "target": target_url,
@@ -514,7 +689,7 @@ class AIOrchestrator:
                     "forms": len((initial_data.get("attack_surface") or {}).get("forms", [])),
                 },
             }, ensure_ascii=False, default=str)
-            narrative = self.reporter.think(report_ctx)
+            narrative = "" if was_cancelled else self.reporter.think(report_ctx)
             if _is_llm_error(narrative):
                 narrative_err = narrative
                 narrative = ""
@@ -532,6 +707,11 @@ class AIOrchestrator:
             "executed_tests": executed,
             "narrative_report": narrative,
             "errors": errors + ([narrative_err] if narrative_err else []),
+            "cancelled": was_cancelled,
+            "steering_notes": list(steering_notes),
+            "mentor_calls": mentor_calls,
+            "role_models": dict(self.role_models),
+            "small_model_mode": self.small_model_mode,
             "history": _history_from_executed(executed, loop_count),
             "coverage_matrix": build_coverage_matrix(initial_data, executed),
             "telemetry": self._telemetry_summary(),

@@ -135,7 +135,7 @@ Enforces a mandatory ethical confirmation gate (`POST /api/active-confirm` → `
 | **Finding Correlation (`correlate_findings`)** | Chains multi-module findings into high-impact attack paths (e.g., *SSRF + Open DB Port → Internal Network Compromise*, *XSS + Weak CSP → Unblocked Script Execution*) |
 
 ### 5. AI Red Team Orchestration — Evidence-Verified Pipeline
-Enable **🤖 AI Red Team Agents** in the Command Center to run a 3-stage, evidence-verified pipeline (`/api/ai-scan`). Every agent call uses provider JSON mode with deterministic repair plus a single fixer-retry, so a malformed LLM reply no longer silently drops a probe or verdict; the Strategist receives a prioritized, budgeted attack-surface summary (not a blind character cut), and each run returns an endpoint × parameter × vuln-class **coverage matrix**, honest per-round history, and per-agent **telemetry** (calls, latency, tokens):
+Enable **🤖 AI Red Team Agents** in the Command Center to run a 3-stage, evidence-verified pipeline (`/api/ai-scan`). Every agent call uses provider JSON mode with deterministic repair plus a single fixer-retry, so a malformed LLM reply no longer silently drops a probe or verdict; the Strategist receives a prioritized, budgeted attack-surface summary (not a blind character cut), and each run returns an endpoint × parameter × vuln-class **coverage matrix**, honest per-round history, and per-agent **telemetry** (calls, latency, tokens): Scans run as **background jobs** with a live thought stream, a cancel button and operator **steering notes**. Before probing a state-changing endpoint (delete / logout / payment / transfer / reset …) or whenever the Strategist flags a probe as uncertain (`needs_confirmation`), the agent **asks you first** and skips the probe if you decline or do not answer within 120 s (max 3 questions per scan). Each agent (Scout / Strategist / Analyst / Reporter / Mentor) can use **its own model** on the same provider, and an optional **small / local model mode** adds an independent Mentor that redirects the Strategist after an unproductive round (PentAGI adviser analogue, max 2 extra calls).
 
 | Stage / Agent | Role | How It Works |
 |---------------|------|--------------|
@@ -154,6 +154,7 @@ Enable **🤖 AI Red Team Agents** in the Command Center to run a 3-stage, evide
 - **Anthropic Claude (direct)** — Native Messages API (`claude-sonnet-5-5` etc.). The `anthropic-workspace-id` header is **not** sent unless you explicitly set a workspace id (a stray workspace header otherwise causes HTTP 404).
 - **Azure OpenAI Service** — Your resource `endpoint` + `deployment` name (`api-version` configurable).
 - **AWS Bedrock** — SigV4-signed (stdlib-only) Runtime access; defaults to the Anthropic Claude model family (`model_id`), supports temporary `session_token`.
+- All providers above are selectable in the AI settings drawer; in the Full edition Strix receives Claude / Azure / Bedrock settings through LiteLLM naming (`anthropic/…`, `azure/…`, `bedrock/…`) and the matching environment variables. If a provider rejects an optional parameter with HTTP 400 (`temperature` — e.g. Claude 5.x — or the `response_format` JSON mode), the connector drops it, retries once and remembers that for the rest of the scan; Bedrock requests are SigV4-signed with the AWS double-encoded canonical path (model IDs contain `:`).
 
 ### 6. Strix Autonomous AI Pentest — Subprocess & Docker Sandbox Integration
 In addition to the built-in AI orchestrator, the **⚔️ Strix Pentest** tab manages the official **[Strix CLI](https://github.com/usestrix/strix)** (`strix_engine.py`) as a background subprocess:
@@ -171,7 +172,7 @@ We believe security tools should be transparent about their boundaries:
 1. **Browser Mode (GitHub Pages) is Passive-Only:** Due to browser CORS policies and raw socket restrictions, the GitHub Pages demo can only query DNS/email records via DoH. Full HTTP header fetching, deep passive scanning, local directory SAST, active testing, AI Red Team, and Strix require running `server.py` locally or in Docker.
 2. **Static HTML/JS Simulation vs. Headless Chromium:** `browser_sim_engine.py` uses Python's `HTMLParser` and regex/taint heuristics to crawl links, extract forms, and analyze external `.js` files. It does **not** run a headless browser (Playwright/Puppeteer); therefore, single-page applications (SPAs) that render routes exclusively via client-side JavaScript execution will have limited crawl coverage unless tested with Strix's full sandbox.
 3. **Conservative Active Scan Limits:** To prevent accidental denial-of-service, `active_scan_engine.py` enforces a 1.5-second minimum interval between requests and a hard cap of **60 HTTP requests per scan** (crawler capped at 10 pages / depth 2 / 5 JS files). The AI Red Team pipeline uses a separate client locked to the exact origin you confirmed and capped at 12 probes (`max_loops × max_tests_per_loop`), so one AI scan sends at most 60 discovery + 12 AI requests; if the target redirects to another origin (e.g. `http://` → `https://`), enter the final origin as the target.
-4. **AI Thought Stream Delivery:** `/api/ai-scan` executes synchronously per scan request and returns the accumulated `thought_chain` log array when the pipeline finishes (whereas Strix runs asynchronously in the background and streams status via 4-second polling on `/api/strix-status`).
+4. **AI Thought Stream Delivery:** The web UI starts AI scans as background jobs (`POST /api/ai-scan` with `"async": true`) and polls `/api/ai-status` every ~1.5 s for incremental events, operator questions and the final result. Jobs live in server memory only (lost on restart), at most 2 run at the same time, and cancellation takes effect after the current step (the discovery stage can take up to ~90 s). Calling `/api/ai-scan` without `async` keeps the legacy synchronous response for scripts/CI; in that mode there is nobody to ask, so state-changing probes are skipped by default.
 5. **External Network Calls When Configured:** While core local scanning keeps data on your machine, DNS audits query Cloudflare/Google DoH, dependency CVE checks query `api.osv.dev`, and cloud LLM providers send prompt context (headers, discovered URLs/forms, trimmed HTTP response excerpts) to your selected LLM API. Use **Ollama** if you require strictly air-gapped/local LLM inference.
 6. **Docker + Strix Socket Privilege:** Running Strix inside Docker (`docker-compose.strix.yml`) mounts `/var/run/docker.sock` so Strix can spawn sibling `strix-sandbox` containers on the host daemon. Only use the Strix compose override in trusted local environments. When scanning services bound to `localhost` on your host machine from inside the Strix Docker sandbox, target the Docker bridge IP (e.g., `http://172.17.0.1:3000`).
 
@@ -205,6 +206,7 @@ web-security-scanner/
 ├── business_logic_engine.py   # Numeric boundary manipulation, workflow bypass & race condition tester
 ├── ai_connector.py            # Unified LLM client + JSON mode, deterministic repair, per-call telemetry (OpenAI-compatible, Anthropic, Azure OpenAI, AWS Bedrock, Vertex AI, Gemini, OpenRouter, Ollama)
 ├── json_utils.py               # Robust JSON extraction from LLM output (balanced scan + fence/trailing-comma/smart-quote repair)
+├── ai_jobs.py                 # Background AI jobs: live event stream, cancel, steering notes, operator questions
 ├── ai_orchestrator.py         # Evidence-verified 4-agent Red Team pipeline (Scout → Strategist → Analyst → Reporter)
 ├── safety_guard.py            # Code-enforced AI probe guard: exact-origin scope lock + destructive/DoS payload filter
 ├── redaction.py               # Secret masking for every LLM prompt (cookies, Authorization, JWT, API & private keys)
@@ -238,7 +240,11 @@ All `/api/*` endpoints require the per-launch session token in an `X-WSS-Token` 
 - `POST /api/active-scan?url=&modules=` — Rate-limited active vulnerability scan (POST-only; `GET` returns `405`)
 - `POST /api/ai-test` — LLM provider connectivity test
 - `POST /api/ai-json-test` — LLM JSON-mode compatibility check (clean / repaired / fixer-retry / parse-failed; useful for small local models)
-- `POST /api/ai-scan` — Evidence-verified AI Red Team orchestration
+- `POST /api/ai-scan` — Evidence-verified AI Red Team orchestration (`"async": true` returns a `job_id`; without it, legacy synchronous response)
+- `GET  /api/ai-status?job=&since=` — Live AI job status: incremental thought-stream events, pending operator question, final result
+- `POST /api/ai-cancel` — Cancel a running AI job (effective after the current step)
+- `POST /api/ai-note` — Add an operator steering note (max 5 × 500 chars) for the next planning round
+- `POST /api/ai-answer` — Answer a pending operator confirmation question
 - `GET  /api/strix-capabilities` — Strix CLI & Docker sandbox readiness check
 - `POST /api/strix-scan` — Start or `--resume` an autonomous Strix pentest
 - `GET  /api/strix-status?scan_id=` — Live status, log tail, and finding count polling

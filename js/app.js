@@ -1790,6 +1790,10 @@ function exportMarkdownReport() {
     const rep = ai.ai_report || {};
     md += `\n---\n\n## 🤖 7. AI Red Team Orkestrasyonu (Scout → Strategist → Analyst → Reporter)\n\n`;
     md += `**Tur:** ${rep.loops || 0} • **Çalıştırılan AI testi:** ${rep.tests_executed || 0} • **Kanıtı doğrulanmış bulgu:** ${(ai.findings || []).length} • **Toplam istek:** ${ai.requests_sent || 0}\n\n`;
+    const aiTeleMd = rep.telemetry || {};
+    if (aiTeleMd.total_calls) md += '**LLM telemetrisi:** ' + aiTeleMd.total_calls + ' çağrı • ' + (aiTeleMd.total_input_tokens || 0) + ' giriş / ' + (aiTeleMd.total_output_tokens || 0) + ' çıkış token • ' + Math.round((aiTeleMd.total_latency_ms || 0) / 1000) + ' sn\n\n';
+    const aiCovMd = rep.coverage_matrix || null;
+    if (aiCovMd) md += '**Kapsam matrisi:** ' + (aiCovMd.tested_count || 0) + ' test edilen uç/parametre • ' + (aiCovMd.untested_count || 0) + ' test edilmeyen' + (rep.cancelled ? ' • ⏹️ iptal edildi (kısmi sonuç)' : '') + '\n\n';
     if (ai.narrative_report) md += `${ai.narrative_report}\n\n`;
     if ((ai.findings || []).length) {
       md += `### Kanıtı Doğrulanmış AI Bulguları\n\n`;
@@ -2141,6 +2145,31 @@ function onAIProviderChange() {
     if (modelInput && (!modelInput.value || modelInput.value.includes('gemini') || modelInput.value === 'gpt-4o')) {
       modelInput.value = 'gemma2';
     }
+  } else if (provider === 'anthropic') {
+    if (authLabel) authLabel.innerText = 'Anthropic API Key (sk-ant-...)';
+    if (authInput) authInput.placeholder = 'sk-ant-...';
+    if (modelInput && (!modelInput.value || /^(gpt-|gemini|gemma|google\/)/.test(modelInput.value))) {
+      modelInput.value = 'claude-sonnet-5-5';
+    }
+  } else if (provider === 'azure') {
+    baseUrlContainer?.classList.remove('hidden');
+    if (authLabel) authLabel.innerText = 'Azure OpenAI API Key';
+    if (authInput) authInput.placeholder = 'Azure kaynağının API anahtarı';
+    if (baseUrlInput) {
+      baseUrlInput.placeholder = 'https://<kaynak-adı>.openai.azure.com';
+      if (/api\.openai\.com|localhost:11434/.test(baseUrlInput.value)) baseUrlInput.value = '';
+    }
+    if (modelInput) modelInput.placeholder = 'Dağıtım (deployment) adı, örn: gpt-4o';
+  } else if (provider === 'bedrock') {
+    regionContainer?.classList.remove('hidden');
+    if (authLabel) authLabel.innerText = 'AWS Kimlik Bilgisi (ERİŞİM_ANAHTARI:GİZLİ_ANAHTAR[:OTURUM_TOKENI] veya JSON)';
+    if (authInput) authInput.placeholder = 'AKIA...:gizli-anahtar  veya  {"access_key":"AKIA...","secret_key":"...","session_token":"..."}';
+    if (regionInput && (!regionInput.value || regionInput.value === 'global')) {
+      regionInput.value = 'us-east-1';
+    }
+    if (modelInput && (!modelInput.value || /^(gpt-|gemini|gemma|google\/|claude-)/.test(modelInput.value))) {
+      modelInput.value = 'anthropic.claude-3-5-sonnet-20241022-v2:0';
+    }
   }
 
   updateAIStatusUI();
@@ -2171,7 +2200,9 @@ function saveAIConfig(notify = true) {
       project_id: document.getElementById('ai-project-id')?.value || '',
       region: document.getElementById('ai-region')?.value || 'global',
       auth_type: document.getElementById('ai-auth-type')?.value || 'service_account',
-      auth: document.getElementById('ai-auth')?.value || ''
+      auth: document.getElementById('ai-auth')?.value || '',
+      small_model_mode: !!document.getElementById('ai-small-model-mode')?.checked,
+      role_models: collectRoleModels()
     };
     localStorage.setItem('wss_ai_config', JSON.stringify(config));
     updateAIStatusUI();
@@ -2196,6 +2227,8 @@ function loadAIConfig() {
     if (config.region && document.getElementById('ai-region')) document.getElementById('ai-region').value = config.region;
     if (config.auth_type && document.getElementById('ai-auth-type')) document.getElementById('ai-auth-type').value = config.auth_type;
     if (config.auth && document.getElementById('ai-auth')) document.getElementById('ai-auth').value = config.auth;
+      if (document.getElementById('ai-small-model-mode')) document.getElementById('ai-small-model-mode').checked = !!config.small_model_mode;
+      applyRoleModels(config.role_models || {});
     onAIProviderChange();
   } catch (e) {
     console.error('AI ayarları yüklenemedi:', e);
@@ -2408,6 +2441,180 @@ function setAIThinking(state, agentName = '') {
   }
 }
 
+// =============================================================
+// Faz 2: Ajan başına model + arka plan AI işi (canlı akış, iptal, not, onay soruları)
+// =============================================================
+const AI_ROLE_MODEL_FIELDS = {
+  scout: 'ai-model-scout',
+  strategist: 'ai-model-strategist',
+  analyst: 'ai-model-analyst',
+  reporter: 'ai-model-reporter',
+  mentor: 'ai-model-mentor'
+};
+
+function collectRoleModels() {
+  const out = {};
+  for (const [role, id] of Object.entries(AI_ROLE_MODEL_FIELDS)) {
+    const value = (document.getElementById(id)?.value || '').trim();
+    if (value) out[role] = value;
+  }
+  return out;
+}
+
+function applyRoleModels(map) {
+  for (const [role, id] of Object.entries(AI_ROLE_MODEL_FIELDS)) {
+    const el = document.getElementById(id);
+    if (el) el.value = (map && map[role]) || '';
+  }
+}
+
+const AI_JOB = { id: null, since: 0, answeredQuestionId: null };
+
+function setAIJobControls(visible, statusText) {
+  const box = document.getElementById('ai-job-controls');
+  if (box) box.classList.toggle('hidden', !visible);
+  const status = document.getElementById('ai-job-status');
+  if (status && statusText) status.innerText = statusText;
+  if (!visible) renderAIQuestion(null);
+}
+
+function renderAIQuestion(question) {
+  const box = document.getElementById('ai-job-question');
+  if (!box) return;
+  if (!question || question.id === AI_JOB.answeredQuestionId) {
+    box.classList.add('hidden');
+    return;
+  }
+  const textEl = document.getElementById('ai-job-question-text');
+  const metaEl = document.getElementById('ai-job-question-meta');
+  const optsEl = document.getElementById('ai-job-question-options');
+  if (textEl) textEl.innerText = question.text || '';
+  const left = Math.max(0, Math.round(((question.expires_at || 0) - Date.now()) / 1000));
+  if (metaEl) metaEl.innerText = 'Cevap gelmezse ~' + left + ' sn içinde güvenli seçenek uygulanır: ' + (question.default || '');
+  if (optsEl && optsEl.dataset.qid !== question.id) {
+    optsEl.dataset.qid = question.id;
+    optsEl.innerHTML = '';
+    for (const option of (question.options || [])) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = option;
+      btn.className = 'text-[11px] px-2 py-1 rounded border ' + (option === question.default
+        ? 'border-stone-600 text-stone-200 hover:bg-stone-800'
+        : 'border-amber-500 text-amber-100 bg-amber-800/40 hover:bg-amber-700/60');
+      btn.addEventListener('click', () => answerAIQuestion(question.id, option));
+      optsEl.appendChild(btn);
+    }
+  }
+  box.classList.remove('hidden');
+}
+
+async function postAIJobAction(path, payload) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15000)
+  });
+  return res.json();
+}
+
+async function answerAIQuestion(questionId, answer) {
+  if (!AI_JOB.id) return;
+  try {
+    const data = await postAIJobAction('/api/ai-answer', { job_id: AI_JOB.id, question_id: questionId, answer: answer });
+    if (data.success) {
+      AI_JOB.answeredQuestionId = questionId;
+      renderAIQuestion(null);
+    } else {
+      showToast('Cevap iletilemedi: ' + (data.message || data.error || ''), 'warning');
+    }
+  } catch (err) {
+    showToast('Cevap iletilemedi: ' + err.message, 'error');
+  }
+}
+
+async function cancelAIJob() {
+  if (!AI_JOB.id) return;
+  try {
+    const data = await postAIJobAction('/api/ai-cancel', { job_id: AI_JOB.id });
+    showToast(data.message || 'İptal istendi.', data.success ? 'info' : 'warning');
+  } catch (err) {
+    showToast('İptal isteği başarısız: ' + err.message, 'error');
+  }
+}
+
+async function sendAINote() {
+  const input = document.getElementById('ai-job-note');
+  const note = (input?.value || '').trim();
+  if (!AI_JOB.id || !note) return;
+  try {
+    const data = await postAIJobAction('/api/ai-note', { job_id: AI_JOB.id, note: note });
+    if (data.success) {
+      if (input) input.value = '';
+      showToast('Not eklendi; bir sonraki planlamada dikkate alınacak.', 'success');
+    } else {
+      showToast(data.message || 'Not eklenemedi.', 'warning');
+    }
+  } catch (err) {
+    showToast('Not gönderilemedi: ' + err.message, 'error');
+  }
+}
+
+async function runAIScanJob(body, onEvent) {
+  const startRes = await fetch('/api/ai-scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({}, body, { async: true })),
+    signal: AbortSignal.timeout(30000)
+  });
+  const start = await startRes.json();
+  if (!start || !start.job_id) return start; // hata ya da eski (senkron) sunucu yanıtı
+  AI_JOB.id = start.job_id;
+  AI_JOB.since = 0;
+  AI_JOB.answeredQuestionId = null;
+  setAIJobControls(true, 'AI işi çalışıyor…');
+  const deadline = Date.now() + 30 * 60 * 1000;
+  let misses = 0;
+  try {
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      let view = null;
+      try {
+        const r = await fetch('/api/ai-status?job=' + encodeURIComponent(AI_JOB.id) + '&since=' + AI_JOB.since,
+          { signal: AbortSignal.timeout(15000) });
+        view = await r.json();
+        if (r.status === 401) return { success: false, error: 'Oturum anahtarı geçersiz; sayfayı yenileyin.' };
+        if (r.status === 404) {
+          return { success: false, error: (view && view.message) || 'AI işi bulunamadı (sunucu yeniden başlatılmış olabilir).' };
+        }
+      } catch (err) {
+        misses += 1;
+        if (misses > 20) return { success: false, error: 'AI işinin durumu alınamıyor: ' + err.message };
+        continue;
+      }
+      misses = 0;
+      for (const ev of (view.events || [])) {
+        try { if (onEvent) onEvent(ev); } catch (e) { /* tek olay hatası akışı durdurmaz */ }
+      }
+      if (typeof view.next_seq === 'number') AI_JOB.since = view.next_seq;
+      renderAIQuestion(view.pending_question || null);
+      const label = { queued: 'Sırada…', running: 'AI işi çalışıyor…', waiting_input: '❓ Onayın bekleniyor' }[view.status];
+      if (label) setAIJobControls(true, label);
+      if (view.status === 'done' || view.status === 'error' || view.status === 'cancelled') {
+        const result = view.result || { success: false, error: view.error || view.status };
+        if (view.status === 'cancelled') result.cancelled = true;
+        if (!result.success && !result.error) result.error = view.error || view.status;
+        result.__streamed = true;
+        return result;
+      }
+    }
+    return { success: false, error: 'AI işi 30 dakika içinde tamamlanmadı.' };
+  } finally {
+    AI_JOB.id = null;
+    setAIJobControls(false);
+  }
+}
+
 async function startAIOrchestrationScan(targetUrl, modules) {
   const aiProvider = document.getElementById('ai-provider')?.value || 'openai';
   const aiModel = document.getElementById('ai-model')?.value.trim() || 'gemini-3.1-pro';
@@ -2432,6 +2639,16 @@ async function startAIOrchestrationScan(targetUrl, modules) {
     return null;
   }
 
+  if (['anthropic', 'azure', 'bedrock'].includes(aiProvider) && !aiAuth) {
+    showToast(aiProvider + ' için kimlik bilgisi (API anahtarı) gereklidir.', 'warning');
+    return null;
+  }
+
+  if (aiProvider === 'azure' && !aiBaseUrl) {
+    showToast('Azure OpenAI için kaynak endpoint adresi (Base URL) gereklidir.', 'warning');
+    return null;
+  }
+
   saveAIConfig(false);
   
   // UI: AI düşünce akışı sekmesine geç ve başlat
@@ -2442,45 +2659,55 @@ async function startAIOrchestrationScan(targetUrl, modules) {
   setAIThinking('thinking', 'The Scout');
   
   try {
-    const res = await fetch('/api/ai-scan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: targetUrl,
-        modules: modules,
-        ai_config: {
-          provider: aiProvider,
-          model: aiModel,
-          base_url: aiBaseUrl,
-          project_id: aiProjectId,
-          region: aiRegion,
-          auth: {
-            type: aiAuthType,
-            value: aiAuth
-          },
-          api_key: aiAuth
-        }
-      }),
-      signal: AbortSignal.timeout(900000) // 15 dk: keşif fazı + AI döngüleri (rate-limit'li)
-    });
+    const data = await runAIScanJob({
+      url: targetUrl,
+      modules: modules,
+      ai_config: {
+        provider: aiProvider,
+        model: aiModel,
+        base_url: aiBaseUrl,
+        project_id: aiProjectId,
+        region: aiRegion,
+        auth: {
+          type: aiAuthType,
+          value: aiAuth
+        },
+        api_key: aiAuth,
+        small_model_mode: !!document.getElementById('ai-small-model-mode')?.checked,
+        role_models: collectRoleModels()
+      }
+    }, (ev) => appendAILog(ev.message, ev.agent || 'info'));
     
-    const data = await res.json();
-    
-    if (!data.success) {
-      appendAILog('Orkestrasyon hatası: ' + (data.error || data.message || 'Bilinmeyen hata'), 'error');
+    if (!data || !data.success) {
+      if (data && data.cancelled) {
+        appendAILog('AI taraması iptal edildi.', 'system');
+        setAIThinking('idle');
+        showToast('AI taraması iptal edildi.', 'info');
+        return null;
+      }
+      appendAILog('Orkestrasyon hatası: ' + ((data && (data.error || data.message)) || 'Bilinmeyen hata'), 'error');
       setAIThinking('error');
-      showToast('AI tarama hatası: ' + (data.error || 'Bilinmeyen hata'), 'error');
+      showToast('AI tarama hatası: ' + ((data && data.error) || 'Bilinmeyen hata'), 'error');
       return null;
     }
     
-    // AI thought chain loglarını işle (sunucu tüm aşamaları biriktirip döndürür)
-    if (data.thought_chain && Array.isArray(data.thought_chain)) {
+    // AI thought chain: canlı akışta olaylar zaten yazıldı; yalnızca senkron (eski) yanıtta topluca yaz
+    const streamed = !!data.__streamed;
+    delete data.__streamed;
+    if (!streamed && data.thought_chain && Array.isArray(data.thought_chain)) {
       for (const entry of data.thought_chain) {
         appendAILog(entry.message, entry.agent || 'info');
       }
     }
     
-    appendAILog('AI orkestrasyonu tamamlandı: ' + (data.findings?.length || 0) + ' doğrulanmış bulgu (' + (data.requests_sent || 0) + ' istek).', 'success');
+    appendAILog((data.cancelled ? 'AI orkestrasyonu iptal edildi (kısmi sonuçlar): ' : 'AI orkestrasyonu tamamlandı: ') + (data.findings?.length || 0) + ' doğrulanmış bulgu (' + (data.requests_sent || 0) + ' istek).', data.cancelled ? 'system' : 'success');
+    const aiTele = (data.ai_report && data.ai_report.telemetry) || {};
+    if (aiTele.total_calls) {
+      const perAgent = Object.entries(aiTele.by_agent || {}).map(([agent, d]) => agent.replace('The ', '') + ': ' + d.calls + (d.model ? ' (' + d.model + ')' : '')).join(', ');
+      appendAILog('📊 LLM telemetrisi: ' + aiTele.total_calls + ' çağrı · ' + (aiTele.total_input_tokens || 0) + ' giriş / ' + (aiTele.total_output_tokens || 0) + ' çıkış token · ' + Math.round((aiTele.total_latency_ms || 0) / 1000) + ' sn — ' + perAgent, 'info');
+    }
+    const aiCov = (data.ai_report && data.ai_report.coverage_matrix) || null;
+    if (aiCov) appendAILog('🧭 Kapsam: ' + (aiCov.tested_count || 0) + ' uç/parametre test edildi, ' + (aiCov.untested_count || 0) + ' test edilmedi.', 'info');
     setAIThinking('complete');
     renderAIReportCard(data);
     

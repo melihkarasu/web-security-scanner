@@ -30,6 +30,7 @@ from active_scan_engine import ETHICAL_GATE, run_active_scan, run_custom_test, e
 from ai_orchestrator import AIOrchestrator
 from ai_connector import AIProviderFactory
 from redaction import redact_text
+from ai_jobs import AIJobManager, JobLimitError
 from strix_engine import STRIX_MANAGER, strix_capabilities
 
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -53,6 +54,7 @@ POST_ONLY_API_PATHS = frozenset({"/api/active-scan", "/api/ai-scan"})
 STATIC_ALLOWED_PREFIXES = ("/css/", "/js/", "/assets/", "/img/", "/images/", "/fonts/", "/icons/")
 STATIC_ALLOWED_ROOT_EXT = (".html", ".ico", ".png", ".svg", ".jpg", ".jpeg", ".webp", ".gif", ".webmanifest")
 TOKEN_META_PLACEHOLDER = '<meta name="wss-token" content="">'
+AI_JOBS = AIJobManager()  # Faz 2: arka plan AI işleri (yalnız bellek)
 
 class ScannerHTTPHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -198,6 +200,18 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_ai_json_test()
             return
 
+        if parsed.path == "/api/ai-cancel":
+            self.handle_api_ai_cancel()
+            return
+
+        if parsed.path == "/api/ai-note":
+            self.handle_api_ai_note()
+            return
+
+        if parsed.path == "/api/ai-answer":
+            self.handle_api_ai_answer()
+            return
+
         # Strix AI Pentest: tarama başlat (alt süreç; etik onay zorunlu)
         if parsed.path == "/api/strix-scan":
             self.handle_api_strix_scan_post()
@@ -266,6 +280,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         # 1f. API: /api/strix-capabilities (Strix kurulum + özellik tespiti)
         if parsed.path == "/api/strix-capabilities":
             self.send_json(strix_capabilities())
+            return
+
+        # 1f. API: /api/ai-status?job=&since= (Faz 2 — canlı AI iş durumu + olay akışı)
+        if parsed.path == "/api/ai-status":
+            self.handle_api_ai_status(parsed)
             return
 
         # 1g. API: /api/strix-status?scan_id= (canlı durum + bulgu akışı)
@@ -1005,6 +1024,67 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         except Exception as e:
             self.send_json({"success": False, "error": f"Bağlantı hatası: {str(e)}"}, status=400)
 
+    def _read_json_payload(self):
+        """İstek gövdesini JSON olarak okur; geçersizse None döner."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length > 0 else b"{}"
+            data = json.loads(body.decode("utf-8") or "{}")
+            return data if isinstance(data, dict) else None
+        except (ValueError, json.JSONDecodeError):
+            return None
+
+    def _ai_job_or_error(self, job_id):
+        job = AI_JOBS.get(job_id)
+        if not job:
+            self.send_json({"success": False, "error": "JOB_NOT_FOUND",
+                            "message": "AI işi bulunamadı (süresi dolmuş ya da sunucu yeniden başlatılmış olabilir)."},
+                           status=404)
+        return job
+
+    def handle_api_ai_status(self, parsed_path):
+        """Faz 2: arka plan AI işinin durumu + 'since' sonrasındaki olaylar + bekleyen soru."""
+        qs = urllib.parse.parse_qs(parsed_path.query)
+        job = self._ai_job_or_error((qs.get("job") or [""])[0].strip())
+        if not job:
+            return
+        self.send_json(job.view((qs.get("since") or ["0"])[0]))
+
+    def handle_api_ai_cancel(self):
+        data = self._read_json_payload()
+        if data is None:
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+        job = self._ai_job_or_error(str(data.get("job_id") or ""))
+        if not job:
+            return
+        ok = job.cancel()
+        self.send_json({"success": ok, "status": job.status,
+                        "message": "İptal istendi; o anki adım bitince duracak." if ok else "İş zaten tamamlanmış."})
+
+    def handle_api_ai_note(self):
+        data = self._read_json_payload()
+        if data is None:
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+        job = self._ai_job_or_error(str(data.get("job_id") or ""))
+        if not job:
+            return
+        ok, msg = job.add_note(data.get("note"))
+        self.send_json({"success": ok, "message": msg or "Not eklendi; bir sonraki planlamada dikkate alınacak."},
+                       status=200 if ok else 400)
+
+    def handle_api_ai_answer(self):
+        data = self._read_json_payload()
+        if data is None:
+            self.send_json({"success": False, "error": "Geçersiz JSON gövdesi"}, status=400)
+            return
+        job = self._ai_job_or_error(str(data.get("job_id") or ""))
+        if not job:
+            return
+        ok, msg = job.answer(str(data.get("question_id") or ""), str(data.get("answer") or ""))
+        self.send_json({"success": ok, "message": msg or "Cevap iletildi."}, status=200 if ok else 400)
+
     def handle_api_ai_scan_post(self):
         """AI Destekli Dinamik Tarama (POST uç noktası)."""
         try:
@@ -1040,6 +1120,19 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             }, status=403)
             return
 
+        if data.get("async"):
+            # Faz 2: arka plan işi — arayüz /api/ai-status ile canlı olayları ve soruları çeker
+            try:
+                job = AI_JOBS.start(
+                    target=url,
+                    runner=lambda job: self._run_ai_pipeline(url, modules, ai_config, job=job),
+                    ask_timeout=ai_config.get("ask_timeout") if isinstance(ai_config, dict) else None)
+            except JobLimitError as e:
+                self.send_json({"success": False, "error": "AI_JOB_LIMIT", "message": str(e)}, status=429)
+                return
+            self.send_json({"success": True, "job_id": job.id, "status": job.status})
+            return
+
         try:
             result = self._run_ai_pipeline(url, modules, ai_config)
             if not result.get("success"):
@@ -1049,7 +1142,7 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         except Exception as e:
             self.send_json({"success": False, "error": f"AI Scan Error: {str(e)}"}, status=500)
 
-    def _run_ai_pipeline(self, url, modules, ai_config):
+    def _run_ai_pipeline(self, url, modules, ai_config, job=None):
         """
         AI Red Team hattı (Strix metodolojisi — doğrulanmış bulgu ilkesi):
         1. Gerçek keşif: crawler + derin başlık + seçili aktif modüller (rate-limited)
@@ -1060,7 +1153,10 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         thought_chain = []
 
         def emit(agent, message):
-            thought_chain.append({"agent": agent, "message": redact_text(str(message))[:500], "ts": int(time.time() * 1000)})
+            entry = {"agent": agent, "message": redact_text(str(message))[:500], "ts": int(time.time() * 1000)}
+            thought_chain.append(entry)
+            if job is not None:
+                job.push_event(entry)
 
         # --- 1. Gerçek keşif / baseline taraması ---
         emit("system", "Aşama 1/3 — Keşif: site haritası, formlar, başlıklar ve temel aktif modüller taranıyor…")
@@ -1074,6 +1170,11 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         emit("system", "Keşif tamam: %d istek, %d temel bulgu, %d sayfa, %d form." % (
             base.get("requests_sent", 0), len(base.get("findings", [])),
             len(base.get("site_map", [])), len(base.get("forms", []))))
+
+        if job is not None and job.is_cancelled():
+            emit("system", "⏹️ İptal edildi; AI aşamasına geçilmedi.")
+            return {"success": False, "cancelled": True, "error": "IPTAL_EDILDI",
+                    "message": "AI taraması kullanıcı tarafından iptal edildi.", "thought_chain": thought_chain}
 
         # HTTP başlıkları (AI context'ine eklenecek; HEAD/GET fallback)
         try:
@@ -1109,7 +1210,8 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             target_url=url,
             initial_data=scan_state,
             active_scanner_callback=active_test_callback,
-            progress_callback=emit
+            progress_callback=emit,
+            control=job
         )
 
         # --- 4. Birleştirilmiş yanıt ---
@@ -1123,6 +1225,8 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
 
         return {
             "success": True,
+            "cancelled": bool(ai_result.get("cancelled")),
+            "job_id": job.id if job is not None else None,
             "ai_report": ai_result,
             "thought_chain": thought_chain,
             "findings": findings,

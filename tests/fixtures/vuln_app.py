@@ -43,6 +43,9 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header("Location", qs.get("to", ["/"])[0])
             self.send_header("Content-Length", "0")
             self.end_headers()
+        elif parsed.path == "/account/delete":
+            # Durum değiştiren uç (yalnızca kayıt tutar; ana sayfadan BAĞLANTI VERİLMEZ)
+            self._send(200, "<html><body>deleted %s</body></html>" % qs.get("id", [""])[0])
         else:
             self._send(404, "not found")
 
