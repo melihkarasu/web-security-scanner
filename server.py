@@ -34,6 +34,7 @@ from ai_jobs import AIJobManager, JobLimitError
 import scan_history
 import security_assistant
 import threat_intel
+import headless_browser
 from strix_engine import STRIX_MANAGER, strix_capabilities
 
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -60,6 +61,8 @@ TOKEN_META_PLACEHOLDER = '<meta name="wss-token" content="">'
 AI_JOBS = AIJobManager()  # Faz 2: arka plan AI işleri (yalnız bellek)
 # Faz 3: tehdit istihbaratı varsayılan KAPALI (WSS_THREAT_INTEL=1 ile varsayılan açılabilir)
 THREAT_INTEL_DEFAULT = os.environ.get("WSS_THREAT_INTEL", "0").strip().lower() in ("1", "true", "yes", "on")
+# Faz 5: gerçek tarayıcı (headless Chromium) varsayılan KAPALI (WSS_REAL_BROWSER=1 ile varsayılan açılabilir)
+REAL_BROWSER_DEFAULT = headless_browser.browser_enabled_default()
 
 
 def _flag(value):
@@ -347,7 +350,8 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
                 "mode": "local_server",
                 "edition": EDITION,
                 "version": "2.0.0",
-                "host": HOST
+                "host": HOST,
+                "real_browser": headless_browser.capabilities_nonblocking()
             })
             return
 
@@ -1004,9 +1008,10 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
 
         modules = [m for m in modules_param.split(",") if m] if modules_param else None
         threat_flag = _flag((qs.get("threat_intel") or [""])[0]) or THREAT_INTEL_DEFAULT
+        real_browser_flag = _flag((qs.get("real_browser") or [""])[0]) or REAL_BROWSER_DEFAULT
 
         try:
-            result = run_active_scan(raw_url, modules)
+            result = run_active_scan(raw_url, modules, options={"real_browser": real_browser_flag})
             if not result.get("success") and result.get("error") == "ETIK_ONAY_YOK":
                 self.send_json({
                     "success": False,
@@ -1322,7 +1327,10 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
         base_modules = list(dict.fromkeys((modules or []) + ["browser", "deep_headers"]))
         base_modules = [m for m in base_modules if m not in ("ports", "logic")]  # AI hattında gürültü/yavaşlık üreten modüller kapalı
         t0 = time.time()
-        base = run_active_scan(url, base_modules)
+        real_browser_flag = (_flag(ai_config.get("real_browser")) if isinstance(ai_config, dict) else False) or REAL_BROWSER_DEFAULT
+        if real_browser_flag:
+            emit("system", "🖥️ Gerçek tarayıcı (headless Chromium) açık: SPA keşfi ve XSS kanıtı kapsam kilitli tarayıcıyla yapılacak.")
+        base = run_active_scan(url, base_modules, options={"real_browser": real_browser_flag})
         if not base.get("success"):
             return {"success": False, "error": base.get("error", "BASELINE_TARAMA_HATASI"),
                     "message": base.get("message", "Temel tarama başlatılamadı.")}
@@ -1399,6 +1407,7 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
                 "ai_orchestrator": {"ran": True, "findings": len(findings)}
             },
             "baseline_findings": base.get("findings", []),
+            "real_browser": base.get("real_browser"),
             "site_map": base.get("site_map", []),
             "chains": base.get("chains", []),
             "errors": ai_result.get("errors", []),
@@ -1607,6 +1616,16 @@ def main():
         print(" • Tarama geçmişi: kapalı (WSS_HISTORY=0)")
     print(" • Tehdit istihbaratı: " + ("varsayılan AÇIK (WSS_THREAT_INTEL=1)" if THREAT_INTEL_DEFAULT
                                      else "varsayılan kapalı (tarama başına açılır)"))
+    try:
+        browser_caps = headless_browser.capabilities()
+    except Exception as e:
+        browser_caps = {"available": False, "reason": str(e)}
+    if browser_caps.get("available"):
+        print(" • Gerçek tarayıcı: %s %s (sandbox: %s%s) — tarama başına açılır" % (
+            browser_caps.get("binary", "chromium"), browser_caps.get("version", ""), browser_caps.get("sandbox", "-"),
+            ", yalıtılmış yan konteyner" if browser_caps.get("remote") else ""))
+    else:
+        print(" • Gerçek tarayıcı: kullanılamıyor — %s" % str(browser_caps.get("reason") or "")[:140])
     print(f" • Sağlık:         {url}/healthz")
     if API_TOKEN_FROM_ENV:
         print(" • API anahtarı:   WSS_API_TOKEN ortam değişkeninden alındı")

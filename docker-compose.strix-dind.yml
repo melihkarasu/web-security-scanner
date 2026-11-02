@@ -1,0 +1,72 @@
+# Strix + İZOLE DOCKER (TLS'li docker:dind) — host Docker soketi BAĞLANMAZ
+# (Faz 5, PentAGI "DOCKER_INSIDE" önerisinin uyarlaması)
+#
+# Kullanım:  docker compose -f docker-compose.yml -f docker-compose.strix-dind.yml up -d --build
+#            (docker-compose.strix.yml ile BİRLİKTE kullanmayın; ikisi alternatiftir.)
+# İlk kurulumda sandbox imajını izole dind deposuna çekin (~6 GB, strix_dind_data volume'unda kalır):
+#            docker compose exec web-security-scanner docker pull ghcr.io/usestrix/strix-sandbox:1.3.0
+#
+# docker-compose.strix.yml'den farkı:
+#  - Strix sandbox'ları ayrı bir docker:dind daemon'ında çalışır; TLS zorunlu, API yalnızca 127.0.0.1:2376'da
+#    (dışarıya yayınlanmaz). Sandbox'lar host'taki diğer konteynerleri, imajları ve ağları görmez.
+#  - Scanner root DEĞİL (scanneruser, uid 1000) ve /var/run/docker.sock bağlı değil.
+#  - Scanner dind ile aynı ağ ad alanını paylaşır (Strix sandbox'a konteyner IP'si üzerinden bağlanır);
+#    bu yüzden arayüz portu (127.0.0.1:8765) strix-docker servisinde yayınlanır.
+#  - Sandbox ağları host ağlarıyla çakışmaz (10.213.0.0/24, 10.214.0.0/16). host.docker.internal gerçek host'a
+#    (STRIX_DIND_HOST_GATEWAY, varsayılan 172.17.0.1) yönlenir: host'taki yerel hedefleri 172.17.0.1:PORT ile tarayın.
+#  - Beyaz kutu kaynak kodu dind içine AYNI yolda ve SALT-OKUNUR aynalanır (soket modunda host daemon gerçek
+#    host yolunu bağladığı için scanner'daki :ro koruması Strix sandbox'ı için geçerli değildir).
+#    Ayna yolları /tmp altında olmamalıdır: dind /tmp'ye kendi tmpfs'ini bağlar.
+#
+# Sınırlama: docker:dind konteyneri privileged çalışmak ZORUNDADIR. Yalıtım host soketini doğrudan vermekten
+# belirgin biçimde iyidir ama tam değildir (privileged dind'den kaçış zinciri host'u etkileyebilir).
+services:
+  web-security-scanner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_STRIX: "1"
+    image: web-security-scanner:strix
+    network_mode: "service:strix-docker"
+    ports: !reset []
+    volumes:
+      - strix_dind_certs:/certs/client:ro
+      - strix_scans:/app/strix_scans
+    environment:
+      - DOCKER_HOST=tcp://127.0.0.1:2376
+      - DOCKER_TLS_VERIFY=1
+      - DOCKER_CERT_PATH=/certs/client
+      - STRIX_TELEMETRY=0
+    depends_on:
+      strix-docker:
+        condition: service_healthy
+
+  strix-docker:
+    image: docker:29-dind
+    hostname: strix-docker
+    privileged: true
+    restart: unless-stopped
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    command:
+      - --bip=10.213.0.1/24
+      - --default-address-pool=base=10.214.0.0/16,size=24
+      - --host-gateway-ip=${STRIX_DIND_HOST_GATEWAY:-172.17.0.1}
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - strix_dind_certs:/certs/client
+      - strix_dind_data:/var/lib/docker
+      - /www/wwwroot:/www/wwwroot:ro
+      - /home/uzem/.openclaw/workspace:/home/uzem/.openclaw/workspace:ro
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  strix_dind_certs:
+  strix_dind_data:
+  strix_scans:

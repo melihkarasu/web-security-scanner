@@ -293,7 +293,9 @@ def test_xss_reflected(client, base_url):
                 "title": "Reflected XSS — encode edilmemiş yansıma (%s parametresi)" % pname,
                 "evidence": "...%s... (HTML/tırnak kırma karakterleri kodlanmadan yanıt gövdesine yansıdı)" % _excerpt(body2, XSS_MARKER),
                 "cwe": "CWE-79",
-                "fix": "Çıktıyı bağlama göre kodlayın (HTML: &lt; &gt; &quot;); textContent kullanın."
+                "fix": "Çıktıyı bağlama göre kodlayın (HTML: &lt; &gt; &quot;); textContent kullanın.",
+                # Faz 5: gerçek tarayıcı kanıtı için prob konumu (geçmiş parmak izine girmez)
+                "probe": {"url": _build_url(parsed, probe_params), "param": pname}
             })
             break  # bir kanıt yeter
         findings.append({
@@ -1365,6 +1367,14 @@ def verify_and_classify_active_findings(findings):
             f["verified"] = True
             f["trust_boundary"] = "http_response -> defense_in_depth"
             hardening_notes.append(f)
+        elif f.get("browser_not_executed"):
+            # Faz 5: ham yansıma var ama gerçek tarayıcıda zararsız işaret çalışmadı (CSP / çıktı bağlamı)
+            f["verdict"] = "needs_validation"
+            f["verified"] = False
+            f["trust_boundary"] = "untrusted_input -> browser_execution"
+            f["validation_step"] = ("Gerçek tarayıcıda zararsız işaret çalışmadı; CSP ve çıktı bağlamını inceleyip "
+                                    "sömürülebilirliği elle doğrulayın.")
+            needs_validation.append(f)
         else:
             f["verdict"] = "confirmed"
             f["verified"] = True
@@ -1436,8 +1446,72 @@ def build_active_coverage_ledger(scan_url, active_modules, module_stats, finding
     return ledger
 
 
-def run_active_scan(base_url, modules=None):
-    """Etik onay sonrası aktif taramayı orkestre eder."""
+def _run_real_browser(scan_url, active_modules, findings, site_map, forms):
+    """Faz 5: isteğe bağlı gerçek tarayıcı adımı (headless Chromium, bkz. headless_browser.py).
+
+    - "browser" modülü seçiliyse sayfayı gerçek tarayıcıda çizer; JavaScript ile oluşan kapsam içi
+      bağlantı ve formları site_map / forms listelerine (AI saldırı yüzeyi dahil) ekler.
+    - Kodlanmadan yansıyan YÜKSEK XSS bulgularında (en fazla 2) zararsız bir işaretin tarayıcıda
+      GERÇEKTEN çalıştığını kanıtlar ve ekran görüntüsü ekler; çalışmazsa bulgu doğrulama gerektirir.
+    Tarayıcı trafiği kapsam kilitli vekilden geçer ve kendi istek bütçesini kullanır.
+    """
+    started = time.time()
+    out = {"enabled": True, "available": True, "spa": None, "xss_checks": 0, "xss_confirmed": 0, "error": None}
+    try:
+        import headless_browser
+    except Exception as e:
+        out.update({"available": False, "error": "Gerçek tarayıcı modülü yüklenemedi: %s" % str(e)[:120]})
+        return out
+    try:
+        with headless_browser.open_session(scan_url) as session:
+            if "browser" in active_modules:
+                rendered = session.render(scan_url)
+                if rendered.get("ok"):
+                    surface = headless_browser.extract_surface(rendered.get("dom"), scan_url)
+                    known_pages = set(p.get("url") for p in site_map if isinstance(p, dict))
+                    known_actions = set((f.get("action_url") or f.get("action") or "") for f in forms if isinstance(f, dict))
+                    new_links = [u for u in surface["links"] if u not in known_pages]
+                    for u in new_links[:30]:
+                        site_map.append({"url": u, "status": None, "forms": 0, "links_found": 0, "depth": 1,
+                                         "source": "real_browser"})
+                    new_forms = [f for f in surface["forms"] if f["action"] not in known_actions]
+                    for f in new_forms[:15]:
+                        forms.append({
+                            "page_url": scan_url, "action_url": f["action"], "action": f["action"],
+                            "method": f["method"].upper(),
+                            "inputs": [{"name": n, "type": "text", "value": ""} for n in f["inputs"]],
+                            "token_field_found": any(re.search(r"csrf|_token|authenticity", n, re.I) for n in f["inputs"]),
+                            "source": "real_browser"})
+                    out["spa"] = {"links": len(surface["links"]), "new_links": len(new_links),
+                                  "forms": len(surface["forms"]), "new_forms": len(new_forms)}
+                else:
+                    out["spa"] = {"error": rendered.get("error") or "Sayfa çizilemedi."}
+            candidates = [f for f in findings if f.get("test") == "XSS" and f.get("severity") == "YÜKSEK"
+                          and isinstance(f.get("probe"), dict)]
+            for f in candidates[:2]:
+                proof = session.confirm_xss(f["probe"].get("url") or scan_url, f["probe"].get("param") or "")
+                out["xss_checks"] += 1
+                f["browser_proof"] = {"executed": bool(proof.get("executed")), "nonce": proof.get("nonce"),
+                                      "screenshot": proof.get("screenshot"), "error": proof.get("error")}
+                if proof.get("executed"):
+                    out["xss_confirmed"] += 1
+                    f["evidence"] = (f.get("evidence") or "") + (
+                        " | Gerçek tarayıcı kanıtı: zararsız işaret Chromium'da çalıştı (%s)." % proof.get("nonce"))
+                elif not proof.get("error"):
+                    f["browser_not_executed"] = True
+                    f["evidence"] = (f.get("evidence") or "") + (
+                        " | Gerçek tarayıcıda işaret çalışmadı (CSP veya çıktı bağlamı engelliyor olabilir).")
+            out["stats"] = session.stats()
+    except headless_browser.BrowserUnavailable as e:
+        out.update({"available": False, "error": str(e)})
+    except Exception as e:
+        out["error"] = "Gerçek tarayıcı adımı başarısız: %s" % str(e)[:200]
+    out["duration_ms"] = int((time.time() - started) * 1000)
+    return out
+
+
+def run_active_scan(base_url, modules=None, options=None):
+    """Etik onay sonrası aktif taramayı orkestre eder. options: {"real_browser": bool} (Faz 5)."""
     parsed = urllib.parse.urlparse(base_url if "://" in base_url else "https://" + base_url)
     hostname = parsed.hostname
     normalized = "%s://%s%s" % (parsed.scheme, parsed.netloc, parsed.path or "/")
@@ -1526,6 +1600,11 @@ def run_active_scan(base_url, modules=None):
             return f
         findings += _run("ports", _ports)
 
+    # Faz 5: İsteğe bağlı gerçek tarayıcı (headless Chromium): SPA keşfi + XSS'in tarayıcıda çalıştığının kanıtı
+    real_browser = None
+    if (options or {}).get("real_browser"):
+        real_browser = _run_real_browser(scan_url, active_modules, findings, browser_site_map, browser_forms)
+
     # Cloudflare Audit Skill: Bağımsız doğrulama geçişi ve 4-durumlu yaşam döngüsü
     lifecycle = verify_and_classify_active_findings(findings)
     coverage_ledger = build_active_coverage_ledger(scan_url, active_modules, module_stats, findings)
@@ -1550,6 +1629,7 @@ def run_active_scan(base_url, modules=None):
         "chains": chains,
         "site_map": browser_site_map,
         "forms": browser_forms,
+        "real_browser": real_browser,
         "requests_sent": client.request_count,
         "rate_limit_seconds": RATE_LIMIT_SECONDS,
         "duration_ms": int((time.time() - start) * 1000),

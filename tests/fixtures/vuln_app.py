@@ -51,6 +51,17 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header("Location", qs.get("to", ["/"])[0])
             self.send_header("Content-Length", "0")
             self.end_headers()
+        elif parsed.path == "/spa":
+            # Bağlantı ve form JavaScript ile oluşur (statik HTML ayrıştırıcı göremez; gerçek tarayıcı görür)
+            self._send(200, "<html><body><div id=app></div><script>"
+                       "var a=document.createElement('a');a.href='/item?id=42';a.textContent='dyn';"
+                       "document.getElementById('app').appendChild(a);"
+                       "var f=document.createElement('form');f.action='/search';f.method='get';"
+                       "var i=document.createElement('input');i.name='q';f.appendChild(i);"
+                       "document.body.appendChild(f);</script></body></html>")
+        elif parsed.path == "/embed":
+            # Kapsam dışı alt kaynak testi: verilen adresten resim yüklemeye çalışan sayfa
+            self._send(200, "<html><body><img src=\"%s\"></body></html>" % html.escape(qs.get("src", [""])[0], quote=True))
         elif parsed.path == "/account/delete":
             # Durum değiştiren uç (yalnızca kayıt tutar; ana sayfadan BAĞLANTI VERİLMEZ)
             self._send(200, "<html><body>deleted %s</body></html>" % qs.get("id", [""])[0])

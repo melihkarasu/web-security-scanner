@@ -20,7 +20,7 @@ Web Security Scanner bridges that gap with a **Unified Single-Input Command Cent
 
 1. **Browser-Only Preview (GitHub Pages):** Instant DNS & email security posture checks (DMARC, SPF, DNSSEC, CAA, IPv6) via DNS-over-HTTPS (DoH) with zero installation.
 2. **Core Local Mode (`python3 server.py`):** Runs on the Python 3 standard library with zero required `pip` or `npm` packages. Unlocks live HTTP header proxying, deep passive reconnaissance, local directory SAST (regex + Python AST + JS taint + entropy + Google OSV CVEs), ethics-gated active scanning (12 modules), and evidence-verified AI Red Team orchestration.
-3. **Full Autonomous Pentest Mode (Local + Strix / Docker):** Integrates the [Strix](https://github.com/usestrix/strix) multi-agent CLI as a managed subprocess executing real proof-of-concept (PoC) exploits inside an isolated Docker sandbox.
+3. **Full Autonomous Pentest Mode (Local + Strix / Docker):** Integrates the [Strix](https://github.com/usestrix/strix) multi-agent CLI as a managed subprocess executing real proof-of-concept (PoC) exploits inside an isolated Docker sandbox. Optional add-ons: Strix on an isolated TLS `docker:dind` daemon instead of the host Docker socket, and a real headless-Chromium browser in a hardened sidecar.
 
 ---
 
@@ -36,6 +36,8 @@ Web Security Scanner bridges that gap with a **Unified Single-Input Command Cent
 | **Active Security Testing** (16 modules: SQLi, NoSQLi, SSTI, XSS, CSRF, SSRF, Open Redirect, IDOR, Active CORS, Live JWT & OAuth 2.0/OIDC, Active GraphQL, HPP & Cache Poisoning, Ports, Deep Headers, Browser Sim, Business Logic + 2-pass verification) | ❌ | ✅ (Ethics-gated + rate-limited) |
 | **AI Red Team Orchestration** (Scout → Strategist → Analyst → Reporter, evidence-verified findings only) | ❌ | ✅ OpenAI-compatible / Anthropic Claude / Azure OpenAI / AWS Bedrock / Gemini / Vertex AI / OpenRouter / Ollama |
 | **Strix Autonomous AI Pentest** (100% CLI flag & env parity + Docker sandbox PoC generation + live sub-agent tree + `coverage.json` + SARIF 2.1.0/CSV/MD) | ❌ | ✅ (Requires `strix-agent` + Docker) |
+| **Real Browser Mode** (opt-in headless Chromium: SPA discovery + XSS execution proof with screenshot, scope-locked proxy) | ✅ (needs a Chromium headless shell) | ✅ (isolated `wss-browser` sidecar) |
+| **Strix on Isolated Docker** (TLS `docker:dind`, no host socket, non-root scanner, read-only source mirrors) | ❌ | ✅ |
 | **Scan History & Diff** (local SQLite, secrets masked, 30-day retention, new / fixed / persisting vs. previous scan) | ✅ | ✅ |
 | **Threat Intelligence** (opt-in: version banners & JS libraries → NVD / OSV / CISA KEV, always *needs validation*) | ✅ | ✅ |
 | **Security Assistant** (read-only chat that explains this scan's findings & fixes, no actions) | ✅ | ✅ |
@@ -84,6 +86,13 @@ curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/ma
 # 🚀 Docker Full (Includes Strix CLI + host Docker socket for autonomous sandbox PoC runs):
 curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --docker-full
 # (or: docker compose -f docker-compose.yml -f docker-compose.strix.yml up -d --build)
+
+# 🖥️ Optional real browser (isolated headless-Chromium sidecar, ~570 MB extra):
+# docker compose -f docker-compose.yml -f docker-compose.browser.yml up -d --build
+
+# 🔒 Full with Strix on an isolated TLS docker:dind instead of the host Docker socket:
+# docker compose -f docker-compose.yml -f docker-compose.strix-dind.yml up -d --build
+# docker compose exec web-security-scanner docker pull ghcr.io/usestrix/strix-sandbox:1.3.0
 ```
 Access the Web UI at **`http://localhost:8765`**.
 
@@ -142,6 +151,8 @@ Enforces a mandatory ethical confirmation gate (`POST /api/active-confirm` → `
 | **TCP Port Scan (`ports`)** | Connects to 24 common ports (`21, 22, 25, 53, 80, 443, 1433, 1521, 2375, 3306, 3389, 5432, 5900, 6379, 8080, 8443, 9200, 27017`) and highlights exposed database/infrastructure services |
 | **Finding Correlation (`correlate_findings`)** | Chains multi-module findings into high-impact attack paths (e.g., *SSRF + Open DB Port → Internal Network Compromise*, *XSS + Weak CSP → Unblocked Script Execution*) |
 
+**🖥️ Real Browser Mode (opt-in, off by default):** Tick **Gerçek Tarayıcı (headless Chromium)** in the Command Center (or send `real_browser=1` / `"real_browser": true` in `ai_config`). The scan then (a) renders the start page in headless Chromium so JavaScript-generated links and forms join the crawl map and the AI attack surface, and (b) re-tests every unencoded reflected XSS with a harmless marker that only edits our own browser's DOM: if it executes, the finding is **confirmed** with a screenshot of a red *WSS XSS PROOF* banner; if it does not (CSP, output context), it moves to *needs validation*. All browser traffic goes through a scope-locked local proxy: only the confirmed origin, only `GET/HEAD/OPTIONS` for http, at most 100 requests per scan, browser-side DNS disabled, WebRTC UDP blocked, a fresh profile per render. Natively Chromium's own sandbox stays on; in Docker the browser runs in a separate hardened `wss-browser` sidecar. Requires a Chromium *headless shell* (`chrome-headless-shell` or Debian `chromium-headless-shell`); a startup self-test reports a clear reason when it is unavailable.
+
 ### 5. AI Red Team Orchestration — Evidence-Verified Pipeline
 Enable **🤖 AI Red Team Agents** in the Command Center to run a 3-stage, evidence-verified pipeline (`/api/ai-scan`). Every agent call uses provider JSON mode with deterministic repair plus a single fixer-retry, so a malformed LLM reply no longer silently drops a probe or verdict; the Strategist receives a prioritized, budgeted attack-surface summary (not a blind character cut), and each run returns an endpoint × parameter × vuln-class **coverage matrix**, honest per-round history, and per-agent **telemetry** (calls, latency, tokens): Scans run as **background jobs** with a live thought stream, a cancel button and operator **steering notes**. Before probing a state-changing endpoint (delete / logout / payment / transfer / reset …) or whenever the Strategist flags a probe as uncertain (`needs_confirmation`), the agent **asks you first** and skips the probe if you decline or do not answer within 120 s (max 3 questions per scan). Each agent (Scout / Strategist / Analyst / Reporter / Mentor) can use **its own model** on the same provider, and an optional **small / local model mode** adds an independent Mentor that redirects the Strategist after an unproductive round (PentAGI adviser analogue, max 2 extra calls).
 
@@ -170,6 +181,7 @@ In addition to the built-in AI orchestrator, the **⚔️ Strix Pentest** tab ma
 - **Full CLI Flag Parity:** Supports scan modes (`quick`, `standard`, `deep`), custom instructions (`--instruction-file`), white-box multi-target scanning (`--target` repeatable + `--target-list`), turn/budget caps (`--max-turns`, `--max-budget`), CI severity threshold (`--fail-on`), code diff scoping (`--scope-mode`, `--diff-base`), custom CLI config (`--config`), MCP server configuration (`--mcp-config`, `--mcp-server`, `--mcp-exclude`), sandbox file injection (`--workspace-file`), past run discovery & resumption (`--resume`), and CLI self-update (`--update`).
 - **Live Polling & PoC Extraction:** Polls `strix_runs/<run>/run.json` and `vulnerabilities.json` every 4 seconds, streaming `strix_output.log` and mapping Strix's CVSS 3.1 scores, CWE IDs, HTTP evidence, and executable PoC scripts directly into the UI and exportable reports.
 - **Privacy & Safety:** Enforces the server-side ethical gate (including on `--resume` by resolving the original target hostname) and sets `STRIX_TELEMETRY=0` by default.
+- **Isolated Docker (opt-in):** `docker-compose.strix-dind.yml` runs Strix sandboxes on a dedicated TLS `docker:dind` daemon instead of the host socket. The scanner runs as non-root and only shares the dind network namespace (Strix reaches sandboxes by container IP), sandbox networks use non-overlapping ranges (`10.213.0.0/24`, `10.214.0.0/16`), `host.docker.internal` still points to the real host (`172.17.0.1`), and white-box source paths are mirrored into dind **read-only** at the same path. The Strix panel shows the active Docker mode (🔒 isolated dind / ⚠️ host socket).
 
 ---
 
@@ -178,13 +190,14 @@ In addition to the built-in AI orchestrator, the **⚔️ Strix Pentest** tab ma
 We believe security tools should be transparent about their boundaries:
 
 1. **Browser Mode (GitHub Pages) is Passive-Only:** Due to browser CORS policies and raw socket restrictions, the GitHub Pages demo can only query DNS/email records via DoH. Full HTTP header fetching, deep passive scanning, local directory SAST, active testing, AI Red Team, and Strix require running `server.py` locally or in Docker.
-2. **Static HTML/JS Simulation vs. Headless Chromium:** `browser_sim_engine.py` uses Python's `HTMLParser` and regex/taint heuristics to crawl links, extract forms, and analyze external `.js` files. It does **not** run a headless browser (Playwright/Puppeteer); therefore, single-page applications (SPAs) that render routes exclusively via client-side JavaScript execution will have limited crawl coverage unless tested with Strix's full sandbox.
+2. **Static HTML/JS Simulation by Default; Real Browser Is Opt-In:** `browser_sim_engine.py` crawls with Python's `HTMLParser` and regex/taint heuristics. The optional Real Browser Mode adds headless-Chromium rendering for SPAs and XSS execution proof, but it renders only the start page plus XSS proofs per scan (it is not a full JavaScript crawler), it needs a Chromium *headless shell* (full Chrome builds whose `--dump-dom` never returns are detected by the self-test and rejected), and for `https` targets the proxy tunnels TLS, so it enforces the origin but cannot inspect request methods.
 3. **Conservative Active Scan Limits:** To prevent accidental denial-of-service, `active_scan_engine.py` enforces a 1.5-second minimum interval between requests and a hard cap of **60 HTTP requests per scan** (crawler capped at 10 pages / depth 2 / 5 JS files). The AI Red Team pipeline uses a separate client locked to the exact origin you confirmed and capped at 12 probes (`max_loops × max_tests_per_loop`), so one AI scan sends at most 60 discovery + 12 AI requests; if the target redirects to another origin (e.g. `http://` → `https://`), enter the final origin as the target.
 4. **AI Thought Stream Delivery:** The web UI starts AI scans as background jobs (`POST /api/ai-scan` with `"async": true`) and polls `/api/ai-status` every ~1.5 s for incremental events, operator questions and the final result. Jobs live in server memory only (lost on restart), at most 2 run at the same time, and cancellation takes effect after the current step (the discovery stage can take up to ~90 s). Calling `/api/ai-scan` without `async` keeps the legacy synchronous response for scripts/CI; in that mode there is nobody to ask, so state-changing probes are skipped by default.
 5. **External Network Calls When Configured:** While core local scanning keeps data on your machine, DNS audits query Cloudflare/Google DoH, dependency CVE checks query `api.osv.dev`, and cloud LLM providers send prompt context (headers, discovered URLs/forms, trimmed HTTP response excerpts) to your selected LLM API. Use **Ollama** if you require strictly air-gapped/local LLM inference. With threat intelligence enabled, product names and versions (never the target address) are sent to `services.nvd.nist.gov`, `api.osv.dev` and `www.cisa.gov`; responses are cached locally for 24 h.
-6. **Docker + Strix Socket Privilege:** Running Strix inside Docker (`docker-compose.strix.yml`) mounts `/var/run/docker.sock` so Strix can spawn sibling `strix-sandbox` containers on the host daemon. Only use the Strix compose override in trusted local environments. When scanning services bound to `localhost` on your host machine from inside the Strix Docker sandbox, target the Docker bridge IP (e.g., `http://172.17.0.1:3000`).
+6. **Docker + Strix Socket Privilege:** The default Strix override (`docker-compose.strix.yml`) mounts `/var/run/docker.sock` and runs as root, so a compromised scanner container means root on the host; Strix sandboxes also bind white-box source paths straight from the host, bypassing the scanner's `:ro` mount. Prefer `docker-compose.strix-dind.yml` (TLS `docker:dind`, non-root scanner, read-only mirrors). Caveats: the dind container itself must run `privileged` (far better than handing over the host socket, but not a hard boundary), the ~6 GB sandbox image is pulled again into dind's own store, and mirrored paths must not live under `/tmp` (dind mounts its own tmpfs there). When scanning services on your host from a Strix sandbox, target the Docker bridge IP (e.g., `http://172.17.0.1:3000`) in both modes.
 7. **Banner-Based CVE Matching Is a Lead, Not a Verdict:** Threat-intelligence matches rely on advertised versions. Linux distributions backport security fixes without changing version strings, and servers can hide or fake banners, so every match is reported as *needs validation*. Without `NVD_API_KEY` the NVD API allows ~5 requests / 30 s, so each scan performs at most 6 NVD lookups spaced 6.5 s apart (cache hits are free).
 8. **Scan History Is Local and Origin-Scoped:** History is a local SQLite file (directory 0700, file 0600) and is compared per target origin (`scheme://host:port`) and scan kind. Cancelled or failed scans are not recorded. For AI scans the LLM may choose different probes each run, so "fixed" there means *not seen again*, not *verified fixed*.
+9. **Browser Sidecar Runs Chromium Without Its Internal Sandbox:** Docker's default seccomp profile blocks the namespace sandbox Chromium needs, so the `wss-browser` sidecar starts Chromium with `--no-sandbox` (`WSS_BROWSER_NO_SANDBOX=1`). Isolation is provided at container level instead: no mounted files, credentials or Docker socket, all Linux capabilities dropped, read-only root filesystem, `no-new-privileges`, memory/PID limits and a per-start shared key. The scanner container never launches a browser, and native runs keep Chromium's own sandbox on.
 
 ---
 
@@ -199,6 +212,8 @@ We believe security tools should be transparent about their boundaries:
 | **AI probe guard (code-enforced)** | LLM-proposed probes must match the ethically confirmed target's exact origin (scheme + host + port); off-scope redirects are not followed; destructive SQL/OS commands, long sleeps/`BENCHMARK`, cloud-metadata endpoints and oversized payloads are rejected before sending (`safety_guard.py`) |
 | **Secret masking before LLM calls** | Cookie values, `Authorization`, JWT payload/signature (header/`alg` kept), cloud/API keys, private keys, connection-string passwords and hardcoded secret literals are masked in every prompt sent to cloud or local LLMs — AI Red Team and SAST AI audit (`redaction.py`) |
 | **Read-only probes** | No `INSERT`/`UPDATE`/`DELETE` payloads; SQLi/SSTI/XSS probes use benign markers |
+| **Scope-locked real browser** | Opt-in headless Chromium reaches only the confirmed origin through a local proxy (http: `GET/HEAD/OPTIONS` only, 100-request budget, off-scope hosts and internal IPs rejected), browser DNS disabled, WebRTC UDP blocked, temporary profile; in Docker it runs in an isolated, capability-less, read-only sidecar |
+| **Isolated Strix Docker (optional)** | `docker-compose.strix-dind.yml`: TLS-only `docker:dind` on `127.0.0.1:2376`, non-root scanner without the host socket, read-only source mirrors |
 | **Zero-dependency core** | Core server, SAST, and active engines run on Python 3 stdlib (`urllib`, `socket`, `ssl`, `http.server`, `json`, `re`, `ast`); `cryptography` is only required for Vertex AI Service Account JWT auth |
 | **Resource bounds** | SAST skips `node_modules`, `.git`, `.venv`, files >1 MB, and caps at 800 files per scan |
 
@@ -220,6 +235,8 @@ web-security-scanner/
 ├── scan_history.py            # Local scan history (SQLite): masked findings, stable fingerprints, new/fixed/persisting diff, retention
 ├── threat_intel.py            # Opt-in threat intel: version banners & JS libs -> NVD / OSV / CISA KEV (needs-validation findings)
 ├── security_assistant.py      # Read-only findings chat assistant (masked context, tool-less, prompt-injection safe)
+├── headless_browser.py        # Opt-in real browser: headless Chromium + scope-locked proxy, SPA discovery, XSS execution proof
+├── browser_service.py         # Isolated browser sidecar HTTP service (wss-browser container, keyed, 2 concurrent renders)
 ├── ai_orchestrator.py         # Evidence-verified 4-agent Red Team pipeline (Scout → Strategist → Analyst → Reporter)
 ├── safety_guard.py            # Code-enforced AI probe guard: exact-origin scope lock + destructive/DoS payload filter
 ├── redaction.py               # Secret masking for every LLM prompt (cookies, Authorization, JWT, API & private keys)
@@ -232,6 +249,9 @@ web-security-scanner/
 ├── Dockerfile                 # Multi-mode container build (supports ARG INSTALL_STRIX=1)
 ├── docker-compose.yml         # Standard non-root container deployment
 ├── docker-compose.strix.yml   # Strix-enabled container override (mounts host docker.sock)
+├── docker-compose.strix-dind.yml # Strix on isolated TLS docker:dind (no host socket, non-root scanner, read-only mirrors)
+├── docker-compose.browser.yml # Optional isolated headless-Chromium sidecar (wss-browser)
+├── Dockerfile.browser         # Browser sidecar image (chromium-headless-shell, non-root)
 ├── tests/                     # Stdlib unittest suite: mock LLM, local vulnerable fixture app, API security & E2E
 └── requirements.txt           # Optional dependency (cryptography>=42.0.0 for Vertex AI Service Account JWT)
 ```
@@ -242,7 +262,7 @@ web-security-scanner/
 
 All `/api/*` endpoints require the per-launch session token in an `X-WSS-Token` header (or `Authorization: Bearer`). The web UI receives it automatically; for `curl`/CI use the token printed at server start (`docker logs web-security-scanner`) or pin one with `WSS_API_TOKEN`. Requests with a non-loopback `Host` (DNS rebinding) or a cross-site `Origin` are rejected, and no CORS headers are sent.
 
-- `GET  /api/status` — Server health & local mode detection
+- `GET  /api/status` — Server health & local mode detection (+ non-blocking `real_browser` capability)
 - `GET  /healthz` — Token-free liveness probe (Docker `HEALTHCHECK`)
 - `GET  /api/headers?url=` — Live HTTP response header proxy (bypasses browser CORS)
 - `GET  /api/deep-scan?url=` — Deep passive scan (cookies, TLS, `robots.txt`, mixed content, tech fingerprint)
@@ -266,6 +286,8 @@ All `/api/*` endpoints require the per-launch session token in an `X-WSS-Token` 
 - `POST /api/history-delete` — Delete one scan (`id`), a whole target (`target`) or everything (`"all": true`)
 
 Threat intelligence is enabled per scan with `threat_intel=1` on `/api/active-scan` or `"threat_intel": true` inside `ai_config`. Environment: `WSS_HISTORY=0` disables history, `WSS_HISTORY_DB` overrides the database path (default `data/scan_history.sqlite3`; the Docker setup keeps it in the `wss_data` named volume), `WSS_HISTORY_RETENTION_DAYS` (default 30), `WSS_THREAT_INTEL=1` turns threat intel on by default, `NVD_API_KEY` raises the NVD rate limit.
+
+Real Browser Mode is enabled per scan with `real_browser=1` on `/api/active-scan` or `"real_browser": true` inside `ai_config`. Environment: `WSS_REAL_BROWSER=1` turns it on by default, `WSS_CHROMIUM_PATH` points to a specific binary, `WSS_BROWSER_NO_SANDBOX=1` explicitly allows running without Chromium's sandbox (sidecar only), and `WSS_BROWSER_SERVICE_URL` + `WSS_BROWSER_SERVICE_TOKEN_FILE` delegate rendering to the isolated sidecar.
 - `GET  /api/strix-capabilities` — Strix CLI & Docker sandbox readiness check
 - `POST /api/strix-scan` — Start or `--resume` an autonomous Strix pentest
 - `GET  /api/strix-status?scan_id=` — Live status, log tail, and finding count polling

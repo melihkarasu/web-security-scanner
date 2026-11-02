@@ -1358,7 +1358,7 @@ async function startActiveScan(options = {}) {
     }
 
     // 2. Aktif taramayı başlat
-    const scanUrl = '/api/active-scan?url=' + encodeURIComponent(rawUrl) + '&modules=' + encodeURIComponent(modules.join(',')) + threatIntelQuery();
+    const scanUrl = '/api/active-scan?url=' + encodeURIComponent(rawUrl) + '&modules=' + encodeURIComponent(modules.join(',')) + threatIntelQuery() + realBrowserQuery();
     const res = await fetch(scanUrl, { method: 'POST', signal: AbortSignal.timeout(300000) });
     const data = await res.json();
 
@@ -1394,7 +1394,7 @@ async function startActiveScan(options = {}) {
       }
 
       // 2. Aktif taramayı başlat
-      const scanUrl = '/api/active-scan?url=' + encodeURIComponent(rawUrl) + '&modules=' + encodeURIComponent(modules.join(',')) + threatIntelQuery();
+      const scanUrl = '/api/active-scan?url=' + encodeURIComponent(rawUrl) + '&modules=' + encodeURIComponent(modules.join(',')) + threatIntelQuery() + realBrowserQuery();
       const res = await fetch(scanUrl, { method: 'POST', signal: AbortSignal.timeout(300000) });
       const data = await res.json();
 
@@ -1594,6 +1594,75 @@ function buildAIConfigForRequest() {
 }
 
 // =============================================================
+// Faz 5: Gerçek tarayıcı (headless Chromium) tercihi + kanıt görüntüsü
+// =============================================================
+function realBrowserEnabled() {
+  const el = document.getElementById('real-browser-toggle');
+  if (el) return !!el.checked && !el.disabled;
+  return localStorage.getItem('wss_real_browser') === '1';
+}
+
+function realBrowserQuery() {
+  return realBrowserEnabled() ? '&real_browser=1' : '';
+}
+
+(function initRealBrowserToggle() {
+  let attempts = 0;
+  const refreshStatus = async () => {
+    const el = document.getElementById('real-browser-toggle');
+    const status = document.getElementById('real-browser-status');
+    if (!el) return;
+    try {
+      const res = await fetch('/api/status', { signal: AbortSignal.timeout(10000) });
+      const data = await res.json();
+      const caps = data.real_browser || {};
+      if (caps.checking && attempts < 6) {
+        attempts += 1;
+        if (status) status.textContent = 'Durum kontrol ediliyor…';
+        setTimeout(refreshStatus, 2500);
+        return;
+      }
+      if (caps.available) {
+        el.disabled = false;
+        if (status) status.textContent = 'Hazır: ' + (caps.binary || 'chromium') + ' ' + (caps.version || '') +
+          ' · sandbox: ' + (caps.sandbox || '-') + (caps.remote ? ' · yalıtılmış yan konteyner' : '');
+      } else {
+        el.checked = false;
+        el.disabled = true;
+        if (status) status.textContent = 'Kullanılamıyor: ' + (caps.reason || 'bu kurulumda Chromium yok');
+      }
+    } catch (e) {
+      el.disabled = true;
+      if (status) status.textContent = 'Durum alınamadı (yerel sunucu gerekli).';
+    }
+  };
+  const apply = () => {
+    const el = document.getElementById('real-browser-toggle');
+    if (!el || el.dataset.bound) return;
+    el.dataset.bound = '1';
+    el.checked = localStorage.getItem('wss_real_browser') === '1';
+    el.addEventListener('change', () => localStorage.setItem('wss_real_browser', el.checked ? '1' : '0'));
+    refreshStatus();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+  else apply();
+})();
+
+function browserProofHtml(f) {
+  const p = f && f.browser_proof;
+  if (!p) return '';
+  if (p.executed) {
+    const shot = (typeof p.screenshot === 'string' && /^[A-Za-z0-9+/=]+$/.test(p.screenshot)) ? p.screenshot : '';
+    return '<div class="mb-1.5 p-2 rounded-lg border border-rose-300 bg-rose-50">' +
+      '<div class="text-[11px] font-bold text-rose-800">🖥️ Gerçek tarayıcıda çalıştı — kanıtlı (işaret ' + escapeHtml(p.nonce || '') + ')</div>' +
+      (shot ? '<img alt="Tarayıcı kanıtı ekran görüntüsü" class="mt-1.5 max-w-full rounded border border-rose-200" src="data:image/png;base64,' + shot + '">' : '') +
+      '</div>';
+  }
+  if (p.error) return '<div class="mb-1.5 text-[11px] text-stone-500">🖥️ Tarayıcı kanıtı alınamadı: ' + escapeHtml(p.error) + '</div>';
+  return '<div class="mb-1.5 p-2 rounded-lg border border-amber-300 bg-amber-50 text-[11px] text-amber-800">🖥️ Gerçek tarayıcıda zararsız işaret çalışmadı (CSP veya çıktı bağlamı engelliyor olabilir) — sömürülebilirliği elle doğrulayın.</div>';
+}
+
+// =============================================================
 // Faz 3: Tarama geçmişi / fark kartı + tehdit istihbaratı tercihi
 // =============================================================
 function threatIntelEnabled() {
@@ -1629,7 +1698,8 @@ function renderScanHistoryCard(data) {
   let card = document.getElementById('scan-history-card');
   const hist = data && data.history;
   const ti = data && data.threat_intel;
-  if (!hist && !ti) {
+  const rb = data && data.real_browser;
+  if (!hist && !ti && !rb) {
     if (card) card.innerHTML = '';
     return;
   }
@@ -1679,6 +1749,25 @@ function renderScanHistoryCard(data) {
     if ((ti.errors || []).length) html += '<p class="mt-1 text-[10px] text-rose-700">' + (ti.errors || []).map(e => escapeHtml(e)).join('<br>') + '</p>';
     html += '</div>';
     parts.push(html);
+  }
+  if (rb) {
+    const st = rb.stats || {};
+    let rbHtml = '<div class="p-3.5 rounded-xl border border-sky-200 bg-sky-50/70">' +
+      '<div class="text-xs font-bold text-sky-900">🖥️ Gerçek tarayıcı (headless Chromium)</div>';
+    if (rb.available === false || rb.error) {
+      rbHtml += '<p class="mt-1 text-[11px] text-rose-700">' + escapeHtml(rb.error || 'Kullanılamadı.') + '</p>';
+    }
+    if (rb.available !== false) {
+      const spa = rb.spa || {};
+      const spaText = rb.spa ? (spa.error ? 'SPA çizimi: ' + escapeHtml(spa.error) : 'SPA keşfi: ' + (spa.new_links || 0) + ' yeni bağlantı, ' + (spa.new_forms || 0) + ' yeni form') : 'SPA keşfi: "browser" modülü seçilmedi';
+      rbHtml += '<p class="mt-1 text-[11px] text-sky-900">' + spaText +
+        ' · XSS tarayıcı kanıtı: ' + (rb.xss_confirmed || 0) + '/' + (rb.xss_checks || 0) + ' çalıştı' +
+        ' · tarayıcı istekleri: ' + (st.requests || 0) + '/' + (st.budget || 0) +
+        ' · kapsam dışı engellenen: ' + (st.blocked_scope || 0) +
+        (st.sandbox ? ' · sandbox: ' + escapeHtml(st.sandbox) : '') + (st.remote ? ' · yan konteyner' : '') + '</p>';
+    }
+    rbHtml += '</div>';
+    parts.push(rbHtml);
   }
   card.innerHTML = parts.join('');
 }
@@ -1871,6 +1960,7 @@ function renderActiveResults(data) {
         '</div>' +
         '<div class="text-xs font-bold text-mistral-ink mb-1.5">' + escapeHtml(f.title) + '</div>' +
         '<div class="text-[10px] font-mono bg-stone-900 text-emerald-300 p-2 rounded-lg overflow-x-auto mb-1.5"><code>' + escapeHtml(f.evidence || '') + '</code></div>' +
+        browserProofHtml(f) +
         (f.fix && f.fix !== '-' ? '<p class="text-[11px] text-emerald-800 bg-emerald-50 rounded-lg px-2 py-1 leading-relaxed"><strong>Çözüm:</strong> ' + escapeHtml(f.fix) + '</p>' : '') +
         '</div>').join('');
     }
@@ -2175,6 +2265,15 @@ function exportMarkdownReport() {
         (d.fixed || []).forEach(function (it) { md += '- ✅ [' + (it.severity || '-') + '] ' + (it.title || '') + '\n'; });
         md += '\n';
       }
+    }
+    const rbx = res.real_browser;
+    if (rbx) {
+      const rbs = rbx.stats || {};
+      md += '\n## 🖥️ Gerçek Tarayıcı (headless Chromium) — ' + label + '\n\n';
+      if (rbx.error) md += '- ⚠️ ' + rbx.error + '\n';
+      if (rbx.spa && !rbx.spa.error) md += '- SPA keşfi: ' + (rbx.spa.new_links || 0) + ' yeni bağlantı, ' + (rbx.spa.new_forms || 0) + ' yeni form\n';
+      md += '- XSS tarayıcı kanıtı: ' + (rbx.xss_confirmed || 0) + '/' + (rbx.xss_checks || 0) + ' çalıştı\n';
+      md += '- Tarayıcı istekleri: ' + (rbs.requests || 0) + '/' + (rbs.budget || 0) + ' • kapsam dışı engellenen: ' + (rbs.blocked_scope || 0) + '\n\n';
     }
     const ti = res.threat_intel;
     if (ti) {
@@ -3021,7 +3120,8 @@ async function startAIOrchestrationScan(targetUrl, modules) {
         small_model_mode: !!document.getElementById('ai-small-model-mode')?.checked,
         role_models: collectRoleModels(),
         agent_prompts: collectAgentPrompts(),
-        threat_intel: threatIntelEnabled()
+        threat_intel: threatIntelEnabled(),
+        real_browser: realBrowserEnabled()
       }
     }, (ev) => appendAILog(ev.message, ev.agent || 'info'));
     
@@ -4021,7 +4121,7 @@ async function startUnifiedScan() {
           throw new Error(confirmData.error || 'Etik onay sunucu tarafından reddedildi.');
         }
 
-        const activeUrl = '/api/active-scan?url=' + encodeURIComponent(cleanUrl) + '&modules=' + encodeURIComponent(selectedActiveMods.join(',')) + threatIntelQuery();
+        const activeUrl = '/api/active-scan?url=' + encodeURIComponent(cleanUrl) + '&modules=' + encodeURIComponent(selectedActiveMods.join(',')) + threatIntelQuery() + realBrowserQuery();
         const aRes = await fetch(activeUrl);
         const aData = await aRes.json();
         
@@ -4413,9 +4513,12 @@ async function loadStrixCapabilities() {
       el.innerHTML = '❌ Strix kurulu değil. Kurulum: <code>' + escapeHtml(d.install_hint || 'pip install strix-agent') + '</code> — ardından sayfayı yenileyin.';
       return;
     }
+    const dm = d.docker_mode || {};
+    const pullCmd = dm.mode === 'dind-tls' ? 'docker compose exec web-security-scanner docker pull ghcr.io/usestrix/strix-sandbox:1.3.0' : 'docker pull ghcr.io/usestrix/strix-sandbox:1.3.0';
+    const dmLine = dm.mode ? '<br>' + (dm.secure ? '🔒 ' : '⚠️ ') + 'Docker: ' + escapeHtml(dm.label || dm.mode) + (dm.note ? ' — ' + escapeHtml(dm.note) : '') : '';
     el.innerHTML = '✅ <strong>Strix ' + escapeHtml(d.version || '') + '</strong> kurulu · Sandbox: ' +
-      (d.sandbox_image ? '<code>' + escapeHtml(d.sandbox_image) + '</code>' : 'imaj bekleniyor (docker pull ghcr.io/usestrix/strix-sandbox:1.3.0)') +
-      '<br>' + (d.features || []).map(f => '• ' + escapeHtml(f)).join('<br>');
+      (d.sandbox_image ? '<code>' + escapeHtml(d.sandbox_image) + '</code>' : 'imaj bekleniyor (' + escapeHtml(pullCmd) + ')') +
+      dmLine + '<br>' + (d.features || []).map(f => '• ' + escapeHtml(f)).join('<br>');
   } catch (e) {
     el.innerText = 'Strix durumu alınamadı: ' + e.message;
   }

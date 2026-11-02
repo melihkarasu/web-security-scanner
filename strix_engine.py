@@ -83,6 +83,30 @@ def _which_strix():
     return None
 
 
+def docker_mode():
+    """Strix sandbox'larının hangi Docker daemon'ında çalışacağını ve güvenlik etkisini açıklar (Faz 5)."""
+    host = os.environ.get("DOCKER_HOST", "").strip()
+    tls = os.environ.get("DOCKER_TLS_VERIFY", "").strip().lower() not in ("", "0", "false", "no")
+    in_container = os.path.exists("/.dockerenv")
+    if host.startswith(("tcp://", "https://")):
+        if tls:
+            return {"mode": "dind-tls", "label": "İzole Docker (dind, TLS)", "secure": True,
+                    "note": "Strix sandbox'ları ayrı bir dind daemon'ında çalışır; host Docker soketi bağlı değil."}
+        return {"mode": "remote-tcp-insecure", "label": "Uzak Docker (TLS yok)", "secure": False,
+                "note": "DOCKER_HOST TLS'siz bir TCP adresine işaret ediyor; DOCKER_TLS_VERIFY=1 ve istemci sertifikası kullanın."}
+    if host.startswith("unix://") or os.path.exists("/var/run/docker.sock"):
+        if in_container:
+            return {"mode": "host-socket", "label": "Host Docker soketi (konteynere bağlı)", "secure": False,
+                    "note": ("Scanner konteynerini ele geçiren host'ta root olur; Strix sandbox'ı beyaz kutu kaynak yolunu "
+                             "host'tan doğrudan bağlar (scanner'daki :ro koruması geçerli değildir). "
+                             "docker-compose.strix-dind.yml (izole TLS dind) önerilir.")}
+        return {"mode": "host-socket", "label": "Yerel Docker daemon'ı", "secure": False,
+                "note": "Strix sandbox'ları bu makinenin Docker daemon'ında çalışır."}
+    if host:
+        return {"mode": "other", "label": host, "secure": False, "note": ""}
+    return {"mode": "none", "label": "Docker yok", "secure": False, "note": "Docker daemon'ına erişim bulunamadı."}
+
+
 def strix_capabilities():
     """Kurulum durumu + sürüm + docker sandbox imajı + desteklenen özellikler."""
     binary = _which_strix()
@@ -95,6 +119,7 @@ def strix_capabilities():
         "modes": list(SCAN_MODES),
         "features": [],
         "install_hint": "pip install strix-agent  (veya: pipx install strix-agent)",
+        "docker_mode": docker_mode(),
     }
     if not binary:
         return caps
@@ -130,7 +155,10 @@ def strix_capabilities():
             "Hızlı/standart/derin tarama modları + kesilen taramaları devam ettirme (--resume)",
         ]
     elif caps["docker_available"]:
-        caps["features"] = ["Sandbox imajı henüz çekilmemiş: docker pull ghcr.io/usestrix/strix-sandbox:1.3.0"]
+        pull = ("docker compose exec web-security-scanner docker pull ghcr.io/usestrix/strix-sandbox:1.3.0 "
+                "(izole dind deposuna, ~6 GB)") if caps["docker_mode"].get("mode") == "dind-tls" else \
+            "docker pull ghcr.io/usestrix/strix-sandbox:1.3.0"
+        caps["features"] = ["Sandbox imajı henüz çekilmemiş: " + pull]
     return caps
 
 

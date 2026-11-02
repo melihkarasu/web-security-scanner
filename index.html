@@ -505,6 +505,21 @@
               </div>
             </label>
 
+            <!-- Faz 5: Gerçek tarayıcı (headless Chromium; isteğe bağlı, "tümünü seç" kapsamı dışında) -->
+            <label class="module-card module-card-ai">
+              <div class="module-icon-box" aria-hidden="true">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-amber-950">Gerçek Tarayıcı (headless Chromium)</span>
+                  <input type="checkbox" id="real-browser-toggle">
+                </div>
+                <p class="text-[11px] text-stone-600 mt-1 leading-relaxed">İsteğe bağlı: sayfayı gerçek tarayıcıda çizer (JavaScript ile oluşan bağlantı ve formlar) ve kodlanmadan yansıyan XSS'in tarayıcıda gerçekten çalıştığını zararsız bir işaretle kanıtlayıp ekran görüntüsü alır. Tarayıcı yalnızca onaylı adrese gidebilir.</p>
+                <p id="real-browser-status" class="text-[10px] text-stone-500 mt-1 font-mono">Durum kontrol ediliyor…</p>
+              </div>
+            </label>
+
             <!-- Madde 9: 4-Aşamalı AI Semantik Kaynak Kod & Mimari Denetimi -->
             <label class="module-card module-card-ai">
               <div class="module-icon-box" aria-hidden="true">
@@ -1076,6 +1091,6 @@
   </div>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261101e"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261102b"></script>
 </body>
 </html>

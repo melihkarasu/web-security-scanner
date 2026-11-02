@@ -1,0 +1,46 @@
+# Gerçek tarayıcı (headless Chromium) — YALITILMIŞ YAN KONTEYNER (Faz 5, PentAGI "scraper" uyarlaması)
+# Kullanım:  docker compose -f docker-compose.yml -f docker-compose.browser.yml up -d --build
+#
+# - Chromium scanner konteynerinde DEĞİL, aşağıdaki wss-browser konteynerinde çalışır.
+# - Docker'ın varsayılan seccomp profili Chromium'un namespace sandbox'ına izin vermez; bu yüzden
+#   tarayıcı --no-sandbox çalışır ve yalıtım konteyner düzeyinde sağlanır: bağlı dosya / kimlik bilgisi /
+#   Docker soketi yok, tüm Linux yetenekleri düşürülmüş, kök dosya sistemi salt-okunur,
+#   no-new-privileges, bellek ve süreç sınırı. Tarayıcı trafiği konteyner içindeki kapsam kilitli
+#   vekilden geçer (yalnızca onaylı köken, http'de yalnızca GET/HEAD/OPTIONS, tarama başına 100 istek).
+# - Scanner ile servis arasındaki anahtar her açılışta üretilir ve paylaşılan volume'dan okunur.
+# - İmaj ~570 MB ek alan kullanır (chromium-headless-shell + bağımlılıklar).
+services:
+  web-security-scanner:
+    environment:
+      - WSS_BROWSER_SERVICE_URL=http://wss-browser:9230
+      - WSS_BROWSER_SERVICE_TOKEN_FILE=/run/wss-browser/token
+    volumes:
+      - wss_browser_key:/run/wss-browser:ro
+    depends_on:
+      wss-browser:
+        condition: service_healthy
+
+  wss-browser:
+    build:
+      context: .
+      dockerfile: Dockerfile.browser
+    image: web-security-scanner-browser:latest
+    container_name: wss-browser
+    restart: unless-stopped
+    environment:
+      - WSS_BROWSER_NO_SANDBOX=1
+      - WSS_BROWSER_SERVICE_TOKEN_FILE=/run/wss-browser/token
+    volumes:
+      - wss_browser_key:/run/wss-browser
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 256
+
+volumes:
+  wss_browser_key:
