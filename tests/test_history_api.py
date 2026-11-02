@@ -124,6 +124,11 @@ class HistoryApiTests(unittest.TestCase):
         self.assertEqual(intel[0]["verdict"], "needs_validation")
         self.assertIn("PHP 7.4.3", intel[0]["title"])
         self.assertIn("CISA KEV", intel[0]["evidence"])
+        # Faz 6: istihbarat bulgusu önem sayaçlarına ve lifecycle'a da girer (liste ile tutarlı)
+        from collections import Counter
+        expected = Counter(f["severity"] for f in r_on["findings"]) + Counter(c["severity"] for c in r_on.get("chains") or [])
+        self.assertEqual({k: v for k, v in r_on["summary"].items() if v}, dict(expected))
+        self.assertTrue(any(f.get("test") == ti.TEST_NAME for f in r_on["lifecycle"]["needs_validation"]))
         self.assertTrue(self.intel_urls)
         for url in self.intel_urls:
             self.assertNotIn("127.0.0.1", url)

@@ -1045,6 +1045,16 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
                 bucket = "baseline_findings" if kind == "ai" else "findings"
                 result.setdefault(bucket, [])
                 result[bucket].extend(intel_findings)
+                if kind != "ai":
+                    # Sayaçlar ve yaşam döngüsü tarama sonunda hesaplandığı için istihbarat bulgularını
+                    # buraya da ekle (aksi hâlde liste ile önem sayaçları / lifecycle tutarsız kalır).
+                    summary = result.get("summary")
+                    if isinstance(summary, dict):
+                        for f in intel_findings:
+                            summary[f.get("severity")] = int(summary.get(f.get("severity")) or 0) + 1
+                    lifecycle = result.get("lifecycle")
+                    if isinstance(lifecycle, dict) and isinstance(lifecycle.get("needs_validation"), list):
+                        lifecycle["needs_validation"].extend(intel_findings)
             except Exception as e:
                 result["threat_intel"] = {"enabled": True, "findings": [],
                                           "errors": ["Tehdit istihbaratı çalıştırılamadı: %s" % str(e)[:160]]}
