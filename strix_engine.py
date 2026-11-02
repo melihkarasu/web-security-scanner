@@ -188,20 +188,54 @@ def build_strix_env(ai_config: dict, strix_env_opts: dict = None) -> dict:
         env["LLM_API_KEY"] = key or "ollama"
     elif provider == "vertex":
         auth_type = (auth.get("type") or "api_key").lower()
+        sa_path = None
+        sa_info = None
         if auth_type == "service_account" and key:
-            import tempfile
-            fd, path = tempfile.mkstemp(prefix="strix_sa_", suffix=".json")
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(key)
-            os.chmod(path, 0o600)
-            env["GOOGLE_APPLICATION_CREDENTIALS"] = path
-            if ai_config.get("project_id"):
-                env["GCLOUD_PROJECT"] = ai_config["project_id"]
-            env.setdefault("GOOGLE_CLOUD_PROJECT", env.get("GCLOUD_PROJECT", ""))
+            # 'key' ya bir dosya YOLU ya da doğrudan Service Account JSON içeriği olabilir (UI her ikisini de yollayabilir).
+            if os.path.exists(key):
+                sa_path = key
+                try:
+                    with open(key, "r", encoding="utf-8") as f:
+                        sa_info = json.load(f)
+                except Exception:
+                    sa_info = None
+            else:
+                try:
+                    sa_info = json.loads(key)
+                except Exception:
+                    sa_info = None
+                import tempfile
+                fd, sa_path = tempfile.mkstemp(prefix="strix_sa_", suffix=".json")
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(key)
+                os.chmod(sa_path, 0o600)
+        elif auth_type == "service_account" and env.get("GOOGLE_APPLICATION_CREDENTIALS"):
+            # Anahtar verilmedi ama konteynere bağlı gcloud Service Account / ADC mevcut.
+            sa_path = env["GOOGLE_APPLICATION_CREDENTIALS"]
+            try:
+                with open(sa_path, "r", encoding="utf-8") as f:
+                    sa_info = json.load(f)
+            except Exception:
+                sa_info = None
         elif key:
+            # API anahtarı ile (Service Account değil)
             env["GOOGLE_API_KEY"] = key
             env["LLM_API_KEY"] = key
-        env["LLM_API_KEY"] = key or env.get("LLM_API_KEY", "")
+
+        if sa_path:
+            # litellm/Strix, vertex_ai için GOOGLE_APPLICATION_CREDENTIALS (geçerli SA JSON) + proje + konum bekler.
+            env["GOOGLE_APPLICATION_CREDENTIALS"] = sa_path
+            proj = ((ai_config.get("project_id") or "").strip()
+                    or (sa_info.get("project_id") if isinstance(sa_info, dict) else "")
+                    or env.get("VERTEX_PROJECT", "") or env.get("GOOGLE_CLOUD_PROJECT", ""))
+            if proj:
+                for var in ("VERTEXAI_PROJECT", "VERTEX_PROJECT", "GCLOUD_PROJECT", "GOOGLE_CLOUD_PROJECT"):
+                    env[var] = proj
+            loc = ((ai_config.get("region") or "").strip().lower()
+                   or env.get("VERTEX_LOCATION", "") or "global")
+            env["VERTEXAI_LOCATION"] = loc
+            env["VERTEX_LOCATION"] = loc
+        env["LLM_API_KEY"] = env.get("LLM_API_KEY", "") or key
     elif provider == "anthropic":
         if not key:
             raise ValueError("Strix taraması için Anthropic API anahtarı gereklidir.")
@@ -240,8 +274,17 @@ def build_strix_env(ai_config: dict, strix_env_opts: dict = None) -> dict:
             env["LLM_API_BASE"] = base_url
             env["OPENAI_BASE_URL"] = base_url
 
-    # Strix gelişmiş ortam değişkenleri (%100 özellik paritesi)
     opts = strix_env_opts if isinstance(strix_env_opts, dict) else {}
+    # Faz 5+: Bazı sağlayıcılar (ör. Vertex "global" uç noktası litellm async yolunda) ilk bağlantıda
+    # dalgalı yanıt verir; Strix'in tek seferlik LLM önkontrolü (LLM_PREFLIGHT_TIMEOUT) ve çağrı zaman
+    # aşımı cömert tutulur ki dalgalı pencereyi retry ile geçsin (ajan döngüsünün kendi tur-retry'si de var).
+    def _opt(name, default):
+        return str((opts.get(name) if isinstance(strix_env_opts, dict) else None) or ai_config.get(name) or default)
+    env.setdefault("LLM_PREFLIGHT_TIMEOUT", _opt("llm_preflight_timeout", "150"))
+    env.setdefault("LITELLM_REQUEST_TIMEOUT", _opt("llm_request_timeout", "120"))
+    env.setdefault("LITELLM_NUM_RETRIES", _opt("llm_num_retries", "4"))
+
+    # Strix gelişmiş ortam değişkenleri (%100 özellik paritesi)
     for opt_key, env_name in (
         ("postman_api_key", "POSTMAN_API_KEY"),
         ("perplexity_api_key", "PERPLEXITY_API_KEY"),
