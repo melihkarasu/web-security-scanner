@@ -32,7 +32,8 @@ services:
     ports: !reset []
     volumes:
       - strix_dind_certs:/certs/client:ro
-      - strix_scans:/app/strix_scans
+      # dind'de scanner non-root çalıştığı için socket modunun root'a ait 'strix_scans' volume'ü yeniden kullanılmaz; imaj /app/strix_scans'i uid 1000 ile önceden oluşturur.
+      - strix_scans_dind:/app/strix_scans
     environment:
       - DOCKER_HOST=tcp://127.0.0.1:2376
       - DOCKER_TLS_VERIFY=1
@@ -69,4 +70,4 @@ services:
 volumes:
   strix_dind_certs:
   strix_dind_data:
-  strix_scans:
+  strix_scans_dind:
