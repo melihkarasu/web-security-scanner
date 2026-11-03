@@ -4039,7 +4039,7 @@ async function startUnifiedScan() {
             'Yerel Dizin Bulunamadı (SAST Hatası)',
             `"${rawDir}" dizini sunucuda bulunamadı veya erişilemedi (${errMsg}).`,
             [
-              'Sunucu üzerindeki tam yolu (örn: /www/wwwroot/sarjharitasi.tr) veya klasör adını (örn: sarjharitasi) kontrol edin.',
+              'Yerel dizin yolunu (örn: ~/projects/my-app, /workspace/my-app) veya klasör adını (örn: my-app) kontrol edin.',
               ...avail,
               'Eğer bir web sitesini URL üzerinden taramak istiyorsanız üstteki kutuya alan adını (örn: sarjharitasi.tr) başında "/" olmadan yazın.'
             ]

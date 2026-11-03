@@ -33,6 +33,13 @@ class TestComposeStrixVolumes(unittest.TestCase):
         content = self._read_file("docker-compose.strix.yml")
         self.assertIn("strix_scans:/app/strix_scans", content)
 
+    def test_compose_files_use_portable_volumes_without_hardcoded_host_paths(self):
+        for fname in ("docker-compose.yml", "docker-compose.strix.yml", "docker-compose.strix-dind.yml"):
+            content = self._read_file(fname)
+            self.assertNotIn("/home/uzem", content, f"{fname} must not contain hardcoded /home/uzem path")
+            self.assertNotIn("/www/wwwroot", content, f"{fname} must not contain hardcoded /www/wwwroot path")
+            self.assertIn("${WSS_PROJECTS_DIR:-~}:/workspace:ro", content, f"{fname} must mount portable workspace")
+
 
 if __name__ == "__main__":
     unittest.main()

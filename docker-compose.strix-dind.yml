@@ -14,7 +14,7 @@
 #    bu yüzden arayüz portu (127.0.0.1:8765) strix-docker servisinde yayınlanır.
 #  - Sandbox ağları host ağlarıyla çakışmaz (10.213.0.0/24, 10.214.0.0/16). host.docker.internal gerçek host'a
 #    (STRIX_DIND_HOST_GATEWAY, varsayılan 172.17.0.1) yönlenir: host'taki yerel hedefleri 172.17.0.1:PORT ile tarayın.
-#  - Beyaz kutu kaynak kodu dind içine AYNI yolda ve SALT-OKUNUR aynalanır (soket modunda host daemon gerçek
+#  - Beyaz kutu kaynak kodu dind içine AYNI yolda (/workspace) ve SALT-OKUNUR aynalanır (soket modunda host daemon gerçek
 #    host yolunu bağladığı için scanner'daki :ro koruması Strix sandbox'ı için geçerli değildir).
 #    Ayna yolları /tmp altında olmamalıdır: dind /tmp'ye kendi tmpfs'ini bağlar.
 #
@@ -39,6 +39,7 @@ services:
       - DOCKER_TLS_VERIFY=1
       - DOCKER_CERT_PATH=/certs/client
       - STRIX_TELEMETRY=0
+      - WSS_WORKSPACE_ROOT=/workspace
     depends_on:
       strix-docker:
         condition: service_healthy
@@ -59,8 +60,7 @@ services:
     volumes:
       - strix_dind_certs:/certs/client
       - strix_dind_data:/var/lib/docker
-      - /www/wwwroot:/www/wwwroot:ro
-      - /home/uzem/.openclaw/workspace:/home/uzem/.openclaw/workspace:ro
+      - ${WSS_PROJECTS_DIR:-~}:/workspace:ro
     healthcheck:
       test: ["CMD", "docker", "info"]
       interval: 5s

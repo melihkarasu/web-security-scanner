@@ -662,24 +662,21 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
     def _get_sast_search_roots(self):
         home = os.path.expanduser("~")
         cwd = os.getcwd()
+        ws_root = os.environ.get("WSS_WORKSPACE_ROOT") or "/workspace"
+        common_subdirs = ("Projects", "projects", "Developer", "Desktop", "Documents", "repos", "workspace", "src", "www")
         candidates = [
+            ws_root,
+            *[os.path.join(ws_root, sub) for sub in common_subdirs],
             cwd,
             os.path.dirname(cwd),
             os.path.dirname(os.path.dirname(cwd)),
-            "/www/wwwroot",
-            "/var/www",
-            "/opt",
-            "/srv",
             home,
-            os.path.join(home, "Projects"),
-            os.path.join(home, "Developer"),
-            os.path.join(home, "Desktop"),
-            os.path.join(home, "Documents"),
-            os.path.join(home, "repos"),
-            os.path.join(home, "workspace"),
-            os.path.join(home, ".openclaw", "workspace"),
-            os.path.join(home, ".openclaw", "workspace", "standalone-apps"),
-            "/root",
+            *[os.path.join(home, sub) for sub in common_subdirs],
+            "/var/www",
+            "/var/www/html",
+            "/srv",
+            "/opt",
+            "/www/wwwroot",
         ]
         roots = []
         seen = set()
