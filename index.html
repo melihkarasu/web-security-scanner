@@ -83,13 +83,13 @@
           <!-- Rapor İndirme Menüsü -->
           <div class="segmented-group" title="Denetim Raporunu Dışa Aktar">
             <button type="button" onclick="exportMarkdownReport()" class="segmented-item" title="Markdown Raporu İndir">
-              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>MD</span>
+              <svg class="w-3.5 h-3.5 text-mistral-orange" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Rapor (MD)</span>
             </button>
             <button type="button" onclick="exportJsonReport()" class="segmented-item" title="JSON Raporu İndir">
               <span>JSON</span>
             </button>
-            <button type="button" onclick="exportHtmlReport()" class="segmented-item hidden sm:inline-flex" title="HTML Raporu İndir">
+            <button type="button" onclick="exportHtmlReport()" class="segmented-item" title="HTML Raporu İndir">
               <span>HTML</span>
             </button>
           </div>
@@ -727,6 +727,33 @@
 
     <!-- Genel Skor & İstatistik Kartı -->
     <div id="scan-results-dashboard" class="hidden space-y-6">
+
+      <!-- Tarama Raporunu Dışa Aktarma & Paylaşım Çubuğu (Vitrin Aksiyon Barı) -->
+      <div id="results-export-toolbar" class="p-4 sm:p-5 rounded-2xl border border-stone-200 bg-white shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="vibe-cat-badge shrink-0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </span>
+          <div class="min-w-0">
+            <h3 class="text-sm sm:text-base font-bold font-editorial text-mistral-ink">Denetim Sonuçları &amp; Rapor Dışa Aktarma</h3>
+            <p class="text-[11px] sm:text-xs text-mistral-slate truncate">Tamamlanan taramanın tüm bulgularını, kanıtlarını ve çözüm önerilerini bilgisayarınıza indirin.</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
+          <button type="button" onclick="exportHtmlReport()" class="btn btn-sm btn-primary">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+            <span>HTML Rapor İndir</span>
+          </button>
+          <button type="button" onclick="exportMarkdownReport()" class="btn btn-sm btn-secondary">
+            <svg class="w-3.5 h-3.5 text-mistral-orange" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Markdown (.md)</span>
+          </button>
+          <button type="button" onclick="exportJsonReport()" class="btn btn-sm btn-secondary">
+            <svg class="w-3.5 h-3.5 text-stone-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <span>JSON (.json)</span>
+          </button>
+        </div>
+      </div>
       
       <!-- Özet Metrikler Grid (Mobilde 2x2 Bento, Masaüstünde 4 Sütun) -->
       <div class="kpi-bento-grid">
