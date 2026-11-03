@@ -14,7 +14,7 @@
   --muted: #94A3B8;
   --hairline: #E2E8F0;
   --hairline-strong: #CBD5E1;
-  --canvas: #F8FAFC;
+  --canvas: #FFFDF9;
   --surface: #FFFFFF;
   --cream: #FFF8E0;
   --cream-soft: #FFFAEB;
@@ -789,4 +789,237 @@ pre.bg-stone-950 code {
 
 .hidden {
   display: none !important;
+}
+
+/* =============================================================
+   9. VIBE CODED APPS VİTRİN TASARIM SİSTEMİ ENTEGRASYONU
+   Mistral Warm Canvas (#FFFDF9) • MK Obsidian Emblem • Accordion
+   Kategori Hapları • Bento Modül Kartları • Yüksek Okunabilirlik
+============================================================= */
+.bg-mistral-canvas {
+  background-color: #FFFDF9 !important;
+}
+
+.bg-mistral-cream {
+  background-color: #FFF8E0 !important;
+}
+
+.border-mistral-beige-deep {
+  border-color: #E6D5A8 !important;
+}
+
+/* Premium Obsidian MK Brand Emblem */
+.mk-brand-emblem {
+  width: 2.625rem;
+  height: 2.625rem;
+  border-radius: 0.75rem !important;
+  background: linear-gradient(145deg, #1E2028 0%, #0D0F14 55%, #07080B 100%) !important;
+  border: 1px solid #2E323E !important;
+  box-shadow:
+    0 6px 16px -3px rgba(10, 12, 18, 0.38),
+    0 2px 4px -1px rgba(10, 12, 18, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(250, 82, 15, 0.25) !important;
+  color: #FFFFFF !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mk-brand-emblem::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+
+.mk-brand-emblem:hover {
+  border-color: rgba(250, 82, 15, 0.75) !important;
+  box-shadow:
+    0 8px 20px -3px rgba(250, 82, 15, 0.28),
+    0 3px 6px -1px rgba(10, 12, 18, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+  transform: translateY(-1px) scale(1.02);
+}
+
+.mk-brand-emblem-sm {
+  width: 2.125rem;
+  height: 2.125rem;
+  border-radius: 0.625rem !important;
+}
+
+/* Vitrin Hero & Omni-Search Komuta Kartı */
+.vibe-hero-card,
+.command-hero {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(250, 82, 15, 0.08) 0%, rgba(245, 158, 11, 0.04) 40%, transparent 70%),
+    radial-gradient(circle at 0% 100%, rgba(255, 248, 224, 0.7) 0%, transparent 60%),
+    #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 1.5rem !important;
+  box-shadow: 0 10px 28px -6px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.vibe-omni-dock,
+.omni-dock {
+  background-color: #FFFDF9 !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 1.125rem !important;
+  padding: 0.875rem !important;
+  transition: all 0.2s ease;
+}
+
+.vibe-omni-dock:focus-within,
+.omni-dock:focus-within {
+  background-color: #FFFFFF !important;
+  border-color: rgba(250, 82, 15, 0.45) !important;
+  box-shadow: 0 8px 24px -6px rgba(250, 82, 15, 0.14) !important;
+}
+
+/* Yatay Kaydırılabilir Hızlı Profil & Filtre Çubuğu (.vibe-cat-pills) */
+.vibe-cat-pills {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0.25rem 0.125rem;
+}
+
+.vibe-cat-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.vibe-cat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.875rem;
+  border-radius: 9999px !important;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569 !important;
+  background-color: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: var(--shadow-xs);
+  transition: all 0.16s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.vibe-cat-pill svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  color: #64748B;
+}
+
+.vibe-cat-pill:hover {
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+  background-color: #F8FAFC !important;
+}
+
+.vibe-cat-pill.is-active {
+  background: linear-gradient(135deg, #FA520F 0%, #EA580C 100%) !important;
+  color: #FFFFFF !important;
+  border-color: rgba(204, 58, 5, 0.3) !important;
+  box-shadow: 0 3px 10px -1px rgba(250, 82, 15, 0.3) !important;
+}
+
+.vibe-cat-pill.is-active svg {
+  color: #FFFFFF !important;
+}
+
+/* Vitrin Akordion Kartları (.vibe-accordion-card) */
+.vibe-accordion-card {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 1.25rem !important;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.vibe-accordion-card:hover {
+  border-color: #CBD5E1 !important;
+}
+
+.vibe-cat-badge {
+  width: 2.625rem;
+  height: 2.625rem;
+  border-radius: 0.875rem !important;
+  background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%) !important;
+  border: 1px solid #FED7AA !important;
+  color: #FA520F !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-xs);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.vibe-cat-badge svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  stroke: currentColor;
+}
+
+.vibe-cat-badge-amber {
+  background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%) !important;
+  border: 1px solid #FDE68A !important;
+  color: #D97706 !important;
+}
+
+/* Bento Modül Kartları — Geliştirilmiş Okunabilirlik & Hiyerarşi */
+.module-card {
+  padding: 1rem 1.125rem !important;
+  border-radius: 1rem !important;
+  border: 1px solid #E2E8F0 !important;
+  background-color: #FFFFFF !important;
+  box-shadow: var(--shadow-xs) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.module-card:hover {
+  border-color: rgba(250, 82, 15, 0.45) !important;
+  box-shadow: 0 8px 20px -5px rgba(250, 82, 15, 0.08), 0 3px 8px -2px rgba(15, 23, 42, 0.04) !important;
+  transform: translateY(-1px);
+}
+
+.module-card:has(input:checked),
+.module-card.is-checked {
+  border-color: rgba(250, 82, 15, 0.5) !important;
+  background: linear-gradient(180deg, rgba(255, 247, 237, 0.65) 0%, #FFFFFF 100%) !important;
+  box-shadow: 0 4px 14px -3px rgba(250, 82, 15, 0.14) !important;
+}
+
+.module-card-ai:has(input:checked),
+.module-card-ai.is-checked {
+  border-color: #F59E0B !important;
+  background: linear-gradient(180deg, #FFFBEB 0%, #FFFFFF 100%) !important;
+  box-shadow: 0 4px 14px -3px rgba(245, 158, 11, 0.18) !important;
+}
+
+.module-icon-box {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  border-radius: 0.75rem !important;
+}
+
+.rotate-180 {
+  transform: rotate(180deg);
 }

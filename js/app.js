@@ -3224,6 +3224,59 @@ function toggleAnalysisGroup(group, checked) {
   syncLegacyModuleFlags();
 }
 
+function toggleModuleAccordion(groupId, forceOpen) {
+  const body = document.getElementById('acc-body-' + groupId);
+  const chevron = document.getElementById('chevron-' + groupId);
+  const btn = document.getElementById('acc-btn-' + groupId);
+  if (!body) return;
+  const isOpen = !body.classList.contains('hidden');
+  const nextOpen = typeof forceOpen === 'boolean' ? forceOpen : !isOpen;
+  if (nextOpen) {
+    body.classList.remove('hidden');
+    if (chevron) chevron.classList.add('rotate-180');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+  } else {
+    body.classList.add('hidden');
+    if (chevron) chevron.classList.remove('rotate-180');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function applyScanPreset(preset) {
+  document.querySelectorAll('.vibe-cat-pill[data-preset]').forEach(p => {
+    p.classList.toggle('is-active', p.getAttribute('data-preset') === preset);
+  });
+  const setIds = (ids, val) => ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.checked = val;
+  });
+  const allStd = ['chk-headers', 'chk-dns', 'chk-deep', 'chk-sast', 'chk-active-inj', 'chk-active-access', 'chk-active-crawl'];
+  const allAi = ['chk-ai-redteam', 'chk-ai-sast', 'chk-ai-pentest'];
+  if (preset === 'passive') {
+    setIds(allStd, false);
+    setIds(['chk-headers', 'chk-dns', 'chk-deep'], true);
+    setIds(allAi, false);
+  } else if (preset === 'sast') {
+    setIds(allStd, false);
+    setIds(['chk-sast'], true);
+    setIds(allAi, false);
+    document.getElementById('unified-dir-input')?.focus();
+  } else if (preset === 'active') {
+    setIds(allStd, true);
+    setIds(allAi, false);
+  } else if (preset === 'full-ai') {
+    if (STATE.edition === 'lite') setScannerEdition('full');
+    setIds(allStd, true);
+    setIds(allAi, true);
+    toggleModuleAccordion('ai', true);
+  } else {
+    // standard (default)
+    setIds(allStd, true);
+    setIds(allAi, false);
+  }
+  syncLegacyModuleFlags();
+}
+
 function syncLegacyModuleFlags() {
   const cHeaders = document.getElementById('chk-headers')?.checked ?? true;
   const cDns = document.getElementById('chk-dns')?.checked ?? true;
@@ -3247,6 +3300,17 @@ function syncLegacyModuleFlags() {
     const chk = card.querySelector('input[type="checkbox"]');
     if (chk) card.classList.toggle('is-checked', chk.checked);
   });
+
+  const stdCount = [cHeaders, cDns, cDeep, cSast, cActInj, cActAcc, cActCrawl].filter(Boolean).length;
+  const tIntel = document.getElementById('threat-intel-toggle')?.checked ? 1 : 0;
+  const rBrowser = document.getElementById('real-browser-toggle')?.checked ? 1 : 0;
+  const aiCount = [cAiRed, cAiSast, cAiPen].filter(Boolean).length + tIntel + rBrowser;
+  const stdBadge = document.getElementById('std-selected-badge');
+  if (stdBadge) stdBadge.textContent = stdCount + ' / 7 Seçili';
+  const aiBadge = document.getElementById('ai-selected-badge');
+  if (aiBadge) aiBadge.textContent = aiCount + ' / 5 Seçili';
+  const totalCountEl = document.getElementById('hero-active-modules-count');
+  if (totalCountEl) totalCountEl.textContent = String(stdCount + aiCount);
 
   onActiveModuleToggle();
 }

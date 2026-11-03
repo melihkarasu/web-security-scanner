@@ -11,33 +11,39 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
   
+  <!-- Favicon: Premium Siyah Zemin Üzerinde Geometrik MK Monogramı -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%231E2028'/%3E%3Cstop offset='100%25' stop-color='%23090A0F'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='40' height='40' rx='10' fill='url(%23bg)' stroke='%232E323E' stroke-width='1.5'/%3E%3Cpath d='M7.5 27.5V12.5H10.6L14.5 20.2L18.4 12.5H21.5V27.5H18.6V17.6L15.4 23.8H13.6L10.4 17.6V27.5H7.5Z' fill='%23FFFFFF'/%3E%3Cpath d='M24.2 27.5V12.5H27.2V19.2L32.8 12.5H36.5L30.5 19.4L36.8 27.5H33.1L28.4 21.3L27.2 22.7V27.5H24.2Z' fill='%23FFFFFF'/%3E%3Ccircle cx='35.2' cy='9.2' r='2' fill='%23FA520F'/%3E%3C/svg%3E">
+
   <!-- Precompiled Standalone Tailwind CSS & Dedicated Modern Design System -->
-  <link rel="stylesheet" href="css/tailwind.min.css?v=20261015a">
-  <link rel="stylesheet" href="css/style.css?v=20261015a">
+  <link rel="stylesheet" href="css/tailwind.min.css?v=20261103a">
+  <link rel="stylesheet" href="css/style.css?v=20261103a">
 </head>
-<body class="bg-[#F8FAFC] text-mistral-ink font-sans antialiased min-h-full flex flex-col selection:bg-orange-500/20 selection:text-orange-950">
+<body class="bg-mistral-canvas text-mistral-ink font-sans antialiased min-h-full flex flex-col selection:bg-orange-500/20 selection:text-orange-950">
 
   <!-- Mistral Signature Sunset Stripe -->
   <div class="sunset-stripe"></div>
 
-  <!-- Üst Gezinme / Header (Mobil Uyumlu Çok Satırlı / Esnek Yapı) -->
+  <!-- Üst Gezinme / Header (VibeCodedApps Vitrin Glassmorphism Yapısı) -->
   <header class="app-header">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
       
-      <!-- Logo & Başlık -->
-      <div class="flex items-center gap-3 min-w-0">
-        <div class="brand-mark" aria-hidden="true">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            <path d="m9 12 2 2 4-4"/>
+      <!-- Logo & Başlık (MK Obsidian Emblem + Vitrin Kimliği) -->
+      <div class="flex items-center gap-3.5 min-w-0">
+        <span class="mk-brand-emblem select-none" aria-label="MK Monogram Logo">
+          <svg class="w-7 h-7" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6.5 28V12H10L14.2 20.4L18.4 12H21.9V28H18.8V17.5L15.2 24.3H13.2L9.6 17.5V28H6.5Z" fill="#FFFFFF"/>
+            <path d="M24.2 28V12H27.4V19.1L33.2 12H37.1L30.8 19.4L37.4 28H33.4L28.6 21.5L27.4 22.9V28H24.2Z" fill="#FFFFFF"/>
+            <circle cx="35.5" cy="8.5" r="2.1" fill="#FA520F"/>
+            <rect x="6.5" y="30.5" width="12" height="1.6" rx="0.8" fill="#FA520F"/>
           </svg>
-        </div>
+        </span>
         <div class="min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
-            <span class="font-extrabold text-base sm:text-lg tracking-tight font-editorial text-mistral-ink truncate">Web Security Scanner</span>
+            <span class="font-extrabold text-sm sm:text-base tracking-tight text-mistral-ink truncate">WEB SECURITY SCANNER</span>
+            <span class="hidden md:inline-flex items-center px-1.5 py-0.5 rounded bg-stone-900 text-white font-mono text-[9px] font-bold tracking-widest uppercase">MK STUDIO</span>
             <span id="header-edition-badge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-orange-100 text-mistral-orange border border-orange-200 font-bold">v2.0 Full</span>
           </div>
-          <p class="text-[11px] text-mistral-slate hidden sm:block truncate">Tek Merkezli Pasif, Aktif, SAST &amp; Otonom AI Güvenlik Denetimi</p>
+          <p class="text-[10px] text-stone-500 font-mono hidden sm:block truncate">Açık Kaynak Siber Güvenlik, SAST &amp; Otonom AI Denetim Vitrini</p>
         </div>
       </div>
 
@@ -99,7 +105,7 @@
   </header>
 
   <!-- Ana İçerik -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-8 w-full flex-1 space-y-6">
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 w-full flex-1 space-y-6">
 
     <!-- AI Konfigürasyon Paneli (Drawer / Modal Kartı) -->
     <div id="ai-config-panel" class="hidden bg-white border-2 border-mistral-orange/40 rounded-2xl p-4 sm:p-6 shadow-md transition-all">
@@ -241,43 +247,61 @@
     </div>
 
     <!-- ============================================================= -->
-    <!-- TEK GİRİŞLİ KOMUTA MERKEZİ (UNIFIED COMMAND CENTER)          -->
+    <!-- TEK GİRİŞLİ KOMUTA MERKEZİ (VİTRİN HERO & OMNI-SEARCH DOCK)    -->
     <!-- ============================================================= -->
-    <section class="command-hero p-5 sm:p-7">
+    <section class="vibe-hero-card command-hero p-5 sm:p-8">
       
-      <!-- Başlık ve Yönlendirici Bilgi -->
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
-        <div class="space-y-1">
-          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-50 border border-orange-200 text-mistral-orange text-[11px] font-mono font-bold mb-1">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-            <span>BİRLEŞİK GÜVENLİK DENETİM MOTORU</span>
+      <!-- Başlık, Editoryal Tanıtım ve 3'lü Bento Özet Kartları -->
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-6">
+        <div class="max-w-2xl space-y-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 border border-orange-200 text-mistral-orange text-[11px] font-mono font-bold">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+              <span>BİRLEŞİK GÜVENLİK DENETİM VİTRİNİ</span>
+            </div>
+            <!-- Yerel Mod & Derin Tarama Durum Rozetleri -->
+            <div id="scanner-capability-status" class="inline-flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
+              <span id="status-local-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-stone-100 border border-stone-200 text-stone-700 font-bold">
+                <span class="w-2 h-2 rounded-full bg-stone-400"></span>
+                <span>Yerel Mod: Kontrol ediliyor…</span>
+              </span>
+              <span id="status-deep-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-stone-100 border border-stone-200 text-stone-700 font-bold">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <span>Derin Tarama: Kontrol ediliyor…</span>
+              </span>
+            </div>
           </div>
-          <h1 class="text-2xl sm:text-3xl font-extrabold font-editorial tracking-tight text-mistral-ink">
-            Güvenlik Teşhis ve Denetim Merkezi
+
+          <h1 class="text-3xl sm:text-4xl font-extrabold font-editorial tracking-tight text-mistral-ink leading-tight">
+            Güvenlik Teşhis Merkezi, <span class="italic text-mistral-orange">Tek Komutla Denetim.</span>
           </h1>
-          <p class="text-xs sm:text-sm text-mistral-slate leading-relaxed max-w-2xl">
-            Alan adını (veya alt dizinli URL'yi: <code class="font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-800 border border-stone-200">alanadi.com/dizin</code>) ya da yerel proje dizinini girerek kapsamlı güvenlik denetimini başlatın.
+          <p class="text-mistral-slate text-xs sm:text-sm leading-relaxed">
+            Canlı alan adını (<code class="font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-800 border border-stone-200">alanadi.com/dizin</code>) veya yerel proje klasörünü girerek pasif keşif, 146 kurallı kaynak kod (SAST), aktif zafiyet ve otonom AI sızma testini tek noktadan çalıştırın.
           </p>
         </div>
 
-        <!-- Yerel Mod & Derin Tarama Durum Kartı -->
-        <div id="scanner-capability-status" class="flex flex-wrap items-center gap-2 p-2 rounded-2xl border border-stone-200 bg-stone-50/80 text-[11px] font-mono self-start lg:self-auto">
-          <span id="status-local-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-200/70 text-stone-700 font-bold">
-            <span class="w-2 h-2 rounded-full bg-stone-400"></span>
-            <span>Yerel Mod: Kontrol ediliyor…</span>
-          </span>
-          <span id="status-deep-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-200/70 text-stone-700 font-bold">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <span>Derin Tarama: Kontrol ediliyor…</span>
-          </span>
+        <!-- Vitrin Bento Stat Callout Grid -->
+        <div class="grid grid-cols-3 gap-2.5 sm:gap-3 shrink-0">
+          <div class="p-3 sm:p-4 rounded-xl bg-stone-50/90 border border-stone-200/90 text-center">
+            <div id="hero-active-modules-count" class="text-xl sm:text-3xl font-extrabold font-mono text-mistral-orange">7</div>
+            <div class="text-[10px] sm:text-xs text-mistral-slate font-semibold mt-0.5">Seçili Modül</div>
+          </div>
+          <div class="p-3 sm:p-4 rounded-xl bg-stone-50/90 border border-stone-200/90 text-center">
+            <div class="text-xl sm:text-3xl font-extrabold font-mono text-mistral-ink">146</div>
+            <div class="text-[10px] sm:text-xs text-mistral-slate font-semibold mt-0.5">SAST Kuralı</div>
+          </div>
+          <div class="p-3 sm:p-4 rounded-xl bg-orange-50/80 border border-orange-200 text-center">
+            <div class="text-xl sm:text-3xl font-extrabold font-mono text-mistral-orange">16</div>
+            <div class="text-[10px] sm:text-xs text-orange-900 font-semibold mt-0.5">Aktif DAST</div>
+          </div>
         </div>
       </div>
 
       <!-- Mod Bilgilendirme Şeridi -->
       <div id="scanner-mode-notice" class="hidden mb-5 p-3.5 rounded-2xl border text-xs"></div>
 
-      <!-- Omni-Input Dock: Hedef Giriş Satırı & Yerel Proje Dizini -->
-      <div class="omni-dock space-y-2.5 mb-6">
+      <!-- Omni-Input Dock: Hedef Giriş Satırı, Yerel Proje Dizini & Hızlı Profil Hapları -->
+      <div class="vibe-omni-dock omni-dock space-y-3">
         <div class="flex flex-col sm:flex-row gap-2.5">
           <div class="target-input-wrapper flex-1">
             <div class="target-input-icon" aria-hidden="true">
@@ -316,34 +340,112 @@
               id="unified-dir-input"
               list="sast-dir-suggestions"
               autocomplete="off"
-              placeholder="Yerel proje dizini veya sadece klasör adı (örn: sarjharitasi, kandemir veya /var/www/app)"
+              placeholder="Yerel proje dizini veya klasör adı (örn: ~/projects/my-app, /workspace/my-app)"
             />
             <datalist id="sast-dir-suggestions"></datalist>
           </div>
           <span id="local-dir-hint" class="text-[11px] text-mistral-slate font-mono px-1.5 flex items-center gap-1.5">
             <svg class="w-3.5 h-3.5 text-mistral-orange shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-            <span>Klasör adından dizin konumu otomatik bulunur ve tamamlanır.</span>
+            <span>Klasör adından dizin konumu otomatik bulunur.</span>
           </span>
+        </div>
+
+        <!-- Vitrin Tarzı Yatay Hızlı Tarama Profili Hapları (.vibe-cat-pills) -->
+        <div class="pt-2 border-t border-stone-200/70 flex flex-wrap items-center justify-between gap-2">
+          <div class="vibe-cat-pills" role="navigation" aria-label="Hızlı Tarama Profilleri">
+            <button type="button" data-preset="standard" onclick="applyScanPreset('standard')" class="vibe-cat-pill is-active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>Standart Tam Denetim (7 Modül)</span>
+            </button>
+            <button type="button" data-preset="passive" onclick="applyScanPreset('passive')" class="vibe-cat-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>Hızlı Pasif &amp; DNS (3 Modül)</span>
+            </button>
+            <button type="button" data-preset="sast" onclick="applyScanPreset('sast')" class="vibe-cat-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              <span>Sadece Kaynak Kod (SAST &amp; CVE)</span>
+            </button>
+            <button type="button" data-preset="full-ai" onclick="applyScanPreset('full-ai')" class="vibe-cat-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
+              <span>Tam Kapsam + AI Red Team</span>
+            </button>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button type="button" onclick="toggleModuleAccordion('standard', true); toggleModuleAccordion('ai', true);" class="btn btn-xs btn-secondary">Modülleri Aç</button>
+            <button type="button" onclick="toggleModuleAccordion('standard', false); toggleModuleAccordion('ai', false);" class="btn btn-xs btn-secondary">Daralt</button>
+          </div>
         </div>
       </div>
 
-      <!-- Modül Seçimi: 10 Maddelik Açıklamalı Analiz Matrisi -->
-      <div class="pt-4 border-t border-stone-200/80 space-y-5">
-        
-        <!-- GRUP 1: Standart & Deterministik Güvenlik Analizleri -->
-        <div>
-          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <div class="text-xs font-bold text-mistral-ink uppercase tracking-wider flex items-center gap-2">
-              <span class="w-6 h-6 rounded-lg bg-orange-50 border border-orange-200 text-mistral-orange inline-flex items-center justify-center">
-                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              </span>
-              <span>1. Standart &amp; Deterministik Güvenlik Analizleri <span class="text-stone-400 font-normal normal-case">(API Key Gerektirmez)</span></span>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <button type="button" onclick="toggleAnalysisGroup('standard', true)" class="btn btn-xs btn-secondary">Tümünü Seç</button>
-              <button type="button" onclick="toggleAnalysisGroup('standard', false)" class="btn btn-xs btn-secondary">Temizle</button>
-            </div>
+      <!-- Etik ve Yasal Onay Kutusu -->
+      <div id="unified-ethical-container" class="mt-4 p-3.5 rounded-xl border border-amber-300/80 bg-amber-50/70 text-xs">
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" id="unified-ethical-check" checked class="mt-0.5">
+          <div class="text-amber-950 leading-relaxed">
+            <span class="font-bold">Yasal &amp; Etik Kullanım Beyanı:</span>
+            <span class="text-stone-700"> Hedef sistem üzerinde test yetkim olduğunu veya sistemin bana ait olduğunu; aktif güvenlik denetiminin doğuracağı tüm yasal ve etik sorumluluğu üstlendiğimi onaylıyorum.</span>
           </div>
+        </label>
+      </div>
+
+      <!-- Canlı Tarama İlerleme Çubuğu -->
+      <div id="scan-progress-container" class="hidden mt-5 pt-4 border-t border-stone-200/80">
+        <div class="flex items-center justify-between text-xs mb-2">
+          <span id="scan-progress-status" class="font-semibold text-mistral-ink flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-mistral-orange animate-ping"></span>
+            <span>Tarama başlatılıyor...</span>
+          </span>
+          <span id="scan-progress-percent" class="font-mono text-mistral-orange font-bold">0%</span>
+        </div>
+        <div class="w-full h-2.5 bg-stone-100 rounded-full overflow-hidden border border-stone-200/60">
+          <div id="scan-progress-bar" class="h-full bg-gradient-to-r from-mistral-orange to-amber-500 w-0 transition-all duration-300 rounded-full"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- VİTRİN AKORDİYON MODÜL KATEGORİLERİ (10 ANALİZ MATRİSİ)        -->
+    <!-- ============================================================= -->
+    <div class="space-y-4">
+      
+      <!-- AKORDİYON 1: Standart & Deterministik Güvenlik Analizleri -->
+      <div class="vibe-accordion-card">
+        <div class="px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3 bg-white border-b border-stone-100">
+          <button type="button" id="acc-btn-standard" aria-expanded="true" onclick="toggleModuleAccordion('standard')" class="flex items-center gap-3.5 text-left flex-1 min-w-0 group cursor-pointer select-none">
+            <span class="vibe-cat-badge group-hover:scale-105">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            </span>
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="text-base sm:text-xl font-bold font-editorial text-mistral-ink tracking-tight group-hover:text-mistral-orange transition-colors">
+                  1. Standart &amp; Deterministik Güvenlik Analizleri
+                </h2>
+                <span id="std-selected-badge" class="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-orange-50 text-mistral-orange border border-orange-200 font-bold">
+                  7 / 7 Seçili
+                </span>
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-semibold hidden sm:inline-block">
+                  Sıfır API Anahtarı
+                </span>
+              </div>
+              <p class="text-xs text-mistral-slate mt-0.5 font-normal">
+                HTTP başlıkları, DNS/e-posta savunması, TLS/çerez derin keşfi, 146 kurallı SAST ve 16 aktif enjeksiyon/erişim modülü
+              </p>
+            </div>
+          </button>
+
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button type="button" onclick="toggleAnalysisGroup('standard', true)" class="btn btn-xs btn-secondary">Tümünü Seç</button>
+            <button type="button" onclick="toggleAnalysisGroup('standard', false)" class="btn btn-xs btn-secondary">Temizle</button>
+            <button type="button" onclick="toggleModuleAccordion('standard')" class="w-8 h-8 rounded-lg bg-stone-50 border border-stone-200 hover:border-orange-200 hover:bg-orange-50 flex items-center justify-center transition" title="Aç / Daralt">
+              <svg id="chevron-standard" class="w-4 h-4 text-mistral-slate transition-transform duration-300 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="acc-body-standard" class="px-4 sm:px-6 py-5 bg-[#FFFDF9]">
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <!-- Madde 1: HTTP Güvenlik Başlıkları & Sızıntı -->
@@ -449,27 +551,49 @@
           </div>
         </div>
 
-        <!-- GRUP 2: API Key / Service Account Gerektiren Yapay Zeka (LLM) Destekli Analizler -->
-        <div id="ai-analysis-group-box" class="p-4 sm:p-5 rounded-2xl border border-amber-300/90 bg-amber-50/40 space-y-3.5">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-2">
-              <span class="w-6 h-6 rounded-lg bg-amber-100 border border-amber-300 text-amber-900 inline-flex items-center justify-center">
-                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
-              </span>
-              <span>2. Yapay Zeka (LLM) &amp; Otonom Ajan Analizleri <span class="text-amber-800 font-normal normal-case">(API Key / Service Account Gerektirir)</span></span>
-            </div>
-            <div class="flex flex-wrap items-center gap-1.5">
-              <button type="button" onclick="toggleAIConfig()" class="btn btn-xs btn-ai">
-                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                <span>AI / API Anahtarı Yapılandır</span>
-              </button>
-              <button type="button" onclick="toggleAnalysisGroup('ai', true)" class="btn btn-xs btn-secondary">Tümünü Seç</button>
-              <button type="button" onclick="toggleAnalysisGroup('ai', false)" class="btn btn-xs btn-secondary">Temizle</button>
-            </div>
-          </div>
+      </div>
 
+      <!-- AKORDİYON 2: Yapay Zeka (LLM) & Gelişmiş Otonom Analizler -->
+      <div id="ai-analysis-group-box" class="vibe-accordion-card">
+        <div class="px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3 bg-white border-b border-stone-100">
+          <button type="button" id="acc-btn-ai" aria-expanded="false" onclick="toggleModuleAccordion('ai')" class="flex items-center gap-3.5 text-left flex-1 min-w-0 group cursor-pointer select-none">
+            <span class="vibe-cat-badge vibe-cat-badge-amber group-hover:scale-105">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
+            </span>
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="text-base sm:text-xl font-bold font-editorial text-mistral-ink tracking-tight group-hover:text-mistral-orange transition-colors">
+                  2. Yapay Zeka (LLM), Tehdit İstihbaratı &amp; Otonom Sızma Testi
+                </h2>
+                <span id="ai-selected-badge" class="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 font-bold">
+                  0 / 5 Seçili
+                </span>
+              </div>
+              <p class="text-xs text-mistral-slate mt-0.5 font-normal">
+                AI Red Team orkestrasyonu, 4-aşamalı semantik kod denetimi, Strix Docker sandbox PoC, gerçek tarayıcı ve CVE istihbaratı
+              </p>
+            </div>
+          </button>
+
+          <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+            <button type="button" onclick="toggleAIConfig()" class="btn btn-xs btn-ai">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span>AI Ayarları</span>
+            </button>
+            <button type="button" onclick="toggleModuleAccordion('ai', true); toggleAnalysisGroup('ai', true)" class="btn btn-xs btn-secondary">Tümünü Seç</button>
+            <button type="button" onclick="toggleAnalysisGroup('ai', false)" class="btn btn-xs btn-secondary">Temizle</button>
+            <button type="button" onclick="toggleModuleAccordion('ai')" class="w-8 h-8 rounded-lg bg-stone-50 border border-stone-200 hover:border-amber-300 hover:bg-amber-50 flex items-center justify-center transition" title="Aç / Daralt">
+              <svg id="chevron-ai" class="w-4 h-4 text-mistral-slate transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Akordiyon Gövdesi (Varsayılan olarak daraltılmış — ekran karmaşasını önler) -->
+        <div id="acc-body-ai" class="hidden px-4 sm:px-6 py-5 bg-[#FFFDF9] space-y-4">
           <!-- Bilgilendirme Notu -->
-          <div class="p-3 rounded-xl bg-white/90 border border-amber-200 text-[11px] text-amber-950 flex items-start gap-2.5">
+          <div class="p-3 rounded-xl bg-amber-50/60 border border-amber-200 text-[11px] text-amber-950 flex items-start gap-2.5">
             <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
             <div class="leading-relaxed">
               <strong>Yapılandırma Bilgilendirmesi:</strong> Bu gruptaki analizlerin çalışması için üstteki <strong>AI Ayarları</strong> panelinden bir LLM sağlayıcısı (<strong>OpenAI Compatible, Google Gemini API, Google Cloud Vertex AI Service Account JSON / API Key, OpenRouter</strong> veya yerel <strong>Ollama</strong>) tanımlanmalıdır. Seçilmeyen veya anahtarı girilmemiş analizler sonuç raporunda açıkça <em>"Seçilmedi / Yapılandırma Eksik nedeniyle atlandı"</em> olarak raporlanır.
@@ -550,42 +674,18 @@
           </div>
         </div>
 
-        <!-- Geriye dönük uyumluluk için gizli ana bayraklar -->
-        <div class="hidden">
-          <input type="checkbox" id="mod-passive" checked>
-          <input type="checkbox" id="mod-deep" checked>
-          <input type="checkbox" id="mod-sast" checked>
-          <input type="checkbox" id="mod-active" checked>
-          <input type="checkbox" id="mod-ai">
         </div>
       </div>
 
-      <!-- Etik ve Yasal Onay Kutusu -->
-      <div id="unified-ethical-container" class="mt-4 p-3.5 rounded-xl border border-amber-300/80 bg-amber-50/70 text-xs">
-        <label class="flex items-start gap-3 cursor-pointer">
-          <input type="checkbox" id="unified-ethical-check" checked class="mt-0.5">
-          <div class="text-amber-950 leading-relaxed">
-            <span class="font-bold">Yasal &amp; Etik Kullanım Beyanı:</span>
-            <span class="text-stone-700"> Hedef sistem üzerinde test yetkim olduğunu veya sistemin bana ait olduğunu; aktif güvenlik denetiminin doğuracağı tüm yasal ve etik sorumluluğu üstlendiğimi onaylıyorum.</span>
-          </div>
-        </label>
+      <!-- Geriye dönük uyumluluk için gizli ana bayraklar -->
+      <div class="hidden">
+        <input type="checkbox" id="mod-passive" checked>
+        <input type="checkbox" id="mod-deep" checked>
+        <input type="checkbox" id="mod-sast" checked>
+        <input type="checkbox" id="mod-active" checked>
+        <input type="checkbox" id="mod-ai">
       </div>
-
-      <!-- Canlı Tarama İlerleme Çubuğu -->
-      <div id="scan-progress-container" class="hidden mt-5 pt-4 border-t border-stone-200/80">
-        <div class="flex items-center justify-between text-xs mb-2">
-          <span id="scan-progress-status" class="font-semibold text-mistral-ink flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-mistral-orange animate-ping"></span>
-            <span>Tarama başlatılıyor...</span>
-          </span>
-          <span id="scan-progress-percent" class="font-mono text-mistral-orange font-bold">0%</span>
-        </div>
-        <div class="w-full h-2.5 bg-stone-100 rounded-full overflow-hidden border border-stone-200/60">
-          <div id="scan-progress-bar" class="h-full bg-gradient-to-r from-mistral-orange to-amber-500 w-0 transition-all duration-300 rounded-full"></div>
-        </div>
-      </div>
-
-    </section>
+    </div>
 
     <!-- ============================================================= -->
     <!-- SONUÇLAR VE RAPORLAMA BÖLÜMÜ                                  -->
@@ -1073,24 +1173,35 @@
 
   </main>
 
-  <!-- Mistral Signature Sunset Stripe & Alt Bilgi / Footer -->
+  <!-- Mistral Signature Sunset Stripe & Alt Bilgi / Footer (VibeCodedApps Vitrin Footer) -->
   <div class="mt-12">
     <div class="sunset-stripe"></div>
-    <footer class="border-t border-mistral-hairline bg-white py-6 text-center text-xs text-mistral-slate">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-          <span class="font-bold text-mistral-ink font-editorial">Web Security Scanner</span>
-          <span>• Sıfır WAF Riski • %100 Yerel Güvenlik Denetim Paketi</span>
+    <footer class="bg-mistral-cream border-t border-mistral-beige-deep py-6 px-4 sm:px-6 text-mistral-slate text-xs sm:text-sm">
+      <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5">
+          <span class="mk-brand-emblem mk-brand-emblem-sm select-none" aria-label="MK Monogram Logo">
+            <svg class="w-5 h-5" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6.5 28V12H10L14.2 20.4L18.4 12H21.9V28H18.8V17.5L15.2 24.3H13.2L9.6 17.5V28H6.5Z" fill="#FFFFFF"/>
+              <path d="M24.2 28V12H27.4V19.1L33.2 12H37.1L30.8 19.4L37.4 28H33.4L28.6 21.5L27.4 22.9V28H24.2Z" fill="#FFFFFF"/>
+              <circle cx="35.5" cy="8.5" r="2.1" fill="#FA520F"/>
+              <rect x="6.5" y="30.5" width="12" height="1.6" rx="0.8" fill="#FA520F"/>
+            </svg>
+          </span>
+          <span class="font-bold text-mistral-ink tracking-tight">WEB SECURITY SCANNER</span>
+          <span class="text-stone-400">•</span>
+          <span class="text-xs text-stone-600">VibeCodedApps Güvenlik Denetim Paketi</span>
         </div>
-        <div>
-          <span>Geliştirici: </span>
-          <a href="https://github.com/melihkarasu" target="_blank" rel="noopener" class="font-semibold text-mistral-ink hover:underline">Melih Karasu</a>
+        <div class="flex items-center gap-3">
+          <a href="https://github.com/melihkarasu/web-security-scanner" target="_blank" rel="noopener" class="btn btn-xs btn-secondary">
+            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            <span>Melih Karasu • GitHub</span>
+          </a>
         </div>
       </div>
     </footer>
   </div>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261102b"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261103a"></script>
 </body>
 </html>
