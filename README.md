@@ -83,9 +83,9 @@ Your browser opens `http://127.0.0.1:8765` automatically (`NO_BROWSER=1` disable
 curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --docker-lite
 # (or: docker compose up -d)
 
-# 🚀 Docker Full (Includes Strix CLI + host Docker socket for autonomous sandbox PoC runs):
+# 🚀 Docker Full (Includes Strix CLI + Headless Chromium + host Docker socket for autonomous sandbox PoC runs):
 curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --docker-full
-# (or: docker compose -f docker-compose.yml -f docker-compose.strix.yml up -d --build)
+# (or: docker compose -f docker-compose.yml -f docker-compose.browser.yml -f docker-compose.strix.yml up -d --build)
 
 # 🖥️ Optional real browser (isolated headless-Chromium sidecar, ~570 MB extra):
 # docker compose -f docker-compose.yml -f docker-compose.browser.yml up -d --build

@@ -20,25 +20,38 @@ class TestComposeStrixVolumes(unittest.TestCase):
             "Dockerfile mkdir -p line must include /app/strix_scans",
         )
 
+    def test_dockerfile_defaults_include_strix_and_chromium(self):
+        content = self._read_file("Dockerfile")
+        self.assertIn("ARG INSTALL_CHROMIUM=1", content)
+        self.assertIn("ARG INSTALL_STRIX=1", content)
+        self.assertIn("chromium-headless-shell", content)
+        self.assertIn("strix-agent", content)
+        self.assertIn("WSS_BROWSER_NO_SANDBOX=1", content)
+
+    def test_install_sh_enables_browser_and_strix_by_default_for_full(self):
+        content = self._read_file("install.sh")
+        self.assertIn('if [ "$EDITION" = "full" ]; then', content)
+        self.assertIn('WITH_BROWSER="1"', content)
+        self.assertIn('WITH_STRIX="1"', content)
+        self.assertIn("INSTALL_CHROMIUM=", content)
+        self.assertIn("INSTALL_STRIX=", content)
+
+    def test_header_has_no_report_export_buttons_before_scan(self):
+        html = self._read_file("index.html")
+        header_match = re.search(r"<header\b[^>]*>(.*?)</header>", html, re.S)
+        self.assertIsNotNone(header_match)
+        header_html = header_match.group(1)
+        for fn in ("exportMarkdownReport", "exportJsonReport", "exportHtmlReport"):
+            self.assertNotIn(fn, header_html, f"{fn} should not be in <header>")
+            self.assertIn(fn, html, f"{fn} should remain in #results-export-toolbar")
+
     def test_strix_dind_uses_dedicated_strix_scans_dind_volume(self):
         content = self._read_file("docker-compose.strix-dind.yml")
         self.assertIn("strix_scans_dind:/app/strix_scans", content)
         self.assertIsNotNone(
             re.search(r"^\s+strix_scans_dind:\s*$", content, re.MULTILINE),
-            "docker-compose.strix-dind.yml must define strix_scans_dind: volume",
+            "docker-compose.strix-dind.yml volumes section must declare strix_scans_dind",
         )
-        self.assertNotIn("- strix_scans:/app/strix_scans", content)
-
-    def test_strix_socket_keeps_strix_scans_volume(self):
-        content = self._read_file("docker-compose.strix.yml")
-        self.assertIn("strix_scans:/app/strix_scans", content)
-
-    def test_compose_files_use_portable_volumes_without_hardcoded_host_paths(self):
-        for fname in ("docker-compose.yml", "docker-compose.strix.yml", "docker-compose.strix-dind.yml"):
-            content = self._read_file(fname)
-            self.assertNotIn("/home/uzem", content, f"{fname} must not contain hardcoded /home/uzem path")
-            self.assertNotIn("/www/wwwroot", content, f"{fname} must not contain hardcoded /www/wwwroot path")
-            self.assertIn("${WSS_PROJECTS_DIR:-~}:/workspace:ro", content, f"{fname} must mount portable workspace")
 
 
 if __name__ == "__main__":

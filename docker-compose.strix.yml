@@ -12,6 +12,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
+        INSTALL_CHROMIUM: "1"
         INSTALL_STRIX: "1"
     image: web-security-scanner:strix
     user: root
@@ -23,6 +24,7 @@ services:
       - HOST=0.0.0.0
       - PORT=8765
       - NO_BROWSER=1
+      - WSS_BROWSER_NO_SANDBOX=1
       - STRIX_TELEMETRY=0
       - WSS_WORKSPACE_ROOT=/workspace
 

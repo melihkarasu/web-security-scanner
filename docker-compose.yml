@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        INSTALL_CHROMIUM: "${INSTALL_CHROMIUM:-1}"
+        INSTALL_STRIX: "${INSTALL_STRIX:-1}"
     image: web-security-scanner:latest
     container_name: web-security-scanner
     restart: unless-stopped
@@ -20,6 +23,8 @@ services:
       - HOST=0.0.0.0
       - PORT=8765
       - NO_BROWSER=1
+      - WSS_BROWSER_NO_SANDBOX=1
+      - WSS_EDITION=${WSS_EDITION:-full}
       - WSS_WORKSPACE_ROOT=/workspace
 
 volumes:
