@@ -1023,3 +1023,75 @@ pre.bg-stone-950 code {
 .rotate-180 {
   transform: rotate(180deg);
 }
+
+/* ==========================================================================
+   UZEM UI/UX Pro Max: Tactical Dark Mode, Compact Density & Semantic Colors
+   ========================================================================== */
+body.compact-modules .module-check-card p,
+body.compact-modules label.module-card p {
+  display: none !important;
+}
+body.compact-modules .module-check-card,
+body.compact-modules label.module-card {
+  padding-top: 0.65rem !important;
+  padding-bottom: 0.65rem !important;
+}
+
+/* Semantik Seçim Ayrımı: Seçili modül kartları nötr/zümrüt vurgu kullanır (Turuncu/Kırmızı CVSS risklerine ayrılır) */
+.module-check-card:has(input[type="checkbox"]:checked) {
+  border-color: rgba(16, 185, 129, 0.55) !important;
+  background-color: rgba(236, 253, 245, 0.35) !important;
+}
+
+/* Tactical Dark Mode (SOC / Güvenlik Operasyon Görünümü) */
+html.dark-theme body {
+  background-color: #0B0F17 !important;
+  color: #E2E8F0 !important;
+}
+html.dark-theme .app-header,
+html.dark-theme footer {
+  background-color: rgba(17, 24, 39, 0.92) !important;
+  border-color: #1E293B !important;
+  color: #E2E8F0 !important;
+}
+html.dark-theme .bg-white,
+html.dark-theme .vibe-hero,
+html.dark-theme .vibe-omni-dock,
+html.dark-theme .module-check-card {
+  background-color: #111827 !important;
+  border-color: #1E293B !important;
+  color: #E2E8F0 !important;
+}
+html.dark-theme .module-check-card:has(input[type="checkbox"]:checked) {
+  border-color: rgba(16, 185, 129, 0.65) !important;
+  background-color: rgba(6, 78, 59, 0.28) !important;
+}
+html.dark-theme .bg-stone-50,
+html.dark-theme .bg-mistral-cream,
+html.dark-theme .segmented-group,
+html.dark-theme .modern-field,
+html.dark-theme input[type="text"],
+html.dark-theme input[type="password"],
+html.dark-theme select,
+html.dark-theme textarea {
+  background-color: #0F172A !important;
+  border-color: #334155 !important;
+  color: #F1F5F9 !important;
+}
+html.dark-theme .text-mistral-ink,
+html.dark-theme .text-stone-900,
+html.dark-theme .text-stone-800,
+html.dark-theme .text-stone-700 {
+  color: #F1F5F9 !important;
+}
+html.dark-theme .text-mistral-slate,
+html.dark-theme .text-stone-600,
+html.dark-theme .text-stone-500 {
+  color: #94A3B8 !important;
+}
+html.dark-theme .btn-secondary,
+html.dark-theme .vibe-cat-pill:not(.is-active) {
+  background-color: #1E293B !important;
+  border-color: #334155 !important;
+  color: #E2E8F0 !important;
+}

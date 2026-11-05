@@ -4987,3 +4987,69 @@ function renderStrixFindings(findings) {
   }).join('');
 }
 
+
+// ============================================================
+// UZEM UI/UX Pro Max: Etik Onay Durumu, Tactical Dark Tema & Kompakt Mod
+// ============================================================
+function syncEthicalConsentUI() {
+  const cb = document.getElementById('unified-ethical-check');
+  const box = document.getElementById('unified-ethical-container');
+  const fullTxt = document.getElementById('ethical-consent-full-text');
+  const compTxt = document.getElementById('ethical-consent-compact-text');
+  const pill = document.getElementById('ethical-consent-status-pill');
+  if (!cb || !box) return;
+  if (cb.checked) {
+    box.className = 'mt-3 px-3.5 py-2 rounded-xl border border-emerald-300/90 bg-emerald-50/80 text-xs transition-all duration-200';
+    if (fullTxt) fullTxt.classList.add('hidden');
+    if (compTxt) compTxt.classList.remove('hidden');
+    if (pill) {
+      pill.textContent = 'Onaylandı';
+      pill.className = 'shrink-0 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-200/80 text-emerald-950';
+    }
+  } else {
+    box.className = 'mt-4 p-3.5 rounded-xl border border-amber-400/90 bg-amber-50/90 text-xs transition-all duration-200';
+    if (fullTxt) fullTxt.classList.remove('hidden');
+    if (compTxt) compTxt.classList.add('hidden');
+    if (pill) {
+      pill.textContent = 'Onay Bekleniyor';
+      pill.className = 'shrink-0 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-200/80 text-amber-950';
+    }
+  }
+}
+
+function applyScannerTheme(theme) {
+  const root = document.documentElement;
+  const label = document.getElementById('theme-toggle-label');
+  if (theme === 'dark') {
+    root.classList.add('dark-theme');
+    if (label) label.textContent = 'Warm Light';
+  } else {
+    root.classList.remove('dark-theme');
+    if (label) label.textContent = 'Tactical Dark';
+  }
+}
+
+function toggleScannerTheme() {
+  const isDark = document.documentElement.classList.contains('dark-theme');
+  const next = isDark ? 'light' : 'dark';
+  try { localStorage.setItem('wss_theme', next); } catch (_) {}
+  applyScannerTheme(next);
+}
+
+function toggleCompactModules(force) {
+  const body = document.body;
+  const btn = document.getElementById('compact-view-btn');
+  const isCompact = typeof force === 'boolean' ? force : !body.classList.contains('compact-modules');
+  body.classList.toggle('compact-modules', isCompact);
+  if (btn) btn.textContent = isCompact ? 'Detaylı Görünüm' : 'Kompakt Görünüm';
+  try { localStorage.setItem('wss_compact_modules', isCompact ? '1' : '0'); } catch (_) {}
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const savedTheme = localStorage.getItem('wss_theme') || 'light';
+    applyScannerTheme(savedTheme);
+    if (localStorage.getItem('wss_compact_modules') === '1') toggleCompactModules(true);
+  } catch (_) {}
+  syncEthicalConsentUI();
+});
