@@ -18,6 +18,9 @@ services:
     user: root
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Özel yerel proje klasörü tanımlamak için .env içinde WSS_PROJECTS_DIR kullanın
+      # veya aşağıdaki örnek satırın yorumunu kaldırıp varsayılan satırı yorum yapın:
+      # - C:/xampp/htdocs:/workspace:ro
       - ${WSS_PROJECTS_DIR:-~}:/workspace:ro
       - strix_scans:/app/strix_scans
     environment:

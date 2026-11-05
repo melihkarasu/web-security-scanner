@@ -62,6 +62,9 @@ services:
     volumes:
       - strix_dind_certs:/certs/client
       - strix_dind_data:/var/lib/docker
+      # Özel yerel proje klasörü tanımlamak için .env içinde WSS_PROJECTS_DIR kullanın
+      # veya aşağıdaki örnek satırın yorumunu kaldırıp varsayılan satırı yorum yapın:
+      # - C:/xampp/htdocs:/workspace:ro
       - ${WSS_PROJECTS_DIR:-~}:/workspace:ro
     healthcheck:
       test: ["CMD", "docker", "info"]

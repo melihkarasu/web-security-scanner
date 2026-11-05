@@ -62,39 +62,58 @@ Web Security Scanner offers **two installation & runtime editions** from the sam
 Open **[melihkarasu.github.io/web-security-scanner](https://melihkarasu.github.io/web-security-scanner/)** in your browser.  
 Performs passive DNS and email security auditing via DoH.
 
-### Option 2: Terminal One-Command Install (`Lite` or `Full`)
+### Option 2: One-Command Install (`Lite` or `Full` — Local Workstation or Server)
+Run either edition with a **single command** on your computer or remote server:
 ```bash
-# ⚡ 1) Fast Install — Web Security Scanner Lite (Zero dependencies, no LLM setup, ready in ~2s):
+# ⚡ 1) Fast Install — Web Security Scanner Lite (Zero pip/Docker dependencies, no LLM setup, ready in ~2s):
 curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --lite
 
-# 🚀 2) Comprehensive Install — Web Security Scanner Full (Includes AI Red Team + Strix Docker Sandbox):
+# 🚀 2) Comprehensive Install — Web Security Scanner Full (AI Red Team + 4-Phase AI SAST + Strix CLI + Chromium):
 curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --full
 
-# Or interactive menu (prompts you to pick 1=Lite or 2=Full) / manual run:
-git clone https://github.com/melihkarasu/web-security-scanner.git
-cd web-security-scanner
+# Interactive installer menu (prompts you for 1=Local Lite, 2=Local Full, or 3=Docker):
+curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash
+
+# Manual git clone & run (Linux / macOS / Windows):
+git clone https://github.com/melihkarasu/web-security-scanner.git && cd web-security-scanner
 python3 server.py --lite   # or: python3 server.py --full
 ```
-Your browser opens `http://127.0.0.1:8765` automatically (`NO_BROWSER=1` disables auto-open).
+Your browser opens `http://127.0.0.1:8765` automatically (`NO_BROWSER=1` disables auto-open on headless servers).
 
-### Option 3: Docker Mode (`Lite` or `Full` Container)
+### Option 3: One-Command Docker Install (`Lite` or `Full` — Docker Desktop & Servers)
 ```bash
-# ⚡ Docker Lite (Lightweight, non-root, zero LLM/Strix overhead):
+# ⚡ Docker Lite — One Command (Lightweight, non-root, zero LLM/Chromium/Strix overhead):
 curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --docker-lite
-# (or: docker compose up -d)
+# (or manually: INSTALL_CHROMIUM=0 INSTALL_STRIX=0 WSS_EDITION=lite docker compose up -d --build)
 
-# 🚀 Docker Full (Includes Strix CLI + Headless Chromium + host Docker socket for autonomous sandbox PoC runs):
+# 🚀 Docker Full — One Command (Bundles Strix CLI + Headless Chromium + Docker sandbox):
 curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --docker-full
-# (or: docker compose -f docker-compose.yml -f docker-compose.browser.yml -f docker-compose.strix.yml up -d --build)
+# (or manually: docker compose -f docker-compose.yml -f docker-compose.browser.yml -f docker-compose.strix.yml up -d --build)
 
-# 🖥️ Optional real browser (isolated headless-Chromium sidecar, ~570 MB extra):
-# docker compose -f docker-compose.yml -f docker-compose.browser.yml up -d --build
+# 🪟 Windows PowerShell / Docker Desktop (One-Command Clone + Full Start):
+# git clone https://github.com/melihkarasu/web-security-scanner.git; cd web-security-scanner; docker compose -f docker-compose.yml -f docker-compose.browser.yml -f docker-compose.strix.yml up -d --build
 
 # 🔒 Full with Strix on an isolated TLS docker:dind instead of the host Docker socket:
-# docker compose -f docker-compose.yml -f docker-compose.strix-dind.yml up -d --build
-# docker compose exec web-security-scanner docker pull ghcr.io/usestrix/strix-sandbox:1.3.0
+# curl -fsSL https://raw.githubusercontent.com/melihkarasu/web-security-scanner/main/install.sh | bash -s -- --docker-full --with-strix-dind
 ```
 Access the Web UI at **`http://localhost:8765`**.
+
+#### 📂 Mounting Your Local Project Directory in Docker (`docker-compose.yml` / `.env`)
+By default, Docker mounts your home directory (`~`) read-only to `/workspace` inside the container so SAST and AI audits can scan your local repositories. To point Docker to a custom project root (such as `C:/xampp/htdocs` on Windows or `/var/www/html` on Linux), use **either** method:
+
+1. **Method A — Uncomment the Example Line in `docker-compose.yml`:**  
+   Open `docker-compose.yml` under `volumes:`, uncomment one of the ready-made example lines, and comment out `- ${WSS_PROJECTS_DIR:-~}:/workspace:ro`:
+   ```yaml
+   volumes:
+     - C:/xampp/htdocs:/workspace:ro                  # Windows (XAMPP / Wamp / Laragon example)
+     # - C:/Users/Username/Projects:/workspace:ro     # Windows (Projects folder example)
+     # - /var/www/html:/workspace:ro                  # Linux (Apache / Nginx web root example)
+     # - /Users/username/Sites:/workspace:ro          # macOS (Local dev folder example)
+     # - ${WSS_PROJECTS_DIR:-~}:/workspace:ro
+   ```
+2. **Method B — Set `WSS_PROJECTS_DIR` in `.env` (Recommended — zero `git pull` conflicts):**  
+   Create or edit `.env` in the repository root (ignored by Git) and define `WSS_PROJECTS_DIR=C:/xampp/htdocs`.  
+   Inside the Web UI's **Local Project Directory** input, simply enter the project folder name (e.g., `my-app` or `/workspace/my-app`).
 
 > **Zero `.env` Setup Required for LLMs:** All LLM provider keys, endpoints, and model selections are configured directly inside the Web UI (**🤖 AI Settings** drawer), verified with the **⚡ Test Connection** button, and stored in your browser's `localStorage`.
 

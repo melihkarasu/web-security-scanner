@@ -12,12 +12,20 @@ services:
     ports:
       - "127.0.0.1:8765:8765"
     volumes:
-      # Platform-bağımsız proje kökü (Linux/macOS: ~, Windows: %USERPROFILE%; özel yol için: WSS_PROJECTS_DIR=/yol)
+      # ---------------------------------------------------------------------------
+      # YEREL PROJE KLASÖRÜ BAĞLANTISI (/workspace olarak konteyner içine bağlanır)
+      # Yöntem A (.env ile): .env dosyasına WSS_PROJECTS_DIR=C:/xampp/htdocs yazın.
+      # Yöntem B (Doğrudan YAML ile): Aşağıdaki varsayılan satırı yorum (#) yapıp
+      #          işletim sisteminize uygun örnek satırın başındaki # işaretini kaldırın:
+      # - C:/xampp/htdocs:/workspace:ro                  # Windows (XAMPP / Wamp / Laragon örneği)
+      # - C:/Users/Kullanici/Projects:/workspace:ro      # Windows (Proje klasörü örneği)
+      # - /var/www/html:/workspace:ro                    # Linux (Apache / Nginx web kökü örneği)
+      # - /Users/kullanici/Sites:/workspace:ro           # macOS (Yerel geliştirme klasörü örneği)
+      # ---------------------------------------------------------------------------
       - ${WSS_PROJECTS_DIR:-~}:/workspace:ro
       # Faz 3: tarama geçmişi (SQLite) kalıcı birimde — konteyner yeniden kurulunca kaybolmaz
       - wss_data:/app/data
-      # Opsiyonel: Ek yerel web kökü veya gcloud ADC bağlamak isterseniz yorum satırını kaldırın:
-      # - /var/www:/var/www:ro
+      # Opsiyonel: gcloud ADC kimlik bilgisi bağlamak isterseniz yorum satırını kaldırın:
       # - ~/.config/gcloud:/home/scanneruser/.config/gcloud:ro
     environment:
       - HOST=0.0.0.0
