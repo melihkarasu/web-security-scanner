@@ -5053,3 +5053,126 @@ document.addEventListener('DOMContentLoaded', () => {
   } catch (_) {}
   syncEthicalConsentUI();
 });
+
+// ============================================================
+// GitHub Sürüm Kontrolü & Arayüzden Tek Tıkla Canlı Güncelleme
+// ============================================================
+let _LAST_UPDATE_INFO = null;
+
+async function checkScannerUpdates(manual = false) {
+  const btn = document.getElementById('header-update-btn');
+  const dot = document.getElementById('header-update-dot');
+  const label = document.getElementById('header-update-label');
+  const banner = document.getElementById('update-banner');
+  if (!btn || !label) return;
+
+  if (manual) {
+    label.textContent = 'Kontrol ediliyor…';
+    if (dot) dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0';
+  }
+
+  try {
+    if (STATE.mode !== 'local_api') {
+      if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-500 shrink-0';
+      label.textContent = 'GitHub Canlı';
+      return;
+    }
+    const res = await fetch('/api/update-check' + (manual ? '?force=1' : ''), { signal: AbortSignal.timeout(12000) });
+    const info = await res.json();
+    _LAST_UPDATE_INFO = info;
+    if (!info || !info.ok) {
+      if (dot) dot.className = 'w-2 h-2 rounded-full bg-stone-400 shrink-0';
+      label.textContent = info?.current_commit ? ('v2.0 · ' + info.current_commit) : 'Sürüm bilgisi yok';
+      if (manual) showToast(info?.error || 'GitHub sürüm kontrolü yapılamadı.', 'warning');
+      return;
+    }
+
+    if (info.update_available) {
+      if (dot) dot.className = 'w-2 h-2 rounded-full bg-orange-500 animate-ping shrink-0';
+      btn.className = 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-orange-400 bg-orange-50 hover:bg-orange-100 text-[11px] font-mono text-orange-950 font-bold transition cursor-pointer';
+      label.textContent = '⬆️ Güncelleme Var (' + (info.latest_commit || 'yeni') + ')';
+      btn.onclick = () => {
+        if (banner) banner.classList.remove('hidden');
+        banner?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      };
+      if (banner) {
+        banner.classList.remove('hidden');
+        const commitsEl = document.getElementById('update-banner-commits');
+        const msgEl = document.getElementById('update-banner-msg');
+        const linkEl = document.getElementById('update-release-link');
+        if (commitsEl) {
+          commitsEl.textContent = (info.current_commit || 'mevcut') + ' → ' + (info.latest_commit || 'yeni') + ' (' + (info.changed_count || 1) + ' dosya)';
+        }
+        if (msgEl) {
+          msgEl.textContent = info.latest_message ? ('Son değişiklik: ' + info.latest_message) : 'GitHub main dalında yeni güncelleme mevcut.';
+        }
+        if (linkEl && info.release_url) linkEl.href = info.release_url;
+      }
+      if (manual) showToast('Yeni bir güncelleme bulundu: ' + (info.latest_commit || ''), 'info');
+    } else {
+      if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-500 shrink-0';
+      btn.className = 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/70 text-[11px] font-mono text-emerald-900 font-semibold transition cursor-pointer';
+      label.textContent = '✓ Güncel (' + (info.current_commit || 'main') + ')';
+      btn.onclick = () => checkScannerUpdates(true);
+      if (banner) banner.classList.add('hidden');
+      if (manual) showToast('Uygulama güncel (' + (info.current_commit || 'main') + ').', 'success');
+    }
+  } catch (e) {
+    if (dot) dot.className = 'w-2 h-2 rounded-full bg-stone-400 shrink-0';
+    label.textContent = 'Sürüm kontrol';
+    if (manual) showToast('Güncelleme kontrolü sırasında bağlantı hatası.', 'warning');
+  }
+}
+
+async function applyScannerUpdate() {
+  const applyBtn = document.getElementById('update-apply-btn');
+  const applyLbl = document.getElementById('update-apply-btn-label');
+  if (applyBtn) applyBtn.disabled = true;
+  if (applyLbl) applyLbl.textContent = 'Güncelleniyor…';
+  showToast('GitHub üzerinden son sürüm indiriliyor ve uygulanıyor…', 'info');
+
+  try {
+    const res = await fetch('/api/update-apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: true }),
+      signal: AbortSignal.timeout(35000)
+    });
+    const data = await res.json();
+    if (!data || !data.ok) {
+      if (applyBtn) applyBtn.disabled = false;
+      if (applyLbl) applyLbl.textContent = 'Şimdi Güncelle';
+      showToast(data?.error || 'Güncelleme uygulanamadı.', 'error');
+      return;
+    }
+    if (applyLbl) applyLbl.textContent = 'Sunucu yeniden başlatılıyor…';
+    showToast('Güncelleme tamamlandı (' + (data.updated_count || 0) + ' dosya)! Sunucu yeniden başlatılıyor…', 'success');
+
+    // Sunucu yeniden başlayana kadar /healthz yokla ve sayfayı yenile
+    let tries = 0;
+    const pollRestart = async () => {
+      tries += 1;
+      try {
+        const h = await fetch('/healthz?t=' + Date.now(), { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+        if (h.ok) {
+          window.location.reload();
+          return;
+        }
+      } catch (_) {}
+      if (tries < 15) {
+        setTimeout(pollRestart, 900);
+      } else {
+        window.location.reload();
+      }
+    };
+    setTimeout(pollRestart, 1200);
+  } catch (e) {
+    if (applyBtn) applyBtn.disabled = false;
+    if (applyLbl) applyLbl.textContent = 'Şimdi Güncelle';
+    showToast('Güncelleme sırasında hata: ' + (e.message || e), 'error');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => checkScannerUpdates(false), 1200);
+});

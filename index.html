@@ -68,6 +68,12 @@
             <span id="scanner-mode-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
             <span id="scanner-mode-label" class="truncate max-w-[160px] sm:max-w-none">Mod kontrol ediliyor…</span>
           </div>
+
+          <!-- GitHub Sürüm & Güncelleme Kontrol Rozeti -->
+          <button type="button" id="header-update-btn" onclick="checkScannerUpdates(true)" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[11px] font-mono text-stone-700 font-semibold transition cursor-pointer" title="GitHub üzerinden yeni sürüm kontrolü yap">
+            <span id="header-update-dot" class="w-2 h-2 rounded-full bg-stone-400 shrink-0"></span>
+            <span id="header-update-label" class="truncate">Sürüm kontrol…</span>
+          </button>
         </div>
 
         <div class="flex items-center gap-1.5 sm:gap-2">
@@ -98,6 +104,30 @@
 
   <!-- Ana İçerik -->
   <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 w-full flex-1 space-y-6">
+
+    <!-- GitHub Canlı Güncelleme Bildirimi ve Tek Tıkla Güncelleme Şeridi -->
+    <div id="update-banner" class="hidden p-4 rounded-2xl border border-orange-300 bg-orange-50/95 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all">
+      <div class="flex items-start sm:items-center gap-3 min-w-0">
+        <span class="w-9 h-9 rounded-xl bg-orange-500 text-white flex items-center justify-center shrink-0 font-bold">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </span>
+        <div class="min-w-0 text-xs">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="font-bold text-stone-900 text-sm">🚀 Yeni Güncelleme Mevcut!</span>
+            <span id="update-banner-commits" class="font-mono text-[11px] px-2 py-0.5 rounded-md bg-orange-200/80 text-orange-950 font-semibold"></span>
+          </div>
+          <p id="update-banner-msg" class="text-stone-700 mt-0.5 truncate"></p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button type="button" id="update-apply-btn" onclick="applyScannerUpdate()" class="btn btn-sm btn-primary">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+          <span id="update-apply-btn-label">Şimdi Güncelle</span>
+        </button>
+        <a id="update-release-link" href="https://github.com/melihkarasu/web-security-scanner/commits/main" target="_blank" rel="noopener" class="btn btn-sm btn-secondary">GitHub</a>
+        <button type="button" onclick="document.getElementById('update-banner').classList.add('hidden')" class="btn btn-sm btn-secondary !px-2" title="Gizle">✕</button>
+      </div>
+    </div>
 
     <!-- AI Konfigürasyon Paneli (Drawer / Modal Kartı) -->
     <div id="ai-config-panel" class="hidden bg-white border-2 border-mistral-orange/40 rounded-2xl p-4 sm:p-6 shadow-md transition-all">
@@ -1228,6 +1258,6 @@
   </div>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261105b"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261105c"></script>
 </body>
 </html>

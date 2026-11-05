@@ -35,6 +35,7 @@ import scan_history
 import security_assistant
 import threat_intel
 import headless_browser
+import updater
 from strix_engine import STRIX_MANAGER, strix_capabilities
 
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -232,6 +233,10 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.handle_api_history_delete()
             return
 
+        if parsed.path == "/api/update-apply":
+            self.handle_api_update_apply()
+            return
+
         # Strix AI Pentest: tarama başlat (alt süreç; etik onay zorunlu)
         if parsed.path == "/api/strix-scan":
             self.handle_api_strix_scan_post()
@@ -343,13 +348,22 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             self.send_json({"success": True, "runs": STRIX_MANAGER.list_all_runs()})
             return
 
+        # 1k. API: /api/update-check (GitHub main sürümüyle karşılaştır)
+        if parsed.path == "/api/update-check":
+            force = query.get("force", ["0"])[0].lower() in ("1", "true", "yes")
+            info = updater.check_for_updates(APP_DIR, force=force)
+            self.send_json(info)
+            return
+
         # 2. API: /api/status (sunucu aktif mi ve hangi sürüm: lite vs full)
         if parsed.path == "/api/status":
+            local_sha, _ = updater.local_commit_info(APP_DIR)
             self.send_json({
                 "status": "online",
                 "mode": "local_server",
                 "edition": EDITION,
                 "version": "2.0.0",
+                "commit": local_sha[:7] if local_sha else "",
                 "host": HOST,
                 "real_browser": headless_browser.capabilities_nonblocking()
             })
@@ -1113,6 +1127,23 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
             return
         self.send_json({"success": True, "diff": diff})
 
+    def handle_api_update_apply(self):
+        res = updater.apply_update(APP_DIR)
+        status_code = 200 if res.get("ok") else 500
+        self.send_json(res, status=status_code)
+        if res.get("ok") and res.get("restarting") and os.environ.get("WSS_DISABLE_EXEC_RESTART") != "1":
+            def _restart_proc():
+                time.sleep(0.8)
+                try:
+                    self.server.server_close()
+                except Exception:
+                    pass
+                try:
+                    os.execv(sys.executable, [sys.executable] + sys.argv)
+                except Exception:
+                    pass
+            threading.Thread(target=_restart_proc, daemon=True).start()
+
     def handle_api_history_delete(self):
         data = self._read_json_payload()
         if data is None:
@@ -1596,6 +1627,12 @@ def find_available_port(host=HOST, start_port=DEFAULT_PORT, max_attempts=10):
 
 def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        restored = updater.restore_persisted_update(APP_DIR)
+        if restored:
+            print(f" [Updater] Kalıcı birimden {restored} güncel dosya geri yüklendi.", flush=True)
+    except Exception:
+        pass
 
     port = find_available_port(HOST, DEFAULT_PORT)
     if not port:
