@@ -310,4 +310,181 @@ def scan_file_for_js_cves(rel_path, content, allow_network=False):
                     "analyzer": "retirejs",
                     "verified": True,
                 })
+    findings.extend(scan_nextjs_advisories_in_file(rel_path, content))
+    return findings
+
+# ==========================================================================
+# Next.js Resmi Güvenlik Bültenleri (Kasım 2026: v16.4.5 / v15.5.29 + CVE-2025-29927)
+# Kaynak: https://nextjs.org/blog/november-2026-security-release
+# ==========================================================================
+NEXTJS_NOV_2026_ADVISORIES = (
+    "GHSA-mfr8-8qww-v76h",  # Cross-tenant cache disclosure (unstable_cache + use cache) [High]
+    "GHSA-vc7v-qv4w-wrv8",  # Cross-root-parameter disclosure in nested use cache [Medium]
+    "GHSA-rhh4-g77r-r9qj",  # Cross-user cache disclosure/poisoning via binary use cache args [Medium]
+    "GHSA-pc58-hwjq-p385",  # Cross-client response injection via stale compressed Response framing [Medium]
+    "GHSA-f3mh-rxg3-f5g2",  # Cookie exposure via x-middleware-set-cookie in Edge routes [Medium]
+    "GHSA-7qx7-33qx-rqx2",  # SVG rejection bypass in Image Optimization [Medium]
+)
+
+def evaluate_nextjs_version(ver_raw):
+    """package.json / package-lock.json içindeki next sürümünü resmi Next.js bültenleriyle karşılaştırır."""
+    m = re.search(r"(\d+\.\d+\.\d+)", str(ver_raw or ""))
+    if not m:
+        return []
+    ver = m.group(1)
+    t = _parse_ver(ver)
+    if not t:
+        return []
+    major = t[0]
+    out = []
+    # 1) CVE-2025-29927 (Kritik Middleware Yetki Atlama: <14.2.25 veya 15.0.0..<15.2.3)
+    if (major < 14) or (major == 14 and _ver_lt(ver, "14.2.25")) or (major == 15 and _ver_lt(ver, "15.2.3")):
+        out.append({
+            "rule_id": "NEXT-ADV-001",
+            "severity": "KRİTİK",
+            "cwe": "CWE-287",
+            "cvss": 9.1,
+            "patched": "15.5.29 / 16.4.5",
+            "cves": ["CVE-2025-29927"],
+            "summary": "Next.js x-middleware-subrequest başlığı ile Middleware yetkilendirme atlama zafiyeti",
+        })
+    # 2) Kasım 2026 Güvenlik Bülteni (v15 < 15.5.29 veya v16 < 16.4.5 veya <=14.x)
+    if (major <= 15 and _ver_lt(ver, "15.5.29")) or (major == 16 and _ver_lt(ver, "16.4.5")):
+        patched_target = "16.4.5" if major >= 16 else "15.5.29"
+        out.append({
+            "rule_id": "NEXT-ADV-001",
+            "severity": "YÜKSEK",
+            "cwe": "CWE-200",
+            "cvss": 7.8,
+            "patched": patched_target,
+            "cves": list(NEXTJS_NOV_2026_ADVISORIES),
+            "summary": (
+                "Next.js Kasım 2026 Güvenlik Bülteni (https://nextjs.org/blog/november-2026-security-release): "
+                "Cross-tenant cache ifşası (GHSA-mfr8-8qww-v76h, GHSA-vc7v-qv4w-wrv8), binary 'use cache' önbellek "
+                "zehirlenmesi (GHSA-rhh4-g77r-r9qj), self-hosted shared shell cache poisoning, sıkıştırılmış Response "
+                "çerçeveleme enjeksiyonu (GHSA-pc58-hwjq-p385), Edge route x-middleware-set-cookie çerez sızıntısı "
+                "(GHSA-f3mh-rxg3-f5g2) ve Image Optimization SVG bypass (GHSA-7qx7-33qx-rqx2)"
+            ),
+        })
+    return out
+
+
+def scan_nextjs_advisories_in_file(rel_path, content):
+    """Next.js Kasım 2026 bültenindeki zafiyetli kod desenlerini ve package.json sürümünü denetler."""
+    findings = []
+    low_path = rel_path.lower().replace("\\", "/")
+    base_name = os.path.basename(low_path)
+    lines = content.splitlines()
+
+    # A) package.json içinde next bağımlılık sürümü kontrolü
+    if base_name == "package.json":
+        try:
+            pkg = json.loads(content)
+            deps = {}
+            for sec in ("dependencies", "devDependencies"):
+                if isinstance(pkg.get(sec), dict):
+                    deps.update(pkg[sec])
+            if "next" in deps:
+                raw_v = str(deps["next"])
+                line_no = 1
+                for idx, ln in enumerate(lines, start=1):
+                    if '"next"' in ln:
+                        line_no = idx
+                        break
+                for adv in evaluate_nextjs_version(raw_v):
+                    cve_str = ", ".join(adv["cves"][:4])
+                    findings.append({
+                        "rule_id": adv["rule_id"],
+                        "category": "Next.js Güvenliği (Kasım 2026 Bülteni)",
+                        "severity": adv["severity"],
+                        "cwe": adv["cwe"],
+                        "cvss": adv["cvss"],
+                        "title": f"Zafiyetli Next.js Sürümü: next@{raw_v} ({cve_str})",
+                        "file": rel_path,
+                        "line": line_no,
+                        "match": f'"next": "{raw_v}"',
+                        "description": adv["summary"],
+                        "fix": f"Next.js bağımlılığını yamalı sürüme yükseltin: npm install next@{adv['patched']}",
+                        "analyzer": "nextjs_advisory",
+                        "verified": True,
+                    })
+        except Exception:
+            pass
+
+    # B) Kaynak kod (.js/.ts/.jsx/.tsx) üzerinde Kasım 2026 Next.js bülteni desen kontrolleri
+    if low_path.endswith((".js", ".ts", ".jsx", ".tsx", ".mjs")):
+        has_use_cache = bool(re.search(r"['\"]use cache['\"]", content))
+        has_unstable_cache = "unstable_cache" in content
+        if has_use_cache and has_unstable_cache:
+            line_no = next((i for i, l in enumerate(lines, 1) if "unstable_cache" in l or "use cache" in l), 1)
+            findings.append({
+                "rule_id": "NEXT-ADV-002",
+                "category": "Next.js Güvenliği (Kasım 2026 Bülteni)",
+                "severity": "YÜKSEK",
+                "cwe": "CWE-200",
+                "cvss": 7.8,
+                "title": "GHSA-mfr8-8qww-v76h: 'use cache' ve 'unstable_cache' Birlikte Kullanımı (Cross-Tenant Cache Disclosure)",
+                "file": rel_path,
+                "line": line_no,
+                "match": "unstable_cache + 'use cache'",
+                "description": "Next.js Kasım 2026 Bülteni (GHSA-mfr8-8qww-v76h): Aynı 'use cache' fonksiyonunun hem doğrudan hem de 'unstable_cache' içinden çağrılması kiracılar (tenant) arası önbellek verisi sızıntısına yol açabilir.",
+                "fix": "Next.js sürümünü v16.4.5 veya v15.5.29'a yükseltin ve 'unstable_cache' ile 'use cache' çağrılarını aynı kök parametreli fonksiyonda birleştirmeyin.",
+                "analyzer": "nextjs_advisory",
+                "verified": True,
+            })
+
+        if has_use_cache and re.search(r"\b(Uint8Array|ArrayBuffer|Buffer\.from)\b", content):
+            line_no = next((i for i, l in enumerate(lines, 1) if re.search(r"(Uint8Array|ArrayBuffer|Buffer\.from)", l)), 1)
+            findings.append({
+                "rule_id": "NEXT-ADV-003",
+                "category": "Next.js Güvenliği (Kasım 2026 Bülteni)",
+                "severity": "ORTA",
+                "cwe": "CWE-345",
+                "cvss": 6.5,
+                "title": "GHSA-rhh4-g77r-r9qj: 'use cache' Fonksiyonunda Binary Argüman Kullanımı (Cache Poisoning/Disclosure)",
+                "file": rel_path,
+                "line": line_no,
+                "match": "use cache + binary argument (Buffer/Uint8Array)",
+                "description": "Next.js Kasım 2026 Bülteni (GHSA-rhh4-g77r-r9qj): 'use cache' fonksiyonlarına geçirilen farklı binary argümanlar aynı önbellek anahtarını üreterek kullanıcılar arası veri karışmasına yol açabilir.",
+                "fix": "Next.js v16.4.5 / v15.5.29 sürümüne güncelleyin ve önbellek anahtarı olarak binary argüman yerine açık string/hash kimlikler kullanın.",
+                "analyzer": "nextjs_advisory",
+                "verified": True,
+            })
+
+        is_edge = bool(re.search(r"runtime\s*=\s*['\"]edge['\"]", content))
+        if is_edge and re.search(r"\.cookies\.set\s*\(", content):
+            line_no = next((i for i, l in enumerate(lines, 1) if ".cookies.set" in l), 1)
+            findings.append({
+                "rule_id": "NEXT-ADV-004",
+                "category": "Next.js Güvenliği (Kasım 2026 Bülteni)",
+                "severity": "ORTA",
+                "cwe": "CWE-200",
+                "cvss": 6.5,
+                "title": "GHSA-f3mh-rxg3-f5g2: Edge Route İçinde NextResponse.cookies.set() ile Çerez Sızıntısı",
+                "file": rel_path,
+                "line": line_no,
+                "match": "runtime='edge' + .cookies.set()",
+                "description": "Next.js Kasım 2026 Bülteni (GHSA-f3mh-rxg3-f5g2): Edge Route Handler'larda NextResponse.cookies.set() kullanımı, HttpOnly çerezleri bile 'x-middleware-set-cookie' iç başlığıyla aynı kökendeki JS'e sızdırabilir.",
+                "fix": "Next.js v16.4.5 / v15.5.29'a güncelleyin veya çerezleri next/headers içindeki cookies().set() ile tanımlayın.",
+                "analyzer": "nextjs_advisory",
+                "verified": True,
+            })
+
+        for idx, ln in enumerate(lines, start=1):
+            if re.search(r"\breturn\s+(?:await\s+)?fetch\s*\(", ln):
+                findings.append({
+                    "rule_id": "NEXT-ADV-005",
+                    "category": "Next.js Güvenliği (Kasım 2026 Bülteni)",
+                    "severity": "ORTA",
+                    "cwe": "CWE-444",
+                    "cvss": 6.5,
+                    "title": "GHSA-pc58-hwjq-p385: Ham fetch() Response Nesnesinin Doğrudan Döndürülmesi (Response Framing Injection)",
+                    "file": rel_path,
+                    "line": idx,
+                    "match": ln.strip()[:100],
+                    "description": "Next.js Kasım 2026 Bülteni (GHSA-pc58-hwjq-p385): Dışarıdan alınan sıkıştırılmış bir fetch() Response nesnesinin değiştirilmeden döndürülmesi, HTTP/1.1 ters vekil (reverse proxy) arkasında istemciler arası yanıt karışmasına yol açabilir.",
+                    "fix": "Next.js v16.4.5 / v15.5.29'a yükseltin ve dış Response döndürürken yeni bir Response/NextResponse oluşturup Content-Encoding/Content-Length başlıklarını temizleyin.",
+                    "analyzer": "nextjs_advisory",
+                    "verified": True,
+                })
     return findings
