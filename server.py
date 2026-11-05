@@ -350,7 +350,8 @@ class ScannerHTTPHandler(SimpleHTTPRequestHandler):
 
         # 1k. API: /api/update-check (GitHub main sürümüyle karşılaştır)
         if parsed.path == "/api/update-check":
-            force = query.get("force", ["0"])[0].lower() in ("1", "true", "yes")
+            qs = urllib.parse.parse_qs(parsed.query)
+            force = (qs.get("force", ["0"])[0] or "0").lower() in ("1", "true", "yes")
             info = updater.check_for_updates(APP_DIR, force=force)
             self.send_json(info)
             return

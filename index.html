@@ -16,7 +16,7 @@
 
   <!-- Precompiled Standalone Tailwind CSS & Dedicated Modern Design System -->
   <link rel="stylesheet" href="css/tailwind.min.css?v=20261103a">
-  <link rel="stylesheet" href="css/style.css?v=20261105b">
+  <link rel="stylesheet" href="css/style.css?v=20261105d">
 </head>
 <body class="bg-mistral-canvas text-mistral-ink font-sans antialiased min-h-full flex flex-col selection:bg-orange-500/20 selection:text-orange-950">
 
@@ -69,10 +69,11 @@
             <span id="scanner-mode-label" class="truncate max-w-[160px] sm:max-w-none">Mod kontrol ediliyor…</span>
           </div>
 
-          <!-- GitHub Sürüm & Güncelleme Kontrol Rozeti -->
-          <button type="button" id="header-update-btn" onclick="checkScannerUpdates(true)" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[11px] font-mono text-stone-700 font-semibold transition cursor-pointer" title="GitHub üzerinden yeni sürüm kontrolü yap">
+          <!-- GitHub Sürüm & Güncelleme Kontrol Butonu -->
+          <button type="button" id="header-update-btn" onclick="checkScannerUpdates(true)" class="btn btn-sm btn-secondary" title="GitHub üzerinden yeni sürüm kontrolü yap">
+            <svg id="header-update-icon" class="w-3.5 h-3.5 text-mistral-orange shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
             <span id="header-update-dot" class="w-2 h-2 rounded-full bg-stone-400 shrink-0"></span>
-            <span id="header-update-label" class="truncate">Sürüm kontrol…</span>
+            <span id="header-update-label" class="truncate">Güncelleme Kontrol</span>
           </button>
         </div>
 
@@ -274,8 +275,8 @@
     <section class="vibe-hero-card command-hero p-5 sm:p-8">
       
       <!-- Başlık, Editoryal Tanıtım ve 3'lü Bento Özet Kartları -->
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-6">
-        <div class="max-w-2xl space-y-2">
+      <div class="flex flex-col gap-5 mb-6">
+        <div class="w-full space-y-2.5">
           <div class="flex flex-wrap items-center gap-2">
             <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 border border-orange-200 text-mistral-orange text-[11px] font-mono font-bold">
               <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
@@ -294,11 +295,11 @@
             </div>
           </div>
 
-          <h1 class="text-3xl sm:text-4xl font-extrabold font-editorial tracking-tight text-mistral-ink leading-tight">
-            Güvenlik Teşhis Merkezi, <span class="italic text-mistral-orange">Tek Komutla Denetim.</span>
+          <h1 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold font-editorial tracking-tight text-mistral-ink leading-snug">
+            Web Uygulamaları ve Kaynak Kod İçin <span class="italic text-mistral-orange">Uçtan Uca Güvenlik Tarayıcısı</span>
           </h1>
-          <p class="text-mistral-slate text-xs sm:text-sm leading-relaxed">
-            Canlı alan adını (<code class="font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-800 border border-stone-200">alanadi.com/dizin</code>) veya yerel proje klasörünü girerek pasif keşif, 146 kurallı kaynak kod (SAST), aktif zafiyet ve otonom AI sızma testini tek noktadan çalıştırın.
+          <p class="text-mistral-slate text-xs sm:text-sm leading-relaxed w-full">
+            Canlı web sitelerini, API uçlarını ve yerel proje klasörlerinizi tek noktadan denetleyin; <strong>146 kurallı kaynak kod analizi (SAST)</strong>, <strong>16 aktif zafiyet testi (DAST)</strong>, <strong>JavaScript/paket CVE kontrolü</strong> ve <strong>otonom AI sızma testini</strong> bir arada çalıştırın.
           </p>
         </div>
 
@@ -1258,6 +1259,6 @@
   </div>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261105c"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261105d"></script>
 </body>
 </html>

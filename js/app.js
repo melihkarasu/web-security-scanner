@@ -5089,7 +5089,7 @@ async function checkScannerUpdates(manual = false) {
 
     if (info.update_available) {
       if (dot) dot.className = 'w-2 h-2 rounded-full bg-orange-500 animate-ping shrink-0';
-      btn.className = 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-orange-400 bg-orange-50 hover:bg-orange-100 text-[11px] font-mono text-orange-950 font-bold transition cursor-pointer';
+      btn.className = 'btn btn-sm btn-primary';
       label.textContent = '⬆️ Güncelleme Var (' + (info.latest_commit || 'yeni') + ')';
       btn.onclick = () => {
         if (banner) banner.classList.remove('hidden');
@@ -5111,7 +5111,7 @@ async function checkScannerUpdates(manual = false) {
       if (manual) showToast('Yeni bir güncelleme bulundu: ' + (info.latest_commit || ''), 'info');
     } else {
       if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-500 shrink-0';
-      btn.className = 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/70 text-[11px] font-mono text-emerald-900 font-semibold transition cursor-pointer';
+      btn.className = 'btn btn-sm btn-secondary';
       label.textContent = '✓ Güncel (' + (info.current_commit || 'main') + ')';
       btn.onclick = () => checkScannerUpdates(true);
       if (banner) banner.classList.add('hidden');

@@ -1095,3 +1095,131 @@ html.dark-theme .vibe-cat-pill:not(.is-active) {
   border-color: #334155 !important;
   color: #E2E8F0 !important;
 }
+
+/* ==========================================================================
+   KAPSAMLI TACTICAL DARK MODE DÜZELTMESİ (Tüm Arka Planlar, Gradyanlar & Yazılar)
+   ========================================================================== */
+html.dark-theme,
+html.dark-theme body {
+  background: #0B0F17 !important;
+  background-color: #0B0F17 !important;
+  color: #F1F5F9 !important;
+}
+html.dark-theme .app-header,
+html.dark-theme footer {
+  background: rgba(15, 23, 42, 0.96) !important;
+  border-color: #1E293B !important;
+  color: #F1F5F9 !important;
+}
+html.dark-theme .command-hero,
+html.dark-theme .vibe-hero-card,
+html.dark-theme .vibe-hero,
+html.dark-theme .vibe-omni-dock,
+html.dark-theme .omni-dock,
+html.dark-theme .module-card,
+html.dark-theme .module-check-card,
+html.dark-theme #ai-config-panel,
+html.dark-theme #results-export-toolbar,
+html.dark-theme [class*="bg-white"],
+html.dark-theme [class*="bg-stone-50"],
+html.dark-theme [class*="bg-stone-100"],
+html.dark-theme [class*="bg-mistral-cream"],
+html.dark-theme [class*="bg-mistral-canvas"] {
+  background: #111827 !important;
+  background-color: #111827 !important;
+  border-color: #1E293B !important;
+  color: #F1F5F9 !important;
+}
+html.dark-theme .target-input-wrapper,
+html.dark-theme #unified-target-input,
+html.dark-theme #unified-dir-input,
+html.dark-theme .modern-field,
+html.dark-theme input[type="text"],
+html.dark-theme input[type="password"],
+html.dark-theme input[type="url"],
+html.dark-theme input[type="number"],
+html.dark-theme select,
+html.dark-theme textarea {
+  background: #0F172A !important;
+  background-color: #0F172A !important;
+  border-color: #334155 !important;
+  color: #F8FAFC !important;
+}
+html.dark-theme input::placeholder,
+html.dark-theme textarea::placeholder {
+  color: #64748B !important;
+}
+html.dark-theme h1, html.dark-theme h2, html.dark-theme h3, html.dark-theme h4,
+html.dark-theme .text-mistral-ink,
+html.dark-theme [class*="text-stone-9"],
+html.dark-theme [class*="text-stone-8"],
+html.dark-theme [class*="text-stone-7"] {
+  color: #F8FAFC !important;
+}
+html.dark-theme p, html.dark-theme label, html.dark-theme span,
+html.dark-theme .text-mistral-slate,
+html.dark-theme [class*="text-stone-6"],
+html.dark-theme [class*="text-stone-5"],
+html.dark-theme [class*="text-stone-4"] {
+  color: #CBD5E1;
+}
+html.dark-theme .text-mistral-orange,
+html.dark-theme .text-orange-500,
+html.dark-theme .text-orange-600 {
+  color: #FB923C !important;
+}
+html.dark-theme [class*="bg-amber-50"],
+html.dark-theme [class*="bg-orange-50"] {
+  background: rgba(120, 53, 15, 0.28) !important;
+  border-color: rgba(245, 158, 11, 0.45) !important;
+  color: #FDE68A !important;
+}
+html.dark-theme [class*="text-amber-9"],
+html.dark-theme [class*="text-amber-8"],
+html.dark-theme [class*="text-orange-9"],
+html.dark-theme [class*="text-orange-8"] {
+  color: #FDE68A !important;
+}
+html.dark-theme [class*="bg-emerald-50"],
+html.dark-theme [class*="bg-green-50"] {
+  background: rgba(6, 78, 59, 0.35) !important;
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  color: #A7F3D0 !important;
+}
+html.dark-theme [class*="text-emerald-9"],
+html.dark-theme [class*="text-emerald-8"],
+html.dark-theme [class*="text-green-9"],
+html.dark-theme [class*="text-green-8"] {
+  color: #A7F3D0 !important;
+}
+html.dark-theme [class*="bg-amber-200"] {
+  background: rgba(217, 119, 6, 0.35) !important;
+  color: #FEF3C7 !important;
+}
+html.dark-theme [class*="bg-emerald-200"] {
+  background: rgba(5, 150, 105, 0.35) !important;
+  color: #D1FAE5 !important;
+}
+html.dark-theme code {
+  background: #1E293B !important;
+  color: #FBBF24 !important;
+  border-color: #334155 !important;
+}
+html.dark-theme .btn-secondary,
+html.dark-theme .btn-ai,
+html.dark-theme .segmented-group,
+html.dark-theme .segmented-item:not(.is-active-orange),
+html.dark-theme .vibe-cat-pill:not(.is-active),
+html.dark-theme .detail-tab-btn:not(.active) {
+  background: #1E293B !important;
+  border-color: #334155 !important;
+  color: #F1F5F9 !important;
+}
+html.dark-theme .btn-primary span,
+html.dark-theme .is-active-orange span,
+html.dark-theme .vibe-cat-pill.is-active span {
+  color: #FFFFFF !important;
+}
+html.dark-theme [class*="border-stone-"] {
+  border-color: #1E293B !important;
+}
