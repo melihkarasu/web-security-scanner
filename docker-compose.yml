@@ -13,7 +13,7 @@ services:
       - "127.0.0.1:8765:8765"
     volumes:
       # Platform-bağımsız proje kökü (Linux/macOS: ~, Windows: %USERPROFILE%; özel yol için: WSS_PROJECTS_DIR=/yol)
-      - ${WSS_PROJECTS_DIR:-${USERPROFILE:-~}}:/workspace:ro
+      - ${WSS_PROJECTS_DIR:-~}:/workspace:ro
       # Faz 3: tarama geçmişi (SQLite) kalıcı birimde — konteyner yeniden kurulunca kaybolmaz
       - wss_data:/app/data
       # Opsiyonel: Ek yerel web kökü veya gcloud ADC bağlamak isterseniz yorum satırını kaldırın:

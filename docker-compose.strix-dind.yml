@@ -62,7 +62,7 @@ services:
     volumes:
       - strix_dind_certs:/certs/client
       - strix_dind_data:/var/lib/docker
-      - ${WSS_PROJECTS_DIR:-${USERPROFILE:-~}}:/workspace:ro
+      - ${WSS_PROJECTS_DIR:-~}:/workspace:ro
     healthcheck:
       test: ["CMD", "docker", "info"]
       interval: 5s
