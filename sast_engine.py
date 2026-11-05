@@ -12,6 +12,7 @@ import json
 import time
 import subprocess
 import urllib.request
+import js_cve_scanner
 
 # Faz 6B: Derin analiz motoru (Python AST + JS taint + entropy + genişletilmiş kurallar)
 from deep_sast_engine import run_deep_analysis, EXTRA_RULES
@@ -606,6 +607,19 @@ def sast_scan_directory(root_path, profile="standard", scope_mode="full", diff_b
                 if f["rule_id"] == "SEC-010" and _is_password_false_positive(vline):
                     continue
                 f["verified"] = True
+                verified_count += 1
+        except OSError:
+            continue
+
+    # Faz 6C: Retire.js tabanlı İstemci/CDN JavaScript Kütüphanesi CVE & Yama Taraması
+    for rel_f in scanned_files_list:
+        full_f = os.path.join(root_path, rel_f)
+        try:
+            with open(full_f, "r", encoding="utf-8", errors="replace") as jf:
+                jcontent = jf.read(512 * 1024)
+            js_findings = js_cve_scanner.scan_file_for_js_cves(rel_f, jcontent, allow_network=False)
+            for jf_item in js_findings:
+                findings.append(jf_item)
                 verified_count += 1
         except OSError:
             continue

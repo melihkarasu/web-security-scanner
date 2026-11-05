@@ -39,6 +39,7 @@ TRACKED_CORE_FILES = (
     "ai_orchestrator.py",
     "ai_connector.py",
     "updater.py",
+    "js_cve_scanner.py",
 )
 
 UPDATABLE_EXTENSIONS = (".py", ".html", ".js", ".css", ".md", ".sh", ".json", ".txt", ".yml", ".yaml")

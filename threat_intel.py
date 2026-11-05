@@ -27,6 +27,7 @@ import urllib.parse
 import urllib.request
 
 import scan_history
+import js_cve_scanner
 
 NVD_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
@@ -203,6 +204,12 @@ def _osv_npm(name, version):
     except ImportError:
         data = _http_json(OSV_URL, data={"package": {"name": name, "ecosystem": "npm"}, "version": version})
     out = []
+    for rj in js_cve_scanner.evaluate_js_library(name, version, allow_network=True):
+        for rcve in (rj.get("cves") or ["Retire.js"]):
+            out.append({"id": rcve, "cves": [rcve] if rcve.startswith("CVE-") else [],
+                        "cvss": rj.get("cvss", 6.5),
+                        "summary": "%s (Yamalı sürüm: >= %s)" % (rj.get("summary", ""), rj.get("patched", rj.get("below", ""))),
+                        "url": "https://github.com/RetireJS/retire.js"})
     for v in (data.get("vulns") or []):
         aliases = [a for a in (v.get("aliases") or []) if isinstance(a, str)]
         sev = str((v.get("database_specific") or {}).get("severity") or "").upper()
