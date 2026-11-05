@@ -16,7 +16,7 @@
 
   <!-- Precompiled Standalone Tailwind CSS & Dedicated Modern Design System -->
   <link rel="stylesheet" href="css/tailwind.min.css?v=20261103a">
-  <link rel="stylesheet" href="css/style.css?v=20261103a">
+  <link rel="stylesheet" href="css/style.css?v=20261105b">
 </head>
 <body class="bg-mistral-canvas text-mistral-ink font-sans antialiased min-h-full flex flex-col selection:bg-orange-500/20 selection:text-orange-950">
 
@@ -71,6 +71,12 @@
         </div>
 
         <div class="flex items-center gap-1.5 sm:gap-2">
+          <!-- Tactical Dark / Warm Light Tema Anahtarı (UZEM UI/UX Pro Max) -->
+          <button type="button" onclick="toggleScannerTheme()" id="theme-toggle-btn" class="btn btn-sm btn-secondary" title="Tema Değiştir: Warm Light / Tactical Dark">
+            <svg id="theme-icon-dark" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <span id="theme-toggle-label" class="hidden md:inline">Tactical Dark</span>
+          </button>
+
           <!-- AI Ayarları Butonu -->
           <button type="button" onclick="toggleAIConfig()" id="header-ai-btn" class="btn btn-sm btn-ai">
             <svg class="w-4 h-4 text-amber-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -357,20 +363,27 @@
             </button>
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
+            <button type="button" id="compact-view-btn" onclick="toggleCompactModules()" class="btn btn-xs btn-secondary" title="Modül açıklamalarını daralt/genişlet (Progressive Disclosure)">Kompakt Görünüm</button>
             <button type="button" onclick="toggleModuleAccordion('standard', true); toggleModuleAccordion('ai', true);" class="btn btn-xs btn-secondary">Modülleri Aç</button>
             <button type="button" onclick="toggleModuleAccordion('standard', false); toggleModuleAccordion('ai', false);" class="btn btn-xs btn-secondary">Daralt</button>
           </div>
         </div>
       </div>
 
-      <!-- Etik ve Yasal Onay Kutusu -->
-      <div id="unified-ethical-container" class="mt-4 p-3.5 rounded-xl border border-amber-300/80 bg-amber-50/70 text-xs">
-        <label class="flex items-start gap-3 cursor-pointer">
-          <input type="checkbox" id="unified-ethical-check" checked class="mt-0.5">
-          <div class="text-amber-950 leading-relaxed">
-            <span class="font-bold">Yasal &amp; Etik Kullanım Beyanı:</span>
-            <span class="text-stone-700"> Hedef sistem üzerinde test yetkim olduğunu veya sistemin bana ait olduğunu; aktif güvenlik denetiminin doğuracağı tüm yasal ve etik sorumluluğu üstlendiğimi onaylıyorum.</span>
+      <!-- Etik ve Yasal Onay Kutusu (Varsayılan: Seçili Değil; Onaylandığında Kompakt Şeride Daralır) -->
+      <div id="unified-ethical-container" class="mt-4 p-3.5 rounded-xl border border-amber-400/90 bg-amber-50/90 text-xs transition-all duration-200">
+        <label class="flex items-center justify-between gap-3 cursor-pointer select-none">
+          <div class="flex items-start gap-3 min-w-0">
+            <input type="checkbox" id="unified-ethical-check" onchange="syncEthicalConsentUI()" class="mt-0.5">
+            <div id="ethical-consent-full-text" class="text-amber-950 leading-relaxed">
+              <span class="font-bold">⚠️ Yasal &amp; Etik Kullanım Beyanı (Zorunlu Onay):</span>
+              <span class="text-stone-700"> Hedef sistem üzerinde test yetkim olduğunu veya sistemin bana ait olduğunu; aktif güvenlik denetiminin doğuracağı tüm yasal ve etik sorumluluğu üstlendiğimi onaylıyorum.</span>
+            </div>
+            <div id="ethical-consent-compact-text" class="hidden text-emerald-900 font-semibold leading-snug">
+              ✓ Etik &amp; Yasal Onay Verildi — Aktif güvenlik ve sızma testleri için yetki beyanı onaylandı.
+            </div>
           </div>
+          <span id="ethical-consent-status-pill" class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-200/80 text-amber-950">Onay Bekleniyor</span>
         </label>
       </div>
 
@@ -1215,6 +1228,6 @@
   </div>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261105a"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261105b"></script>
 </body>
 </html>

@@ -51,6 +51,14 @@ class TestComposeStrixVolumes(unittest.TestCase):
         self.assertIn("let src = buildMarkdownReport() || STATE.reportMarkdown || ''", app_js)
         self.assertIn("if (!dns.dmarc && !dns.spf && !dns.caa && !dns.aaaa && !dns.mx)", app_js)
 
+    def test_ethical_consent_unchecked_by_default_and_uzem_design_controls(self):
+        html = self._read_file("index.html")
+        m = re.search(r'<input[^>]*id="unified-ethical-check"[^>]*>', html)
+        self.assertIsNotNone(m)
+        self.assertNotIn("checked", m.group(0), "unified-ethical-check must not be checked by default")
+        self.assertIn('id="theme-toggle-btn"', html)
+        self.assertIn('id="compact-view-btn"', html)
+
     def test_strix_dind_uses_dedicated_strix_scans_dind_volume(self):
         content = self._read_file("docker-compose.strix-dind.yml")
         self.assertIn("strix_scans_dind:/app/strix_scans", content)
