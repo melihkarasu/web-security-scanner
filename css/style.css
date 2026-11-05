@@ -1223,3 +1223,38 @@ html.dark-theme .vibe-cat-pill.is-active span {
 html.dark-theme [class*="border-stone-"] {
   border-color: #1E293B !important;
 }
+
+/* Dark Mode Ek Konteyner, Akordeon Gövdesi, İkon Rozeti ve Buton Düzeltmeleri */
+html.dark-theme body {
+  background: #0B0F17 !important;
+  background-image: none !important;
+}
+html.dark-theme #acc-body-standard,
+html.dark-theme #acc-body-ai,
+html.dark-theme .vibe-accordion-card,
+html.dark-theme .vibe-accordion-body,
+html.dark-theme section {
+  background: #111827 !important;
+  background-color: #111827 !important;
+  border-color: #1E293B !important;
+}
+html.dark-theme .vibe-cat-badge,
+html.dark-theme .module-icon {
+  background: #1E293B !important;
+  border-color: #334155 !important;
+  color: #FB923C !important;
+}
+html.dark-theme #header-ai-btn,
+html.dark-theme .btn-ai,
+html.dark-theme #theme-toggle-btn,
+html.dark-theme #header-update-btn:not(.btn-primary) {
+  background: #1E293B !important;
+  background-image: none !important;
+  border-color: #334155 !important;
+  color: #F8FAFC !important;
+}
+html.dark-theme #header-ai-btn span,
+html.dark-theme #theme-toggle-btn span,
+html.dark-theme #header-update-btn span {
+  color: #F8FAFC !important;
+}
