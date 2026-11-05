@@ -1967,11 +1967,10 @@ function renderActiveResults(data) {
   }
 }
 
-// Markdown Denetim Raporunu Dışa Aktarma
-function exportMarkdownReport() {
-  if (!STATE.currentDomain) {
-    showToast('Önce bir alan adı taramalısınız.', 'warning');
-    return;
+// Markdown Denetim Raporu Oluşturucu (MD ve HTML dışa aktarma tarafından ortak kullanılır)
+function buildMarkdownReport() {
+  if (!STATE.currentDomain && !(STATE.results && STATE.results.sast)) {
+    return '';
   }
 
   const dateStr = new Date().toISOString().split('T')[0];
@@ -2015,25 +2014,37 @@ function exportMarkdownReport() {
     }
   }
   md += `---\n\n## 🛡️ 1. HTTP Güvenlik Başlıkları Analizi\n\n`;
-  md += `| Başlık | Durum | Skor | Değer / Not |\n|---|---|---|---|\n`;
-
-  for (const [k, v] of Object.entries(STATE.results.headers.headers || {})) {
-    const st = v.pass ? '✅ Güvenli' : '❌ Eksik/Zayıf';
-    const val = v.value ? `\`${v.value.slice(0, 40)}...\`` : '_Yok_';
-    md += `| ${v.name} | ${st} | ${v.score}/${v.maxScore} | ${val} (${v.note}) |\n`;
+  const headerEntries = Object.entries((STATE.results && STATE.results.headers && STATE.results.headers.headers) || {});
+  if (headerEntries.length === 0) {
+    md += `_Bu taramada canlı alan adı / HTTP başlık analizi çalıştırılmadı (yalnızca yerel kaynak kod taraması)._\n`;
+  } else {
+    md += `| Başlık | Durum | Skor | Değer / Not |\n|---|---|---|---|\n`;
+    for (const [k, v] of headerEntries) {
+      const st = v.pass ? '✅ Güvenli' : '❌ Eksik/Zayıf';
+      const val = v.value ? `\`${v.value.slice(0, 40)}...\`` : '_Yok_';
+      md += `| ${v.name} | ${st} | ${v.score}/${v.maxScore} | ${val} (${v.note}) |\n`;
+    }
   }
 
   md += `\n---\n\n## 🌐 2. DNS & E-posta Savunma Kayıtları\n\n`;
-  const dns = STATE.results.dns;
-  md += `- **DMARC:** ${dns.dmarc.record ? `\`${dns.dmarc.record}\`` : '_Yok_'} (${dns.dmarc.note})\n`;
-  md += `- **SPF:** ${dns.spf.record ? `\`${dns.spf.record}\`` : '_Yok_'} (${dns.spf.note})\n`;
-  md += `- **DNSSEC:** ${dns.dnssec ? '✅ Aktif' : '⚠️ Yapılandırılmamış'}\n`;
-  md += `- **CAA:** ${dns.caa.records.length ? `✅ Aktif (${dns.caa.records.join(', ')})` : '⚠️ Kayıt Yok'}\n`;
+  const dns = (STATE.results && STATE.results.dns) || {};
+  if (!dns.dmarc && !dns.spf && !dns.caa && !dns.aaaa && !dns.mx) {
+    md += `_Bu taramada DNS ve e-posta savunma kayıtları analizi çalıştırılmadı (yalnızca yerel kaynak kod taraması)._\n\n`;
+  } else {
+    md += `- **DMARC:** ${dns.dmarc && dns.dmarc.record ? `\`${dns.dmarc.record}\`` : '_Yok_'} (${(dns.dmarc && dns.dmarc.note) || '-'})\n`;
+    md += `- **SPF:** ${dns.spf && dns.spf.record ? `\`${dns.spf.record}\`` : '_Yok_'} (${(dns.spf && dns.spf.note) || '-'})\n`;
+    md += `- **DNSSEC:** ${dns.dnssec ? '✅ Aktif' : '⚠️ Yapılandırılmamış'}\n`;
+    md += `- **CAA:** ${dns.caa && dns.caa.records && dns.caa.records.length ? `✅ Aktif (${dns.caa.records.join(', ')})` : '⚠️ Kayıt Yok'}\n`;
+    md += `- **IPv6 (AAAA):** ${dns.aaaa && dns.aaaa.records && dns.aaaa.records.length ? `✅ Destekleniyor (${dns.aaaa.records.join(', ')})` : 'ℹ️ Kayıt Yok'}\n`;
+    md += `- **MX Kayıtları:** ${dns.mx && dns.mx.records && dns.mx.records.length ? dns.mx.records.join(', ') : '_Yok_'}\n\n`;
+  }
 
-  md += `\n---\n\n## 🚀 3. Tavsiye Edilen Sertleştirme Çözümleri\n\n`;
-  for (const [k, v] of Object.entries(STATE.results.headers.headers || {})) {
-    if (!v.pass && v.fix) {
-      md += `### ${v.name} Onarımı\n\`\`\`nginx\n${v.fix.nginx}\n\`\`\`\n\n`;
+  if (headerEntries.length > 0) {
+    md += `---\n\n## 🔧 Sunucu Sıkılaştırma & İyileştirme Çözümleri\n\n`;
+    for (const [k, v] of headerEntries) {
+      if (!v.pass && v.fix) {
+        md += `### ${v.name} Onarımı\n\`\`\`nginx\n${v.fix.nginx}\n\`\`\`\n\n`;
+      }
     }
   }
 
@@ -2289,7 +2300,19 @@ function exportMarkdownReport() {
   md += `\n---\n\n*Rapor, [Web Security Scanner](https://melihkarasu.github.io/web-security-scanner/) tarafından üretilmiştir. Tarama tarihi: ${new Date().toISOString()}.*`;
 
   STATE.reportMarkdown = md;
-  downloadFile(`${STATE.currentDomain}-guvenlik-raporu.md`, md, 'text/markdown');
+  return md;
+}
+
+// Markdown Denetim Raporunu Dışa Aktarma
+function exportMarkdownReport() {
+  if (!STATE.currentDomain && !(STATE.results && STATE.results.sast)) {
+    showToast('Önce bir tarama yapmalısınız.', 'warning');
+    return;
+  }
+  const md = buildMarkdownReport();
+  const rawTarget = STATE.currentDomain || (STATE.results && STATE.results.sast && STATE.results.sast.root) || 'rapor';
+  const safeName = String(rawTarget).replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'rapor';
+  downloadFile(`${safeName}-guvenlik-raporu.md`, md, 'text/markdown');
   showToast('Markdown raporu indirildi!', 'success');
 }
 
@@ -2321,12 +2344,12 @@ function exportJsonReport() {
 
 // HTML Rapor Dışa Aktarma (Faz 4 — compliance-ready format)
 function exportHtmlReport() {
-  if (!STATE.reportMarkdown && !STATE.currentDomain) {
+  if (!STATE.currentDomain && !(STATE.results && STATE.results.sast) && !STATE.reportMarkdown) {
     showToast('Önce bir tarama yapmalısınız.', 'warning');
     return;
   }
 
-  let src = STATE.reportMarkdown || '';
+  let src = buildMarkdownReport() || STATE.reportMarkdown || '';
   // 1) HTML escape
   let body = src.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 

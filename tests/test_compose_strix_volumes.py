@@ -45,6 +45,12 @@ class TestComposeStrixVolumes(unittest.TestCase):
             self.assertNotIn(fn, header_html, f"{fn} should not be in <header>")
             self.assertIn(fn, html, f"{fn} should remain in #results-export-toolbar")
 
+    def test_sast_only_markdown_and_html_export_safe_against_empty_dns(self):
+        app_js = self._read_file("js/app.js")
+        self.assertIn("function buildMarkdownReport()", app_js)
+        self.assertIn("let src = buildMarkdownReport() || STATE.reportMarkdown || ''", app_js)
+        self.assertIn("if (!dns.dmarc && !dns.spf && !dns.caa && !dns.aaaa && !dns.mx)", app_js)
+
     def test_strix_dind_uses_dedicated_strix_scans_dind_volume(self):
         content = self._read_file("docker-compose.strix-dind.yml")
         self.assertIn("strix_scans_dind:/app/strix_scans", content)
