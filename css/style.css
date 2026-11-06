@@ -1258,3 +1258,40 @@ html.dark-theme #theme-toggle-btn span,
 html.dark-theme #header-update-btn span {
   color: #F8FAFC !important;
 }
+
+/* ==========================================================================
+   DARK MODE HOVER KONTRAST DÜZELTMESİ (Tüm Buton, Hap, Sekme ve Aksiyonlar)
+   ========================================================================== */
+html.dark-theme .btn-secondary:hover,
+html.dark-theme .btn-ai:hover,
+html.dark-theme #section2-ai-btn:hover,
+html.dark-theme #theme-toggle-btn:hover,
+html.dark-theme #header-update-btn:not(.btn-primary):hover,
+html.dark-theme .segmented-item:not(.is-active-orange):hover,
+html.dark-theme .vibe-cat-pill:not(.is-active):hover,
+html.dark-theme .detail-tab-btn:not(.active):hover,
+html.dark-theme button[class*="hover:bg-"]:not(.btn-primary):not(.is-active):not(.is-active-orange):hover,
+html.dark-theme a.btn-secondary:hover {
+  background: #334155 !important;
+  background-color: #334155 !important;
+  background-image: none !important;
+  border-color: #FB923C !important;
+  color: #FFFFFF !important;
+}
+html.dark-theme .btn-secondary:hover span,
+html.dark-theme .btn-secondary:hover svg,
+html.dark-theme .btn-ai:hover span,
+html.dark-theme .btn-ai:hover svg,
+html.dark-theme .segmented-item:not(.is-active-orange):hover span,
+html.dark-theme .vibe-cat-pill:not(.is-active):hover span,
+html.dark-theme .detail-tab-btn:not(.active):hover span,
+html.dark-theme button[class*="hover:bg-"]:hover span {
+  color: #FFFFFF !important;
+}
+html.dark-theme .btn-primary:hover,
+html.dark-theme .is-active-orange:hover,
+html.dark-theme .vibe-cat-pill.is-active:hover {
+  background: #EA580C !important;
+  background-color: #EA580C !important;
+  color: #FFFFFF !important;
+}

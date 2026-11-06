@@ -3214,7 +3214,7 @@ function setScannerEdition(edition, save = true) {
 
   if (ed === 'lite') {
     if (badge) {
-      badge.innerText = 'v2.0 Lite';
+      badge.innerText = 'v2.0';
       badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold';
     }
     if (btnLite) btnLite.className = 'segmented-item is-active-emerald';
@@ -3228,7 +3228,7 @@ function setScannerEdition(edition, save = true) {
     toggleAnalysisGroup('ai', false);
   } else {
     if (badge) {
-      badge.innerText = 'v2.0 Full';
+      badge.innerText = 'v2.0';
       badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-orange-100 text-mistral-orange border border-orange-200 font-bold';
     }
     if (btnFull) btnFull.className = 'segmented-item is-active-orange';
