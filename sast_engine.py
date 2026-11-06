@@ -31,7 +31,7 @@ SAST_SKIP_FILES = {
     "composer.lock", "Cargo.lock", "poetry.lock"
 }
 SAST_CODE_EXTS = {
-    ".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs",
+    ".js", ".ts", ".jsx", ".tsx", ".html", ".htm", ".vue", ".ejs", ".twig", ".hbs", ".svelte", ".mjs", ".cjs",
     ".py", ".php", ".java", ".go", ".rb", ".rs", ".cs", ".sh",
     ".env", ".yml", ".yaml", ".tf", ".json", ".ini", ".conf", ".htaccess"
 }
@@ -611,12 +611,21 @@ def sast_scan_directory(root_path, profile="standard", scope_mode="full", diff_b
         except OSError:
             continue
 
-    # Faz 6C: Retire.js tabanlı İstemci/CDN JavaScript Kütüphanesi CVE & Yama Taraması
-    for rel_f in scanned_files_list:
+    # Faz 6C: Retire.js & Next.js tabanlı İstemci/CDN JavaScript Kütüphanesi CVE & Yama Taraması (.min.js dahil)
+    js_target_files = list(scanned_files_list)
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        dirnames[:] = [d for d in dirnames if d not in SAST_SKIP_DIRS]
+        for fn in filenames:
+            if fn.lower().endswith(".min.js"):
+                rel_min = os.path.relpath(os.path.join(dirpath, fn), root_path)
+                if rel_min not in js_target_files:
+                    js_target_files.append(rel_min)
+    for rel_f in js_target_files:
         full_f = os.path.join(root_path, rel_f)
         try:
+            read_limit = 8192 if rel_f.lower().endswith(".min.js") else (512 * 1024)
             with open(full_f, "r", encoding="utf-8", errors="replace") as jf:
-                jcontent = jf.read(512 * 1024)
+                jcontent = jf.read(read_limit)
             js_findings = js_cve_scanner.scan_file_for_js_cves(rel_f, jcontent, allow_network=False)
             for jf_item in js_findings:
                 findings.append(jf_item)

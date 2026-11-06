@@ -487,4 +487,21 @@ def scan_nextjs_advisories_in_file(rel_path, content):
                     "analyzer": "nextjs_advisory",
                     "verified": True,
                 })
+        if base_name.startswith("next.config.") and re.search(r"(cacheComponents|dynamicIO)\s*:\s*true", content):
+            line_no = next((i for i, l in enumerate(lines, 1) if "cacheComponents" in l or "dynamicIO" in l), 1)
+            findings.append({
+                "rule_id": "NEXT-ADV-006",
+                "category": "Next.js Güvenliği (Kasım 2026 Bülteni)",
+                "severity": "ORTA",
+                "cwe": "CWE-444",
+                "cvss": 6.5,
+                "title": "Next.js Self-Hosted Shared Shell Cache Poisoning Riski (cacheComponents: true)",
+                "file": rel_path,
+                "line": line_no,
+                "match": "cacheComponents / dynamicIO: true",
+                "description": "Next.js Kasım 2026 Bülteni: Self-hosted (next start) uygulamalarda Cache Components açık ve Partial Prefetching kapalı/tanımsız olduğunda paylaşılan sayfa kabuğu (shared shell) önbelleği zehirlenebilir.",
+                "fix": "Next.js sürümünü v16.4.5 veya v15.5.29'a yükseltin ve Partial Prefetching ayarını etkinleştirin.",
+                "analyzer": "nextjs_advisory",
+                "verified": True,
+            })
     return findings
