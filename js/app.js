@@ -5239,8 +5239,8 @@ function enhanceUnifiedFindingsToAccordion() {
     const modBadge = badges.find(b => b !== sev && b !== locBadge && b.length < 36) || '';
 
     const sevColorMap = {
-      'KRİTİK': 'bg-rose-600 text-white border-rose-700',
-      'YÜKSEK': 'bg-orange-500 text-white border-orange-600',
+      'KRİTİK': 'bg-rose-100 text-rose-800 border-rose-300',
+      'YÜKSEK': 'bg-orange-100 text-orange-900 border-orange-300',
       'ORTA': 'bg-amber-100 text-amber-950 border-amber-300',
       'DÜŞÜK': 'bg-sky-100 text-sky-900 border-sky-300'
     };
