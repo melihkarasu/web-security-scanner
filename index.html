@@ -16,7 +16,7 @@
 
   <!-- Precompiled Standalone Tailwind CSS & Dedicated Modern Design System -->
   <link rel="stylesheet" href="css/tailwind.min.css?v=20261103a">
-  <link rel="stylesheet" href="css/style.css?v=20261106a">
+  <link rel="stylesheet" href="css/style.css?v=20261107a">
 </head>
 <body class="bg-mistral-canvas text-mistral-ink font-sans antialiased min-h-full flex flex-col selection:bg-orange-500/20 selection:text-orange-950">
 
@@ -896,21 +896,35 @@
           
           <!-- SEKME 1: Tüm Zafiyetler & Bulgular -->
           <div id="tab-findings" class="detail-tab-content space-y-4">
-            <!-- 10 Analiz Maddesi Sonuç, Durum, Yapılması Gerekenler ve Atlanan Testler Raporu -->
-            <div id="analysis-items-report-card" class="p-4 sm:p-5 rounded-2xl border border-stone-200 bg-stone-50/70 space-y-3">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <div class="flex items-start gap-2.5">
-                  <span class="w-8 h-8 rounded-xl bg-orange-50 border border-orange-200 text-mistral-orange inline-flex items-center justify-center shrink-0 mt-0.5">
-                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                  </span>
+            <!-- 10 Analiz Maddesi Özeti (Varsayılan Daraltılmış Akordeon — Progressive Disclosure) -->
+            <details id="analysis-items-report-card" class="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5 sm:p-4 group">
+              <summary class="flex flex-wrap items-center justify-between gap-2 cursor-pointer select-none list-none">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-7 h-7 rounded-lg bg-orange-50 border border-orange-200 text-mistral-orange flex items-center justify-center font-mono font-bold text-xs shrink-0">10</span>
                   <div>
-                    <h4 class="text-sm font-bold font-editorial text-mistral-ink">Analiz Maddeleri Sonuç, Durum ve Aksiyon Raporu (10/10 Analiz)</h4>
-                    <p class="text-[11px] text-mistral-slate">Çalıştırılan her analizin bulgu özeti, yapılması gerekenler ve seçilmeyen/atlanan testlerin nedeni aşağıda açıkça listelenir.</p>
+                    <h4 class="text-xs sm:text-sm font-bold font-editorial text-mistral-ink">📋 Çalıştırılan Modüller ve Kapsam Özeti (10/10 Analiz)</h4>
+                    <p class="text-[11px] text-mistral-slate">Modül bazlı durum, aksiyon önerileri ve atlanan testlerin nedenini görmek için tıklayın ▾</p>
                   </div>
                 </div>
                 <span id="analysis-items-summary-pill" class="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-mono font-bold text-stone-700"></span>
+              </summary>
+              <div id="analysis-items-report-list" class="mt-3 pt-3 border-t border-stone-200/80 space-y-2"></div>
+            </details>
+
+            <!-- Anlık Ciddiyet Filtresi & Arama Çubuğu (UI/UX Pro Max Instant Triage Bar) -->
+            <div id="triage-filter-bar" class="p-3 sm:p-3.5 rounded-2xl border border-stone-200 bg-white shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+              <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-mono" id="triage-severity-pills">
+                <button type="button" data-sev="ALL" onclick="setTriageSeverityFilter('ALL')" class="btn btn-xs btn-primary">Tümü (<span id="tsev-count-all">0</span>)</button>
+                <button type="button" data-sev="KRİTİK" onclick="setTriageSeverityFilter('KRİTİK')" class="btn btn-xs btn-secondary">🔴 Kritik (<span id="tsev-count-kritik">0</span>)</button>
+                <button type="button" data-sev="YÜKSEK" onclick="setTriageSeverityFilter('YÜKSEK')" class="btn btn-xs btn-secondary">🟠 Yüksek (<span id="tsev-count-yuksek">0</span>)</button>
+                <button type="button" data-sev="ORTA" onclick="setTriageSeverityFilter('ORTA')" class="btn btn-xs btn-secondary">🟡 Orta (<span id="tsev-count-orta">0</span>)</button>
+                <button type="button" data-sev="DÜŞÜK" onclick="setTriageSeverityFilter('DÜŞÜK')" class="btn btn-xs btn-secondary">🔵 Düşük (<span id="tsev-count-dusuk">0</span>)</button>
               </div>
-              <div id="analysis-items-report-list" class="space-y-2.5"></div>
+              <div class="flex items-center gap-1.5 flex-1 md:max-w-xs">
+                <input type="text" id="triage-search-input" oninput="applyTriageFilters()" placeholder="Dosya, kural (SQLI, XSS) veya başlık ara…" class="modern-field !py-1.5 !px-2.5 !text-xs font-mono" />
+                <button type="button" onclick="toggleAllFindingDetails(true)" class="btn btn-xs btn-secondary shrink-0" title="Tüm Bulgu Detaylarını Aç">Aç</button>
+                <button type="button" onclick="toggleAllFindingDetails(false)" class="btn btn-xs btn-secondary shrink-0" title="Tüm Bulgu Detaylarını Daralt">Daralt</button>
+              </div>
             </div>
 
             <!-- Cloudflare Audit Skill: 4-Durumlu Bulgu Yaşam Döngüsü Filtresi -->
@@ -1254,6 +1268,6 @@
   </div>
 
   <!-- Ana İstemci Mantığı (Cloudflare Rocket Loader Korumalı) -->
-  <script data-cfasync="false" src="js/app.js?v=20261106a"></script>
+  <script data-cfasync="false" src="js/app.js?v=20261107a"></script>
 </body>
 </html>

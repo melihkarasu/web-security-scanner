@@ -5176,3 +5176,121 @@ async function applyScannerUpdate() {
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => checkScannerUpdates(false), 1200);
 });
+
+// ============================================================
+// UI/UX Pro Max: Sonuç Raporu Modern Triage, Filtre, Arama & Akordeon Kartlar
+// ============================================================
+let _TRIAGE_SEV_FILTER = 'ALL';
+
+function setTriageSeverityFilter(sev) {
+  _TRIAGE_SEV_FILTER = sev || 'ALL';
+  const pills = document.querySelectorAll('#triage-severity-pills button[data-sev]');
+  pills.forEach(btn => {
+    const isMatch = btn.getAttribute('data-sev') === _TRIAGE_SEV_FILTER;
+    btn.className = isMatch ? 'btn btn-xs btn-primary' : 'btn btn-xs btn-secondary';
+  });
+  if (typeof switchDetailTab === 'function') switchDetailTab('tab-findings');
+  applyTriageFilters();
+}
+
+function toggleAllFindingDetails(openState) {
+  document.querySelectorAll('#unified-findings-list details.triage-finding-item').forEach(d => {
+    if (!d.classList.contains('hidden')) d.open = Boolean(openState);
+  });
+}
+
+function applyTriageFilters() {
+  const q = (document.getElementById('triage-search-input')?.value || '').trim().toLowerCase();
+  const cards = document.querySelectorAll('#unified-findings-list .triage-finding-item');
+  cards.forEach(card => {
+    const sev = (card.getAttribute('data-sev') || '').toUpperCase();
+    const text = (card.getAttribute('data-search') || card.textContent || '').toLowerCase();
+    const sevOk = (_TRIAGE_SEV_FILTER === 'ALL') || (sev === _TRIAGE_SEV_FILTER);
+    const qOk = !q || text.includes(q);
+    card.classList.toggle('hidden', !(sevOk && qOk));
+  });
+}
+
+function enhanceUnifiedFindingsToAccordion() {
+  const listEl = document.getElementById('unified-findings-list');
+  if (!listEl) return;
+  const counts = { ALL: 0, 'KRİTİK': 0, 'YÜKSEK': 0, 'ORTA': 0, 'DÜŞÜK': 0 };
+  const rawChildren = Array.from(listEl.children);
+  rawChildren.forEach((child, idx) => {
+    if (child.tagName === 'P') return;
+    if (child.tagName === 'DETAILS' && child.classList.contains('triage-finding-item')) {
+      const s = child.getAttribute('data-sev') || 'ORTA';
+      counts.ALL += 1;
+      if (counts[s] !== undefined) counts[s] += 1;
+      return;
+    }
+    const fullText = child.textContent || '';
+    let sev = 'ORTA';
+    if (fullText.includes('KRİTİK')) sev = 'KRİTİK';
+    else if (fullText.includes('YÜKSEK')) sev = 'YÜKSEK';
+    else if (fullText.includes('DÜŞÜK')) sev = 'DÜŞÜK';
+    counts.ALL += 1;
+    counts[sev] = (counts[sev] || 0) + 1;
+
+    const titleEl = child.querySelector('h4, h5, strong');
+    const titleTxt = titleEl ? titleEl.textContent.trim() : ('Bulgu #' + (idx + 1));
+    const badges = Array.from(child.querySelectorAll('span.font-mono, code')).map(el => el.textContent.trim()).filter(Boolean);
+    const locBadge = badges.find(b => b.includes('/') || b.includes('.php') || b.includes('.js') || b.includes('.py') || b.includes('http')) || '';
+    const modBadge = badges.find(b => b !== sev && b !== locBadge && b.length < 36) || '';
+
+    const sevColorMap = {
+      'KRİTİK': 'bg-rose-600 text-white border-rose-700',
+      'YÜKSEK': 'bg-orange-500 text-white border-orange-600',
+      'ORTA': 'bg-amber-100 text-amber-950 border-amber-300',
+      'DÜŞÜK': 'bg-sky-100 text-sky-900 border-sky-300'
+    };
+    const sevCls = sevColorMap[sev] || sevColorMap['ORTA'];
+
+    const details = document.createElement('details');
+    details.className = 'triage-finding-item rounded-2xl border border-stone-200 bg-white shadow-2xs overflow-hidden transition hover:border-stone-300';
+    details.setAttribute('data-sev', sev);
+    details.setAttribute('data-search', (titleTxt + ' ' + fullText).slice(0, 600));
+    if (idx < 2 && (sev === 'KRİTİK' || sev === 'YÜKSEK')) details.open = true;
+
+    const summary = document.createElement('summary');
+    summary.className = 'px-4 py-3 flex flex-wrap items-center justify-between gap-2.5 cursor-pointer select-none list-none';
+    summary.innerHTML = `<div class="flex items-center gap-2.5 min-w-0 flex-1">` +
+      `<span class="px-2 py-0.5 rounded-md text-[10px] font-mono font-extrabold border shrink-0 ${sevCls}">${sev}</span>` +
+      (modBadge ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-stone-100 border border-stone-200 text-stone-700 shrink-0">${escapeHtml(modBadge)}</span>` : '') +
+      `<span class="text-xs sm:text-sm font-bold text-mistral-ink truncate">${escapeHtml(titleTxt)}</span>` +
+      `</div>` +
+      `<div class="flex items-center gap-2 shrink-0">` +
+      (locBadge ? `<code class="hidden sm:inline-block text-[11px] font-mono px-2 py-0.5 rounded bg-stone-100 text-stone-700 max-w-[260px] truncate">${escapeHtml(locBadge)}</code>` : '') +
+      `<span class="text-[11px] font-mono text-stone-400">Detay ▾</span>` +
+      `</div>`;
+
+    const bodyWrap = document.createElement('div');
+    bodyWrap.className = 'px-4 pb-4 pt-2 border-t border-stone-100 bg-stone-50/40';
+    child.className = 'space-y-2 text-xs';
+    bodyWrap.appendChild(child);
+    details.appendChild(summary);
+    details.appendChild(bodyWrap);
+    listEl.appendChild(details);
+  });
+
+  const setCnt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = String(val); };
+  setCnt('tsev-count-all', counts.ALL);
+  setCnt('tsev-count-kritik', counts['KRİTİK']);
+  setCnt('tsev-count-yuksek', counts['YÜKSEK']);
+  setCnt('tsev-count-orta', counts['ORTA']);
+  setCnt('tsev-count-dusuk', counts['DÜŞÜK']);
+  applyTriageFilters();
+}
+
+// Observe #unified-findings-list so whenever scan results populate it, cards automatically convert into sleek 1-line triage accordions
+document.addEventListener('DOMContentLoaded', () => {
+  const listEl = document.getElementById('unified-findings-list');
+  if (!listEl || typeof MutationObserver === 'undefined') return;
+  let busy = false;
+  const obs = new MutationObserver(() => {
+    if (busy) return;
+    busy = true;
+    try { enhanceUnifiedFindingsToAccordion(); } finally { setTimeout(() => { busy = false; }, 50); }
+  });
+  obs.observe(listEl, { childList: true });
+});

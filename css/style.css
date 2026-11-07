@@ -1295,3 +1295,22 @@ html.dark-theme .vibe-cat-pill.is-active:hover {
   background-color: #EA580C !important;
   color: #FFFFFF !important;
 }
+
+/* Sonuç Raporu Tek Satır Triage Akordeon & Dark Mode Uyum Stilleri */
+details.triage-finding-item > summary::-webkit-details-marker,
+details#analysis-items-report-card > summary::-webkit-details-marker {
+  display: none;
+}
+details.triage-finding-item[open] > summary {
+  background-color: rgba(250, 82, 15, 0.04);
+}
+html.dark-theme details.triage-finding-item,
+html.dark-theme #triage-filter-bar,
+html.dark-theme details#analysis-items-report-card {
+  background: #111827 !important;
+  border-color: #1E293B !important;
+}
+html.dark-theme details.triage-finding-item > div {
+  background: #0F172A !important;
+  border-color: #1E293B !important;
+}
